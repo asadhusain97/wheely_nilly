@@ -10,13 +10,15 @@ import pinoHttp from 'pino-http';
 import { sanitizeError } from './lib/sanitize.js';
 import { createSnaptradeRouter } from './routes/snaptrade.js';
 import { createWheelRouter } from './routes/wheel.js';
+import { createScreenerRouter } from './routes/screener.js';
+import { createNotificationsRouter } from './routes/notifications.js';
 
 const frontendDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../frontend',
 );
 
-export function createApp({ config, snaptrade, ingest, snapshots, derived }) {
+export function createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications }) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -45,6 +47,9 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived }) {
   );
   app.use(express.json({ limit: '100kb' }));
 
+  if (screener) app.use('/api/v1/screens', createScreenerRouter({ screener, notifications, config }));
+  if (notifications) app.use('/api/v1/notifications', createNotificationsRouter({ notifications }));
+
   if (config.corsOrigins.length > 0) {
     app.use(cors({ origin: config.corsOrigins }));
   }
@@ -72,6 +77,7 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived }) {
         config.snaptrade.clientId,
         config.snaptrade.consumerKey,
         config.snaptrade.userSecret,
+        config.notifications?.token,
       ],
     });
     const isUpstream = safe.kind === 'snaptrade';

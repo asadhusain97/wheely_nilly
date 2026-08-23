@@ -39,6 +39,20 @@ const envSchema = z.object({
   SNAPTRADE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
   RETRY_ATTEMPTS: z.coerce.number().int().min(0).max(5).default(3),
   RETRY_BASE_MS: z.coerce.number().int().min(100).max(10000).default(500),
+  PYTHON_SIDECAR_URL: z.string().url().default('http://127.0.0.1:8000'),
+  SCREENER_TIMEOUT_MS: z.coerce.number().int().min(500).max(60000).default(16000),
+  NTFY_BASE_URL: z.string().url().default('https://ntfy.sh'),
+  NTFY_TOPIC: z.string().default(''),
+  NTFY_TOKEN: z.string().default(''),
+  NTFY_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(5000),
+  NTFY_DRY_RUN: boolFromEnv.default('true'),
+  ALERTS_ENABLED: boolFromEnv.default('false'),
+  ALERT_COOLDOWN_MINUTES: z.coerce.number().int().min(1).max(10080).default(240),
+  ALERT_DAILY_CAP: z.coerce.number().int().min(1).max(100).default(5),
+  ALERT_EXPIRATION_DTE: z.string().default('7,3,1,0'),
+  ALERT_ASSIGNMENT_MAX_DTE: z.coerce.number().int().min(0).max(60).default(7),
+  ALERT_ASSIGNMENT_MIN_MONEYNESS: z.coerce.number().min(0.5).max(2).default(1),
+  ALERT_MIN_ANNUALIZED_RETURN: z.coerce.number().min(0).max(10).default(0.20),
 });
 
 function configError(lines) {
@@ -101,6 +115,15 @@ export function loadConfig(env = process.env) {
     retry: {
       attempts: raw.RETRY_ATTEMPTS,
       baseMs: raw.RETRY_BASE_MS,
+    },
+    screener: { url: raw.PYTHON_SIDECAR_URL.replace(/\/$/, ''), timeoutMs: raw.SCREENER_TIMEOUT_MS },
+    notifications: {
+      baseUrl: raw.NTFY_BASE_URL.replace(/\/$/, ''), topic: raw.NTFY_TOPIC, token: raw.NTFY_TOKEN,
+      timeoutMs: raw.NTFY_TIMEOUT_MS, dryRun: raw.NTFY_DRY_RUN, enabled: raw.ALERTS_ENABLED,
+      cooldownMs: raw.ALERT_COOLDOWN_MINUTES * 60_000, dailyCap: raw.ALERT_DAILY_CAP,
+      expirationDte: raw.ALERT_EXPIRATION_DTE.split(',').map(Number).filter((value) => Number.isInteger(value) && value >= 0),
+      assignmentMaxDte: raw.ALERT_ASSIGNMENT_MAX_DTE, assignmentMinMoneyness: raw.ALERT_ASSIGNMENT_MIN_MONEYNESS,
+      screenerRule: { minAnnualizedReturn: raw.ALERT_MIN_ANNUALIZED_RETURN, maxDelta: 0.35, maxSpreadPercent: 0.15, maxQuoteAgeSeconds: 900, dashboardUrl: '/#screener' },
     },
   };
 }

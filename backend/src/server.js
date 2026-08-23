@@ -7,6 +7,8 @@ import { createIngestService } from './services/ingest.js';
 import { createDerivedService } from './services/derived.js';
 import { createSnapshotStore } from './services/snapshots.js';
 import { createSnaptradeService } from './services/snaptrade.js';
+import { createScreenerService } from './services/screener.js';
+import { createNotificationService } from './services/notifications.js';
 
 let config;
 try {
@@ -26,8 +28,10 @@ const ingest = createIngestService({
   sdkVersion: sdkPackage.version,
 });
 const derived = createDerivedService({ snapshots, config });
-const scheduler = createScheduler({ config, ingest });
-const app = createApp({ config, snaptrade, ingest, snapshots, derived });
+const screener = createScreenerService({ config });
+const notifications = createNotificationService({ config });
+const scheduler = createScheduler({ config, ingest, notifications, derived });
+const app = createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(

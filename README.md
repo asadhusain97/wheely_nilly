@@ -2,7 +2,7 @@
 
 A lightweight, self-hosted dashboard for observing and improving an options wheel strategy. The application is designed for a 64-bit Raspberry Pi and keeps brokerage credentials, normalized trade history, and strategy calculations on infrastructure you control.
 
-Phases 1 and 2 are implemented locally: the backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, reconstructs lifecycle cycles, and serves a responsive portfolio dashboard. Options-chain screening begins in Phase 3. Implementation proceeds in the order defined in [`PLAN.md`](PLAN.md).
+Phases 1–4 are implemented locally: the backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, screens options through an internal Python sidecar, and delivers deduplicated risk notifications through ntfy. Implementation follows [`PLAN.md`](PLAN.md).
 
 ## Architecture
 
@@ -175,7 +175,7 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The current sidecar exposes only `GET /health`. Options-chain routes are deferred to Phase 3.
+The sidecar exposes `GET /health` and the internal `POST /v1/screens` contract. It is intentionally not published to the host network.
 
 ## Raspberry Pi Deployment
 
@@ -291,12 +291,17 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `RETRY_ATTEMPTS` | 1 | `3` | Retries for transient (429/5xx/network) failures |
 | `RETRY_BASE_MS` | 1 | `500` | Base delay for exponential backoff with jitter |
 | `DATA_DIR` | 1 | `./data` | Root for raw snapshots and future normalized data |
-| `PYTHON_SIDECAR_URL` | 3 | `http://screener:8000` | Internal sidecar base URL |
+| `PYTHON_SIDECAR_URL` | 3 | `http://127.0.0.1:8000` | Sidecar URL for direct local runs; Compose overrides it with `http://screener:8000` |
 | `SCREENER_PROVIDER` | 3 | `yfinance` | Selected market-data adapter |
 | `ALPHAVANTAGE_API_KEY` | 3 | Empty | Optional Alpha Vantage credential |
 | `NTFY_BASE_URL` | 4 | `https://ntfy.sh` | Hosted or self-hosted ntfy base URL |
 | `NTFY_TOPIC` | 4 | Empty | Private, hard-to-guess topic name |
 | `NTFY_TOKEN` | 4 | Empty | Optional ntfy access token |
+| `NTFY_DRY_RUN` | 4 | `true` | Records notifications without sending them |
+| `ALERTS_ENABLED` | 4 | `false` | Enables lifecycle and screener alert enqueueing |
+| `ALERT_EXPIRATION_DTE` | 4 | `7,3,1,0` | Comma-separated expiration reminder thresholds |
+| `ALERT_ASSIGNMENT_MAX_DTE` | 4 | `7` | Maximum DTE for assignment-risk estimates |
+| `ALERT_MIN_ANNUALIZED_RETURN` | 4 | `0.20` | Minimum screener annualized return (decimal) |
 
 ## Current Endpoints
 
@@ -316,6 +321,20 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `GET` | `/api/v1/wheel/premiums` | Source-linked option premium ledger |
 | `GET` | `/api/v1/wheel/review` | Unsupported or ambiguous source events |
 | `GET` | `screener:8000/health` | Internal Python container health check |
+| `POST` | `/api/v1/screens` | Validate and proxy an informational options screen |
+| `GET` | `/api/v1/notifications/status` | ntfy configuration, dry-run, rules, and outbox counts |
+| `GET` | `/api/v1/notifications/audit` | Redacted local notification audit trail |
+| `PATCH` | `/api/v1/notifications/rules` | Enable or disable each alert rule |
+| `POST` | `/api/v1/notifications/test` | Enqueue and attempt a credential-free test notification |
+| `POST` | `/api/v1/notifications/flush` | Process due outbox entries |
+
+### Phase 3 screener
+
+Start both services with `docker compose --profile screener up -d --build`, then use the Screen tab. The current provider is `yfinance`; Alpha Vantage is not implemented. Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+
+### Phase 4 notifications
+
+Create a private ntfy topic, subscribe your device, set `NTFY_TOPIC` and optionally `NTFY_TOKEN`, then leave `NTFY_DRY_RUN=true` while testing from the Alerts tab. When the audit looks correct, set `NTFY_DRY_RUN=false` and `ALERTS_ENABLED=true`. Notification state is atomically persisted at `data/notifications/state.json`; event fingerprints survive restarts, transient failures remain in the outbox, and authentication/validation failures are not retried indefinitely. Messages omit account IDs and portfolio totals.
 
 Raw endpoints stay loopback-bound and must gain application authentication before any broader network exposure. Raw payloads are never logged; account numbers are masked in API responses.
 

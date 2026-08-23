@@ -22,4 +22,9 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /min-width:44px;min-height:44px/);
     assert.match(css, /backdrop-filter:blur\(var\(--glass-blur\)\) saturate\(var\(--glass-saturation\)\)/);
   });
+  it('uses the Wheely Nilly brand and logo assets', () => {
+    assert.match(html, /<title>Wheely Nilly<\/title>/);
+    assert.match(html, /class="brand-mark" src="\/assets\/images\/logo\.png"/);
+    assert.match(html, /rel="icon"[^>]+href="\/assets\/images\/favicon\.png"/);
+  });
 });

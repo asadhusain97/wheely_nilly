@@ -44,6 +44,9 @@ services:
       - .env
     environment:
       PORT: 8000
+      SCREENER_CACHE_TTL_SECONDS: ${SCREENER_CACHE_TTL_SECONDS:-120}
+      SCREENER_MAX_CONCURRENCY: ${SCREENER_MAX_CONCURRENCY:-2}
+      SCREENER_TIMEOUT_SECONDS: 15
     expose:
       - "8000"
     volumes:

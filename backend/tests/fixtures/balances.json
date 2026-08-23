@@ -1,0 +1,7 @@
+[
+  {
+    "currency": { "code": "USD", "name": "US Dollar" },
+    "cash": "12500.25",
+    "buying_power": "25000.50"
+  }
+]

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "order-synthetic-put-1",
+    "option_symbol": { "symbol": "WXYZ260918P00040000" },
+    "action": "SELL_TO_OPEN",
+    "total_quantity": "1",
+    "filled_quantity": "1",
+    "execution_price": "1.25",
+    "time_placed": "2026-08-20T15:30:00.000Z",
+    "status": "EXECUTED"
+  },
+  {
+    "id": "order-synthetic-call-1",
+    "option_symbol": { "symbol": "WXYZ260918C00045000" },
+    "action": "SELL_TO_OPEN",
+    "total_quantity": "1",
+    "filled_quantity": "1",
+    "execution_price": "0.85",
+    "time_placed": "2026-08-21T16:00:00.000Z",
+    "status": "EXECUTED"
+  }
+]

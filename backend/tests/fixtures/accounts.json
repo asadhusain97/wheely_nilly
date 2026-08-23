@@ -1,0 +1,28 @@
+[
+  {
+    "id": "acct-individual-1",
+    "number": "881234567",
+    "institution_name": "Robinhood",
+    "name": "Robinhood Individual",
+    "sync_status": {
+      "holdings": {
+        "initial_sync_completed": true,
+        "last_successful_sync": "2026-08-22T14:00:00.000Z"
+      }
+    }
+  },
+  {
+    "id": "acct-individual-2",
+    "number": "559876543",
+    "institution_name": "Robinhood",
+    "name": "Robinhood Individual",
+    "sync_status": null
+  },
+  {
+    "id": "acct-crypto-1",
+    "number": "777123456",
+    "institution_name": "Robinhood",
+    "name": "Robinhood Crypto",
+    "sync_status": null
+  }
+]

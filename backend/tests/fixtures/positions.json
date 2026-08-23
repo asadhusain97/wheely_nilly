@@ -1,0 +1,34 @@
+{
+  "results": [
+    {
+      "symbol": { "symbol": "WXYZ", "description": "Synthetic Wheel Corp" },
+      "units": "100",
+      "price": "42.15"
+    },
+    {
+      "symbol": {
+        "symbol": "WXYZ260918P00040000",
+        "option_type": "PUT",
+        "strike_price": "40.00",
+        "expiration_date": "2026-09-18",
+        "multiplier": 100,
+        "underlying": { "symbol": "WXYZ" }
+      },
+      "units": "-1",
+      "price": "1.25"
+    },
+    {
+      "symbol": {
+        "symbol": "WXYZ260918C00045000",
+        "option_type": "CALL",
+        "strike_price": "45.00",
+        "expiration_date": "2026-09-18",
+        "multiplier": 100,
+        "underlying": { "symbol": "WXYZ" }
+      },
+      "units": "-1",
+      "price": "0.85"
+    }
+  ],
+  "data_freshness": { "last_successful_sync": "2026-08-23T18:00:00.000Z" }
+}

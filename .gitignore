@@ -1,0 +1,34 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Node
+backend/node_modules/
+npm-debug.log*
+
+# Python
+sidecar/.venv/
+sidecar/venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime data and logs
+data/*
+!data/.gitkeep
+*.log
+logs/
+
+# Test/build output
+coverage/
+dist/
+build/
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp

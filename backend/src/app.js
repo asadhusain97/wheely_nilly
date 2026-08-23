@@ -9,13 +9,14 @@ import pinoHttp from 'pino-http';
 
 import { sanitizeError } from './lib/sanitize.js';
 import { createSnaptradeRouter } from './routes/snaptrade.js';
+import { createWheelRouter } from './routes/wheel.js';
 
 const frontendDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../frontend',
 );
 
-export function createApp({ config, snaptrade, ingest, snapshots }) {
+export function createApp({ config, snaptrade, ingest, snapshots, derived }) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -33,6 +34,7 @@ export function createApp({ config, snaptrade, ingest, snapshots }) {
       ],
     }),
   );
+  if (derived) app.use('/api/v1/wheel', createWheelRouter({ derived }));
   app.use(
     helmet({
       contentSecurityPolicy: {

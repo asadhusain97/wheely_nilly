@@ -2,7 +2,7 @@
 
 A lightweight, self-hosted dashboard for observing and improving an options wheel strategy. The application is designed for a 64-bit Raspberry Pi and keeps brokerage credentials, normalized trade history, and strategy calculations on infrastructure you control.
 
-Phase 1 is implemented locally: the backend authenticates with SnapTrade, discovers explicitly selected accounts, and stores immutable raw balances, positions, orders, and activity snapshots. The frontend remains a placeholder; lifecycle calculations and portfolio visualization begin in Phase 2. Implementation proceeds in the order defined in [`PLAN.md`](PLAN.md).
+Phases 1 and 2 are implemented locally: the backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, reconstructs lifecycle cycles, and serves a responsive portfolio dashboard. Options-chain screening begins in Phase 3. Implementation proceeds in the order defined in [`PLAN.md`](PLAN.md).
 
 ## Architecture
 
@@ -310,6 +310,11 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `POST` | `/api/v1/snaptrade/refresh` | Manual ingest run; `409` until account IDs are pinned; `207` on partial failure |
 | `GET` | `/api/v1/snaptrade/snapshots` | Snapshot index (`?accountId=&endpoint=&limit=`) |
 | `GET` | `/api/v1/snaptrade/snapshots/raw?path=` | Raw snapshot envelope by relative path (traversal-safe) |
+| `GET` | `/api/v1/wheel/summary` | Versioned premium, cycle, position, review, and freshness summary |
+| `GET` | `/api/v1/wheel/cycles` | Wheel cycles; filters: `symbol`, `accountId`, `state`, `from`, `to`, `limit` |
+| `GET` | `/api/v1/wheel/positions` | Latest normalized broker positions |
+| `GET` | `/api/v1/wheel/premiums` | Source-linked option premium ledger |
+| `GET` | `/api/v1/wheel/review` | Unsupported or ambiguous source events |
 | `GET` | `screener:8000/health` | Internal Python container health check |
 
 Raw endpoints stay loopback-bound and must gain application authentication before any broader network exposure. Raw payloads are never logged; account numbers are masked in API responses.
@@ -326,6 +331,12 @@ curl -s localhost:3000/api/v1/snaptrade/snapshots | jq
 ```
 
 Snapshots land in `data/raw/accounts/<accountId>/<endpoint>/` as immutable, globally hash-deduplicated JSON envelopes (mode `0600`). Envelopes identify SnapTrade as the source, retain SDK/schema versions and fetch duration, and include the provider freshness timestamp when the payload supplies one. Activity pagination is fully collected before a snapshot is written.
+
+### Phase 2 dashboard
+
+Open `http://127.0.0.1:3000` after starting the backend. The dashboard shows authoritative premium totals, cycle stages, current positions, adjusted and broker basis as separate concepts, review flags, source freshness, filters, and the option cash ledger. It is keyboard accessible and switches to a compact bottom navigation and single-column cycle board on mobile.
+
+The normalized schema, accounting conventions, idempotency keys, and migration approach are documented in [`docs/normalized-schema.md`](docs/normalized-schema.md). Derived endpoints use `Cache-Control: private, no-store` and include a calculation version and source freshness.
 
 ## Data and Calculation Guardrails
 

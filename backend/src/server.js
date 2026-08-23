@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { loadConfig, loadEnvFile } from './config/index.js';
 import { createScheduler } from './jobs/scheduler.js';
 import { createIngestService } from './services/ingest.js';
+import { createDerivedService } from './services/derived.js';
 import { createSnapshotStore } from './services/snapshots.js';
 import { createSnaptradeService } from './services/snaptrade.js';
 
@@ -24,8 +25,9 @@ const ingest = createIngestService({
   snapshots,
   sdkVersion: sdkPackage.version,
 });
+const derived = createDerivedService({ snapshots, config });
 const scheduler = createScheduler({ config, ingest });
-const app = createApp({ config, snaptrade, ingest, snapshots });
+const app = createApp({ config, snaptrade, ingest, snapshots, derived });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(

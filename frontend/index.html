@@ -32,22 +32,19 @@
         </header>
 
         <section class="performance-hero" aria-labelledby="booked-profit-label">
-          <div class="hero-copy">
-            <span id="booked-profit-label">Booked profit</span>
-            <strong id="booked-profit">—</strong>
-            <small>Closed contracts, after fees</small>
+          <div class="profit-primary">
+            <span class="hero-label" id="booked-profit-label">Booked profit</span>
+            <strong class="hero-total" id="booked-profit">—</strong>
           </div>
-          <dl class="return-pair">
-            <div>
-              <dt>Return on collateral</dt>
-              <dd id="return-rate">—</dd>
-            </div>
-            <div>
-              <dt>Annualized</dt>
-              <dd id="annualized-return-rate">—</dd>
-            </div>
+          <dl class="return-primary">
+            <dt>Return on collateral</dt>
+            <dd id="return-rate">—</dd>
           </dl>
-          <p class="quality-line" id="calculation-quality">Calculating trade coverage…</p>
+          <dl class="return-secondary">
+            <dt>Annualized rate</dt>
+            <dd id="annualized-return-rate">—</dd>
+          </dl>
+          <p class="quality-line" id="calculation-quality">Calculating trade history…</p>
         </section>
 
         <dl class="kpi-grid">
@@ -147,9 +144,10 @@
         </figure>
         <form class="filter-bar trades-filter-bar" id="ticker-filters" role="search">
           <label class="ticker-search"><span class="sr-only">Search ticker</span><span class="ticker-search-icon"
-              aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"></circle><path
-                  d="m10.5 10.5 3 3"></path></svg></span><input id="ticker-filter" type="search"
-              placeholder="Ticker" autocomplete="off"></label>
+              aria-hidden="true"><svg viewBox="0 0 16 16">
+                <circle cx="7" cy="7" r="4.5"></circle>
+                <path d="m10.5 10.5 3 3"></path>
+              </svg></span><input id="ticker-filter" type="search" placeholder="Ticker" autocomplete="off"></label>
           <label class="ticker-activity"><span class="sr-only">Filter trade activity</span><select
               id="ticker-status-filter">
               <option value="">All</option>
@@ -202,11 +200,159 @@
         </div>
       </section>
 
-      <section class="app-screen" id="settings" data-screen="settings" aria-labelledby="settings-title" hidden>
-        <header class="screen-header">
-          <p>App configuration</p>
-          <h1 id="settings-title">Settings</h1>
+      <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
+        <header class="screen-header more-header">
+          <p>Reference &amp; preferences</p>
+          <h1 id="more-title">More</h1>
         </header>
+
+        <section class="more-section" aria-labelledby="configuration-title">
+          <div class="section-title more-section-title">
+            <div>
+              <p>Configs to change</p>
+              <h2 id="configuration-title">Configuration</h2>
+            </div>
+          </div>
+          <div class="configuration-placeholder">
+            <span class="configuration-mark" aria-hidden="true">⌁</span>
+            <div>
+              <strong>Controls are coming here</strong>
+              <p>Future portfolio and calculation preferences will live in this section.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="more-section glossary-section" aria-labelledby="glossary-title">
+          <div class="section-title more-section-title">
+            <div>
+              <p>How the numbers work</p>
+              <h2 id="glossary-title">Glossary</h2>
+            </div>
+          </div>
+          <p class="glossary-intro">A field guide to the portfolio and screener metrics used throughout Wheely
+            Nilly. Dashboard returns use matched, closed contracts; open credits remain unrealized.</p>
+
+          <section class="glossary-group" aria-labelledby="glossary-performance-title">
+            <h3 id="glossary-performance-title">Performance</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Booked profit <span>Booked P&amp;L</span></dt>
+                <dd>The profit or loss from matched, closed short-option contracts after fees. Open premium is not
+                  booked until its contract closes.</dd>
+                <dd class="glossary-formula">Opening net credit + closing net cash flow</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Return on collateral <span>Return</span></dt>
+                <dd>Booked profit from qualified closed contracts divided by their combined entry collateral. A
+                  trade is excluded when its profit, collateral, or holding period cannot be established.</dd>
+                <dd class="glossary-formula">Qualified booked profit ÷ qualified entry collateral</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Annualized return <span>Annualized rate</span></dt>
+                <dd>A return scaled to one year. The portfolio dashboard weights qualified closed contracts by
+                  collateral and days held; same-day trades count as one day. The screener annualizes each candidate's
+                  estimated period return.</dd>
+                <dd class="glossary-formula">Dashboard: qualified booked profit × 365 ÷ Σ(collateral × days held)</dd>
+                <dd class="glossary-formula">Screener: net premium ÷ return collateral × 365 ÷ DTE</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Capital velocity</dt>
+                <dd>Booked profit produced per $1,000 of collateral over a standardized 30-day period. It measures
+                  how efficiently deployed capital has generated realized profit.</dd>
+                <dd class="glossary-formula">Qualified booked profit ÷ collateral-days × 30 × $1,000</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Premium capture</dt>
+                <dd>The share of positive opening credit retained as booked profit across closed contracts. Losses
+                  and buyback costs reduce the result.</dd>
+                <dd class="glossary-formula">Booked profit ÷ positive opening credit on closed contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Monthly booked P&amp;L</dt>
+                <dd>Booked profit and loss grouped by the month each contract closed, then stacked by ticker.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-capital-title">
+            <h3 id="glossary-capital-title">Capital &amp; contracts</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Wheel capital</dt>
+                <dd>Capital currently associated with the wheel: cash securing open puts plus the broker cost basis
+                  of complete 100-share lots.</dd>
+                <dd class="glossary-formula">Open CSP collateral + share capital</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>CSP collateral <span>Cash secured</span></dt>
+                <dd>Cash required to secure a short put at its strike. CSP means cash-secured put.</dd>
+                <dd class="glossary-formula">Strike × contract multiplier × open contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Share capital <span>Shares committed</span></dt>
+                <dd>The broker-reported per-share cost basis of complete 100-share lots. For a covered call, only the
+                  shares committed to its contracts are used as collateral.</dd>
+                <dd class="glossary-formula">Broker cost basis per share × 100-share lots</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Collateral <span>Ticker view</span></dt>
+                <dd>Current CSP collateral plus share capital for a ticker. On an individual contract, it means the
+                  cash securing a put or the cost basis of shares committed to a call.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Open CSPs / open CCs</dt>
+                <dd>The number of current short put or short call contracts. CC means covered call; one standard
+                  contract represents 100 shares unless its multiplier says otherwise.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Contract multiplier</dt>
+                <dd>The number of shares one option contract controls. Standard equity options generally use 100;
+                  calculations use the contract's recorded multiplier when available.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Opening credit</dt>
+                <dd>The net cash received when a short option was opened, after recorded fees and allocated to the
+                  matched contract quantity.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Closing cash flow</dt>
+                <dd>The net cash from closing a contract. A buy-to-close cost is negative; expiration and assignment
+                  contribute zero closing option cash in booked option profit.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>DTE <span>Days to expiration</span></dt>
+                <dd>Calendar days remaining until the option expires. Next expiry is the earliest expiration among
+                  current short-option contracts.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Stock price</dt>
+                <dd>The latest available brokerage quote, falling back to the refreshed position price when a quote
+                  is unavailable.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-screener-title">
+            <h3 id="glossary-screener-title">Options screener</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Premium <span>Estimated</span></dt>
+                <dd>The candidate option's estimated per-share execution price. The screener uses the bid/ask
+                  midpoint only when the spread passes its configured limit.</dd>
+                <dd class="glossary-formula">Net premium = estimated premium × 100 − estimated fee</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Delta</dt>
+                <dd>The estimated option-price change for a $1 move in the stock, also commonly read as a rough
+                  sensitivity measure. It comes from the provider when available, otherwise a Black–Scholes estimate.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>OI <span>Open interest</span></dt>
+                <dd>The number of option contracts currently open in the market for that exact contract.</dd>
+              </div>
+            </dl>
+          </section>
+        </section>
       </section>
     </main>
 
@@ -222,10 +368,11 @@
             <path
               d="M4 5.5h10v2H4zm0 5h7v2H4zm0 5h5v2H4zm12.2-5a4.3 4.3 0 1 0 2.7 7.6l2.5 2.5 1.4-1.4-2.5-2.5a4.3 4.3 0 0 0-4.1-6.7zm0 2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z" />
           </svg></span><span>Screen</span></button>
-      <button type="button" data-target="settings"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
-            <path fill-rule="evenodd"
-              d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.5-2.5 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1l-2.5-1-2 3.5 2 1.6a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.5 2.5-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.5 1 2-3.5zM12.8 15.4a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" />
-          </svg></span><span>Settings</span></button>
+      <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <circle cx="5" cy="12" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="19" cy="12" r="2" />
+          </svg></span><span>More</span></button>
     </nav>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>

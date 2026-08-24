@@ -34,11 +34,20 @@ describe('responsive dashboard shell', () => {
     }
     assert.match(js, /\/api\/v1\/wheel\/dashboard/);
     assert.match(js, /Rollover comparison logic is the next feature/);
-    assert.match(js, /All available history since/);
+    assert.match(js, /tradeLabel.*since/s);
+    assert.doesNotMatch(js, /closed trades included in returns/);
     assert.match(html, /id="opportunities-section"[^>]+hidden/);
     assert.match(js, /section\.hidden = !?false/);
     assert.doesNotMatch(html, /id="flow-cash"|class="capital-loop"/);
     assert.doesNotMatch(js, /Cash ready for puts/);
+  });
+  it('keeps the performance card hierarchy aligned around one full-width divider', () => {
+    const performanceHero = html.match(/<section class="performance-hero"[\s\S]*?<\/section>/)?.[0] ?? '';
+    assert.match(performanceHero, /class="profit-primary"[\s\S]*class="hero-label"[\s\S]*class="hero-total"/);
+    assert.ok(performanceHero.indexOf('class="return-secondary"') < performanceHero.indexOf('class="quality-line"'));
+    assert.match(css, /\.profit-primary\{[^}]*grid-row:2[^}]*align-self:end/);
+    assert.match(css, /\.return-secondary\{[^}]*grid-row:2[^}]*align-self:end/);
+    assert.match(css, /\.quality-line\{[^}]*grid-column:1\/-1[^}]*border-top:/);
   });
   it('keeps efficiency ahead of opportunities and open trades', () => {
     assert.ok(html.indexOf('id="efficiency-title"') < html.indexOf('id="opportunities-title"'));
@@ -47,13 +56,19 @@ describe('responsive dashboard shell', () => {
   it('keeps primary navigation to four clear destinations', () => {
     const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
     assert.equal((navigation.match(/<button/g) ?? []).length, 4);
-    for (const label of ['Home', 'Trades', 'Screen', 'Settings']) assert.match(navigation, new RegExp(`>${label}<`));
+    for (const label of ['Home', 'Trades', 'Screen', 'More']) assert.match(navigation, new RegExp(`>${label}<`));
   });
-  it('keeps Settings as a minimal configuration destination', () => {
-    const settings = html.match(/<section class="app-screen" id="settings"[\s\S]*?<\/section>/)?.[0] ?? '';
-    assert.match(settings, /App configuration/);
-    assert.match(settings, /<h1 id="settings-title">Settings<\/h1>/);
-    assert.doesNotMatch(settings, /<table|<button|CC holdings|Premium ledger|Alerts/);
+  it('keeps future configuration above a calculation-backed glossary in More', () => {
+    const more = html.match(/<section class="app-screen" id="more"[\s\S]*?<\/section>\s*<\/section>\s*<\/section>/)?.[0] ?? '';
+    assert.match(more, /<h1 id="more-title">More<\/h1>/);
+    assert.ok(more.indexOf('id="configuration-title"') < more.indexOf('id="glossary-title"'));
+    for (const term of ['Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Opening credit', 'DTE', 'Delta', 'Open interest']) {
+      assert.match(more, new RegExp(term));
+    }
+    assert.equal((more.match(/<dt>Annualized/g) ?? []).length, 1);
+    assert.match(more, /Dashboard: qualified booked profit × 365 ÷ Σ\(collateral × days held\)/);
+    assert.match(more, /Screener: net premium ÷ return collateral × 365 ÷ DTE/);
+    assert.doesNotMatch(more, /<table|<button|CC holdings|Premium ledger|Alerts/);
     assert.doesNotMatch(js, /loadMore|loadAlerts|test-notification|\/api\/v1\/wheel\/(?:positions|premiums)/);
   });
   it('groups trades into searchable, expandable ticker histories', () => {

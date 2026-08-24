@@ -20,7 +20,7 @@ const shortDate = (value) => value
   ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value))
   : '—';
 const historyDate = (value) => value
-  ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(value))
+  ? new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(value))
   : '—';
 const updatedAt = (value) => value
   ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value)).replace(',', ' ·')
@@ -708,13 +708,11 @@ function renderDashboard(dashboard) {
   booked.classList.toggle('loss', Number(kpis.bookedProfit) < 0);
   $('#return-rate').textContent = percent(kpis.returnRate);
   $('#annualized-return-rate').textContent = percent(kpis.annualizedReturnRate);
-  const unmatched = quality.unmatchedCloseContracts
-    ? ` · ${quality.unmatchedCloseContracts} unmatched close${quality.unmatchedCloseContracts === 1 ? '' : 's'} need review`
-    : '';
-  const coverage = quality.historyStartsAt
-    ? `All available history since ${historyDate(quality.historyStartsAt)}`
-    : 'No option history available';
-  $('#calculation-quality').textContent = `${coverage} · ${quality.returnTradesIncluded} of ${quality.closedTrades} closed trades included in returns${unmatched}`;
+  const tradeCount = Number(quality.closedTrades) || 0;
+  const tradeLabel = `${tradeCount} trade${tradeCount === 1 ? '' : 's'}`;
+  $('#calculation-quality').textContent = quality.historyStartsAt
+    ? `${tradeLabel} since ${historyDate(quality.historyStartsAt)}`
+    : tradeCount ? tradeLabel : 'No trade history yet';
 
   $('#wheel-capital').textContent = money(kpis.wheelCapital);
   $('#wheel-capital-detail').textContent = `${money(kpis.cspCollateral)} puts · ${money(kpis.shareCapital)} shares`;
@@ -755,7 +753,7 @@ function showScreen(target) {
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', settings: 'Settings' };
+  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', more: 'More' };
   const screenKicker = $('#screen-kicker');
   if (screenKicker) screenKicker.textContent = names[target];
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });

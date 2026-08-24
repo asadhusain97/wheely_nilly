@@ -18,7 +18,7 @@ describe('loadConfig', () => {
     assert.equal(config.port, 3000);
     assert.equal(config.timezone, 'UTC');
     assert.equal(config.ingest.cron, '*/30 * * * *');
-    assert.equal(config.ingest.activitiesDays, 90);
+    assert.equal(config.ingest.activitiesDays, undefined);
     assert.equal(config.retry.attempts, 3);
     assert.deepEqual(config.snaptrade.accountIds, [
       'acct-individual-1',

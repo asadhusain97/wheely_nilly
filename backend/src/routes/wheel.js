@@ -38,6 +38,18 @@ export function createWheelRouter({ derived }) {
   router.get('/summary', async (_request, response, next) => {
     try { const model = await derived.load(); response.json({ calculationVersion: model.calculationVersion, generatedAt: model.generatedAt, freshness: model.freshness, scope: model.scope, summary: model.summary }); } catch (error) { next(error); }
   });
+  router.get('/dashboard', async (_request, response, next) => {
+    try {
+      const model = await derived.load();
+      response.json({
+        calculationVersion: model.calculationVersion,
+        generatedAt: model.generatedAt,
+        freshness: model.freshness,
+        scope: model.scope,
+        ...model.dashboard,
+      });
+    } catch (error) { next(error); }
+  });
   router.get('/cycles', async (request, response, next) => {
     try {
       const model = await derived.load();

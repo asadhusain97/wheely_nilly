@@ -6,6 +6,7 @@ import { rootDirectory } from '../src/config/index.js';
 
 const html = readFileSync(path.join(rootDirectory, 'frontend/index.html'), 'utf8');
 const css = readFileSync(path.join(rootDirectory, 'frontend/assets/css/app.css'), 'utf8');
+const js = readFileSync(path.join(rootDirectory, 'frontend/assets/js/app.js'), 'utf8');
 
 describe('responsive dashboard shell', () => {
   it('has semantic landmarks, labels, live regions, and keyboard navigation support', () => {
@@ -26,5 +27,71 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /<title>Wheely Nilly<\/title>/);
     assert.match(html, /class="brand-mark" src="\/assets\/images\/logo\.png"/);
     assert.match(html, /rel="icon"[^>]+href="\/assets\/images\/favicon\.png"/);
+  });
+  it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
+    for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {
+      assert.match(html, new RegExp(`id="${id}"`));
+    }
+    assert.match(js, /\/api\/v1\/wheel\/dashboard/);
+    assert.match(js, /Rollover comparison logic is the next feature/);
+    assert.match(js, /All available history since/);
+    assert.match(html, /id="opportunities-section"[^>]+hidden/);
+    assert.match(js, /section\.hidden = !?false/);
+    assert.doesNotMatch(html, /id="flow-cash"|class="capital-loop"/);
+    assert.doesNotMatch(js, /Cash ready for puts/);
+  });
+  it('keeps efficiency ahead of opportunities and open trades', () => {
+    assert.ok(html.indexOf('id="efficiency-title"') < html.indexOf('id="opportunities-title"'));
+    assert.ok(html.indexOf('id="efficiency-title"') < html.indexOf('id="open-trades-title"'));
+  });
+  it('keeps primary navigation to four clear destinations', () => {
+    const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
+    assert.equal((navigation.match(/<button/g) ?? []).length, 4);
+    for (const label of ['Home', 'Trades', 'Screen', 'More']) assert.match(navigation, new RegExp(`>${label}<`));
+  });
+  it('groups trades into searchable, expandable ticker histories', () => {
+    for (const id of ['monthly-pnl-chart', 'monthly-pnl-tooltip', 'monthly-pnl-tooltip-label', 'monthly-pnl-tooltip-value', 'monthly-pnl-legend', 'ticker-filters', 'ticker-filter', 'ticker-status-filter', 'ticker-sort', 'ticker-sort-direction', 'ticker-sort-arrow', 'ticker-list']) {
+      assert.match(html, new RegExp(`id="${id}"`));
+    }
+    assert.doesNotMatch(html, /monthly-chart-readout|Inspect a monthly bar/);
+    assert.ok(html.indexOf('id="monthly-pnl-chart"') < html.indexOf('id="ticker-filters"'));
+    assert.match(js, /tickerPerformance/);
+    assert.match(js, /buildMonthlyTickerSeries/);
+    assert.match(js, /filterMonthlyTickerSeries/);
+    assert.match(js, /renderMonthlyPerformance/);
+    assert.match(js, /positionMonthlyTooltip/);
+    assert.match(js, /showMonthlyTooltip/);
+    assert.match(js, /mouseenter/);
+    assert.match(js, /aria-pressed/);
+    assert.match(js, /createElementNS/);
+    assert.match(js, /sortTickerPerformance/);
+    assert.match(js, /tickerOpenedTimestamp/);
+    assert.match(js, /tickerSort: 'date_desc'/);
+    assert.match(js, /document\.createElement\(['"]details['"]\)/);
+    assert.match(js, /Open now/);
+    assert.match(js, /Past contracts/);
+    for (const sort of ['date', 'pnl', 'capital', 'return']) {
+      assert.match(html, new RegExp(`value="${sort}"`));
+    }
+    assert.equal((html.match(/<option value="(?:date|pnl|capital|return)"/g) ?? []).length, 4);
+    assert.doesNotMatch(html, /value="(?:date|pnl|capital|return)_(?:asc|desc)"/);
+    assert.doesNotMatch(html, /<optgroup/);
+    assert.doesNotMatch(html, /ticker-sort-options|data-sort=/);
+    assert.match(css, /\.monthly-chart-scroll\{[^}]*overflow-x:auto/);
+    assert.match(css, /\.monthly-chart-tooltip\{/);
+    assert.match(css, /\.ticker-key-item\.is-selected/);
+    assert.doesNotMatch(css, /\.monthly-bar-segment\.is-muted/);
+    assert.match(css, /\.ticker-key\{[^}]*overflow-x:auto/);
+    assert.match(html, /class="ticker-search-icon"/);
+    assert.match(css, /\.trades-filter-bar\{[^}]*grid-template-columns:minmax\(93px,1fr\) minmax\(62px,\.72fr\) minmax\(135px,1\.35fr\)/);
+    assert.match(css, /\.trades-filter-bar select\{[^}]*appearance:none/);
+    assert.match(css, /\.ticker-activity::after,\.ticker-order::after/);
+    assert.match(css, /\.trades-filter-bar \.ticker-sort-direction\{/);
+    assert.match(css, /\.trades-filter-bar \.ticker-activity select\{[^}]*background:var\(--card\);color:var\(--body\)/);
+    assert.match(css, /\.ticker-sort-direction span\{[^}]*background:var\(--canvas\)/);
+    assert.match(js, /toggleTickerSortDirection/);
+    assert.match(js, /syncTickerSortDirection/);
+    assert.match(css, /\.ticker-kpis\{[^}]*grid-template-columns:repeat\(4,1fr\)/);
+    assert.doesNotMatch(html, /id="cycles-body"/);
   });
 });

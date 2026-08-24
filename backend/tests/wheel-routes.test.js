@@ -8,6 +8,7 @@ const config = loadConfig({ NODE_ENV: 'test', SNAPTRADE_CLIENT_ID: 'client', SNA
 const model = {
   calculationVersion: 'wheel-v1', generatedAt: '2026-08-23T12:00:00.000Z', freshness: { stale: false },
   summary: { cycleCount: 1 }, positions: [], premiumLedger: [], reviewEvents: [],
+  dashboard: { kpis: { bookedProfit: '100.00' }, opportunities: {}, openTrades: [], tickerPerformance: [], quality: {} },
   cycles: [{ id: '1', accountId: 'acct-1', underlying: 'WXYZ', stage: 'short_put', openedAt: '2026-08-01T00:00:00Z' }],
 };
 const app = () => createApp({
@@ -23,6 +24,12 @@ describe('wheel API', () => {
     assert.equal(response.body.calculationVersion, 'wheel-v1');
     assert.equal(response.body.freshness.stale, false);
     assert.match(response.headers['cache-control'], /no-store/);
+  });
+  it('returns the coherent home dashboard projection', async () => {
+    const response = await request(app()).get('/api/v1/wheel/dashboard');
+    assert.equal(response.status, 200);
+    assert.equal(response.body.kpis.bookedProfit, '100.00');
+    assert.deepEqual(response.body.openTrades, []);
   });
   it('filters cycles and bounds invalid queries', async () => {
     const filtered = await request(app()).get('/api/v1/wheel/cycles?symbol=WXYZ&state=short_put');

@@ -33,7 +33,6 @@ const envSchema = z.object({
   SNAPTRADE_ACCOUNT_IDS: z.string().default(''),
   INGEST_ENABLED: boolFromEnv.default('true'),
   INGEST_CRON: z.string().min(1).default('*/30 * * * *'),
-  INGEST_ACTIVITIES_DAYS: z.coerce.number().int().min(1).max(365).default(90),
   INGEST_ORDERS_DAYS: z.coerce.number().int().min(1).max(90).default(90),
   INGEST_STALE_AFTER_MINUTES: z.coerce.number().int().min(1).max(10080).default(60),
   SNAPTRADE_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(20000),
@@ -108,7 +107,6 @@ export function loadConfig(env = process.env) {
     ingest: {
       enabled: raw.INGEST_ENABLED,
       cron: raw.INGEST_CRON,
-      activitiesDays: raw.INGEST_ACTIVITIES_DAYS,
       ordersDays: raw.INGEST_ORDERS_DAYS,
       staleAfterMs: raw.INGEST_STALE_AFTER_MINUTES * 60_000,
     },

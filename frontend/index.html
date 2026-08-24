@@ -1,70 +1,313 @@
 <!doctype html>
 <html lang="en">
+
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#fbfbf9"><meta name="description" content="A private wheel strategy portfolio app">
-  <title>Wheely Nilly</title><link rel="icon" type="image/png" href="/assets/images/favicon.png"><link rel="apple-touch-icon" href="/assets/images/logo.png"><link rel="stylesheet" href="/assets/css/app.css"><script type="module" src="/assets/js/app.js"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fbfbf9">
+  <meta name="description" content="A private wheel strategy portfolio app">
+  <title>Wheely Nilly</title>
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/images/logo.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script type="module" src="/assets/js/app.js"></script>
 </head>
+
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div class="app-shell">
     <header class="app-bar">
-      <div class="brand"><img class="brand-mark" src="/assets/images/logo.png" alt=""><div><strong>Wheely Nilly</strong><span id="screen-kicker">Portfolio</span></div></div>
-      <div class="app-actions"><time id="last-updated" aria-live="polite">Updated —</time><button class="refresh-button" id="refresh-button" type="button" aria-label="Refresh portfolio data"><span aria-hidden="true">↻</span></button></div>
+      <div class="brand"><img class="brand-mark" src="/assets/images/logo.png" alt="">
+        <div><strong>Wheely Nilly</strong></div>
+      </div>
+      <div class="app-actions"><time id="last-updated" aria-live="polite">Updated —</time><button class="refresh-button"
+          id="refresh-button" type="button" aria-label="Refresh portfolio data"><span
+            aria-hidden="true">↻</span></button></div>
     </header>
 
     <main id="main-content">
       <section class="app-screen is-active" id="overview" data-screen="overview" aria-labelledby="overview-title">
-        <header class="screen-header"><p>Options account</p><h1 id="overview-title">Portfolio pulse</h1></header>
-        <section class="premium-hero" aria-label="Net option premium"><span>Trusted net premium</span><strong id="total-premium">—</strong><small>Ambiguous activity excluded</small></section>
-        <dl class="stat-list">
-          <div><dt>Active cycles</dt><dd id="active-cycles">—</dd><small id="cycle-total">— total</small></div>
-          <div><dt>CC-eligible stocks</dt><dd id="open-positions">—</dd><small>100+ shares</small></div>
-          <div><dt>Needs review</dt><dd id="review-count">—</dd><small>Not in totals</small></div>
+        <header class="screen-header home-header">
+          <h1 id="overview-title">Wheel at a glance.</h1>
+        </header>
+
+        <section class="performance-hero" aria-labelledby="booked-profit-label">
+          <div class="hero-copy">
+            <span id="booked-profit-label">Booked profit</span>
+            <strong id="booked-profit">—</strong>
+            <small>Closed contracts, after fees</small>
+          </div>
+          <dl class="return-pair">
+            <div>
+              <dt>Return on collateral</dt>
+              <dd id="return-rate">—</dd>
+            </div>
+            <div>
+              <dt>Annualized</dt>
+              <dd id="annualized-return-rate">—</dd>
+            </div>
+          </dl>
+          <p class="quality-line" id="calculation-quality">Calculating trade coverage…</p>
+        </section>
+
+        <dl class="kpi-grid">
+          <div class="kpi-wide">
+            <dt>Wheel capital</dt>
+            <dd id="wheel-capital">—</dd><small id="wheel-capital-detail">Cash-secured puts + 100-share lots</small>
+          </div>
+          <div>
+            <dt>Open CSPs</dt>
+            <dd id="open-csps">—</dd><small id="csp-collateral">— secured</small>
+          </div>
+          <div>
+            <dt>Open CCs</dt>
+            <dd id="open-ccs">—</dd><small>Current short calls</small>
+          </div>
         </dl>
-        <section class="mini-section" aria-labelledby="overview-holdings-title"><div class="section-title"><div><p>Coverage</p><h2 id="overview-holdings-title">Call readiness</h2></div></div><div class="table-wrap"><table class="native-table"><thead><tr><th>Stock</th><th>Covered call</th><th>Shares</th></tr></thead><tbody id="overview-positions-body"></tbody></table></div></section>
+
+        <section class="home-section efficiency-section" aria-labelledby="efficiency-title">
+          <div class="section-title">
+            <div>
+              <p>Trading rhythm</p>
+              <h2 id="efficiency-title">Efficiency</h2>
+            </div>
+          </div>
+          <dl class="efficiency-grid">
+            <div>
+              <dt>Capital velocity</dt>
+              <dd id="capital-velocity">—</dd><small>Per $1k / 30 days</small>
+            </div>
+            <div>
+              <dt>Premium capture</dt>
+              <dd id="premium-capture">—</dd><small>Credit retained</small>
+            </div>
+            <div>
+              <dt>Next expiry</dt>
+              <dd id="next-expiry">—</dd><small id="expiry-detail">No open contracts</small>
+            </div>
+          </dl>
+        </section>
+
+        <section class="home-section" id="opportunities-section" aria-labelledby="opportunities-title" hidden>
+          <div class="section-title">
+            <div>
+              <p>Available now</p>
+              <h2 id="opportunities-title">Opportunities</h2>
+            </div>
+          </div>
+          <div class="opportunity-list" id="opportunity-list" aria-live="polite"></div>
+        </section>
+
+        <section class="home-section" aria-labelledby="open-trades-title">
+          <div class="section-title">
+            <div>
+              <p>Capital at work</p>
+              <h2 id="open-trades-title">Open trades</h2>
+            </div><span id="open-trade-count" class="section-count">—</span>
+          </div>
+          <div class="trade-list" id="open-trade-list" aria-live="polite"></div>
+        </section>
+
       </section>
 
       <section class="app-screen" id="cycles" data-screen="cycles" aria-labelledby="cycles-title" hidden>
-        <header class="screen-header"><p>Lifecycle</p><h1 id="cycles-title">Wheel cycles</h1></header>
-        <form class="filter-bar" id="cycle-filters" role="search"><label><span class="sr-only">Search symbol</span><input id="symbol-filter" type="search" placeholder="Symbol" autocomplete="off"></label><label><span class="sr-only">Filter stage</span><select id="stage-filter"><option value="">All stages</option><option value="short_put">Short put</option><option value="shares_held">Shares held</option><option value="covered_call">Covered call</option><option value="complete">Complete</option><option value="awaiting_review">Review</option></select></label><button type="reset">Clear</button></form>
-        <div class="table-wrap lifecycle-wrap"><table class="native-table cycle-table"><thead><tr><th>Cycle</th><th>Contract</th><th>Expiry</th><th>Net</th></tr></thead><tbody id="cycles-body"></tbody></table></div>
-        <div id="cycle-board" hidden aria-live="polite"></div>
-      </section>
-
-      <section class="app-screen" id="positions" data-screen="positions" aria-labelledby="positions-title" hidden>
-        <header class="screen-header"><p>100 shares or more</p><h1 id="positions-title">CC holdings</h1></header>
-        <div class="table-wrap"><table class="native-table holdings-table"><thead><tr><th>Stock</th><th>Covered call</th><th>Shares</th><th>Price</th><th>Basis</th></tr></thead><tbody id="positions-body"></tbody></table></div>
-      </section>
-
-      <section class="app-screen" id="premiums" data-screen="premiums" aria-labelledby="premiums-title" hidden>
-        <header class="screen-header"><p>Source-linked cash flow</p><h1 id="premiums-title">Premiums</h1></header>
-        <div class="table-wrap"><table class="native-table premium-table"><thead><tr><th>Activity</th><th>Gross</th><th>Fee</th><th>Net</th></tr></thead><tbody id="premiums-body"></tbody></table></div>
+        <header class="screen-header trades-header">
+          <p>One ticker at a time</p>
+          <h1 id="cycles-title">Wheel performance</h1><small>Tap a ticker to see its open and past contracts.</small>
+        </header>
+        <figure class="monthly-pnl-card" aria-labelledby="monthly-pnl-title">
+          <figcaption class="monthly-pnl-heading">
+            <div>
+              <p>Closed contracts by ticker</p>
+              <h2 id="monthly-pnl-title">Monthly booked P&amp;L</h2>
+            </div>
+            <div class="monthly-pnl-total">
+              <strong id="monthly-pnl-total">—</strong>
+              <small id="monthly-pnl-range">All history</small>
+            </div>
+          </figcaption>
+          <div class="monthly-chart-stage" id="monthly-chart-stage">
+            <div class="monthly-chart-scroll" id="monthly-chart-scroll" tabindex="0"
+              aria-label="Monthly booked profit and loss chart. Scroll horizontally to see more months.">
+              <svg id="monthly-pnl-chart" role="img" aria-labelledby="monthly-pnl-title monthly-pnl-description"></svg>
+            </div>
+            <div class="monthly-chart-tooltip" id="monthly-pnl-tooltip" role="tooltip" hidden>
+              <strong id="monthly-pnl-tooltip-label"></strong>
+              <b id="monthly-pnl-tooltip-value"></b>
+              <small id="monthly-pnl-tooltip-meta"></small>
+            </div>
+          </div>
+          <p class="sr-only" id="monthly-pnl-description">Stacked monthly option profit and loss, broken down by
+            ticker. Gains appear above zero and losses below zero.</p>
+          <div class="ticker-key-row">
+            <span>Filter by ticker</span>
+            <div class="ticker-key" id="monthly-pnl-legend" role="group"
+              aria-label="Tickers ranked by contribution magnitude"></div>
+          </div>
+        </figure>
+        <form class="filter-bar trades-filter-bar" id="ticker-filters" role="search">
+          <label class="ticker-search"><span class="sr-only">Search ticker</span><span class="ticker-search-icon"
+              aria-hidden="true"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5"></circle><path
+                  d="m10.5 10.5 3 3"></path></svg></span><input id="ticker-filter" type="search"
+              placeholder="Ticker" autocomplete="off"></label>
+          <label class="ticker-activity"><span class="sr-only">Filter trade activity</span><select
+              id="ticker-status-filter">
+              <option value="">All</option>
+              <option value="open">Open</option>
+              <option value="history">Past</option>
+            </select></label>
+          <div class="ticker-order"><button class="ticker-sort-direction" id="ticker-sort-direction" type="button"
+              aria-label="Sort descending. Tap to reverse." aria-pressed="false"><span id="ticker-sort-arrow"
+                aria-hidden="true">↓</span></button><span class="sr-only" id="ticker-sort-label">Sort tickers
+              by</span><select id="ticker-sort" aria-labelledby="ticker-sort-label">
+              <option value="date" selected>Date</option>
+              <option value="pnl">P&amp;L</option>
+              <option value="capital">Capital</option>
+              <option value="return">Return</option>
+            </select></div>
+        </form>
+        <div class="ticker-list" id="ticker-list" aria-live="polite"></div>
       </section>
 
       <section class="app-screen" id="screener" data-screen="screener" aria-labelledby="screener-title" hidden>
-        <header class="screen-header"><p>Informational estimates</p><h1 id="screener-title">Options screener</h1></header>
-        <form class="panel-form" id="screener-form"><label>Symbol<input name="symbol" required pattern="[A-Z][A-Z0-9.-]{0,9}" maxlength="10" placeholder="AAPL" autocomplete="off"></label><label>Strategy<select name="leg"><option value="cash_secured_put">Cash-secured put</option><option value="covered_call">Covered call</option></select></label><label>Cash available<input name="cash_available" type="number" min="0" step="100" value="10000"></label><label>Covered shares<input name="covered_shares" type="number" min="0" step="100" value="0"></label><button type="submit">Screen options</button></form>
+        <header class="screen-header">
+          <p>Informational estimates</p>
+          <h1 id="screener-title">Options screener</h1>
+        </header>
+        <form class="panel-form" id="screener-form"><label>Symbol<input name="symbol" required
+              pattern="[A-Z][A-Z0-9.-]{0,9}" maxlength="10" placeholder="AAPL"
+              autocomplete="off"></label><label>Strategy<select name="leg">
+              <option value="cash_secured_put">Cash-secured put</option>
+              <option value="covered_call">Covered call</option>
+            </select></label><label>Cash available<input name="cash_available" type="number" min="0" step="100"
+              value="10000"></label><label>Covered shares<input name="covered_shares" type="number" min="0" step="100"
+              value="0"></label><button type="submit">Screen options</button></form>
         <p class="data-note" id="screener-meta">Delayed, unofficial market data. Verify quotes with your broker.</p>
-        <div class="table-wrap"><table class="native-table"><thead><tr><th>Contract</th><th>Premium</th><th>Annualized</th><th>Delta</th></tr></thead><tbody id="screener-body"><tr class="empty-row"><td colspan="4">Run a screen to view ranked candidates.</td></tr></tbody></table></div>
+        <div class="table-wrap">
+          <table class="native-table">
+            <thead>
+              <tr>
+                <th>Contract</th>
+                <th>Premium</th>
+                <th>Annualized</th>
+                <th>Delta</th>
+              </tr>
+            </thead>
+            <tbody id="screener-body">
+              <tr class="empty-row">
+                <td colspan="4">Run a screen to view ranked candidates.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section class="app-screen" id="alerts" data-screen="alerts" aria-labelledby="alerts-title" hidden>
-        <header class="screen-header"><p>ntfy delivery</p><h1 id="alerts-title">Alerts</h1></header>
-        <section class="settings-card"><div><strong id="alert-status">Loading…</strong><small id="alert-detail">Checking outbox</small></div><button type="button" id="test-notification">Send test</button></section>
-        <div class="table-wrap"><table class="native-table"><thead><tr><th>Event</th><th>Status</th><th>Created</th></tr></thead><tbody id="alerts-body"></tbody></table></div>
+      <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
+        <header class="screen-header">
+          <p>Records and settings</p>
+          <h1 id="more-title">More</h1>
+        </header>
+        <section class="records-section" aria-labelledby="positions-title">
+          <div class="section-title">
+            <div>
+              <p>100 shares or more</p>
+              <h2 id="positions-title">CC holdings</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="native-table holdings-table">
+              <thead>
+                <tr>
+                  <th>Stock</th>
+                  <th>Covered call</th>
+                  <th>Shares</th>
+                  <th>Price</th>
+                  <th>Basis</th>
+                </tr>
+              </thead>
+              <tbody id="positions-body">
+                <tr class="empty-row">
+                  <td colspan="5">Open More to load holdings.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="records-section" aria-labelledby="premiums-title">
+          <div class="section-title">
+            <div>
+              <p>Source-linked cash flow</p>
+              <h2 id="premiums-title">Premium ledger</h2>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="native-table premium-table">
+              <thead>
+                <tr>
+                  <th>Activity</th>
+                  <th>Gross</th>
+                  <th>Fee</th>
+                  <th>Net</th>
+                </tr>
+              </thead>
+              <tbody id="premiums-body">
+                <tr class="empty-row">
+                  <td colspan="4">Open More to load premium activity.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="records-section" aria-labelledby="alerts-title">
+          <div class="section-title">
+            <div>
+              <p>ntfy delivery</p>
+              <h2 id="alerts-title">Alerts</h2>
+            </div>
+          </div>
+          <section class="settings-card">
+            <div><strong id="alert-status">Not loaded</strong><small id="alert-detail">Open More to check the
+                outbox</small></div><button type="button" id="test-notification">Send test</button>
+          </section>
+          <div class="table-wrap">
+            <table class="native-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody id="alerts-body">
+                <tr class="empty-row">
+                  <td colspan="3">Open More to load alerts.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
     </main>
 
     <nav class="bottom-nav" aria-label="Primary navigation">
-      <button class="is-active" type="button" data-target="overview" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3.5 10.5 12 3.7l8.5 6.8v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z"/></svg></span><span>Home</span></button>
-      <button type="button" data-target="cycles"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19.8 8.2A8.5 8.5 0 1 0 20 15h-2.7a6 6 0 1 1 .2-6.2L14 8.7l4.7 4.5L23 8.5z"/></svg></span><span>Cycles</span></button>
-      <button type="button" data-target="positions"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 4.5h16v4H4zm0 5.5h16v4H4zm0 5.5h16v4H4z"/></svg></span><span>Holdings</span></button>
-      <button type="button" data-target="premiums"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M13 2.5v2.1c2.7.4 4.4 2 4.5 4.3h-3c-.1-1.2-1-2-2.5-2-1.4 0-2.3.7-2.3 1.7 0 .8.7 1.3 2.8 1.8 3.7.8 5.2 2.2 5.2 4.8 0 2.5-1.8 4.2-4.7 4.6v2.1h-2v-2.1c-3-.4-4.8-2.1-4.9-4.7h3c.1 1.5 1.2 2.3 3 2.3 1.6 0 2.5-.7 2.5-1.8 0-.9-.7-1.5-2.9-2-3.4-.8-5-2.1-5-4.7 0-2.4 1.7-4 4.3-4.4v-2z"/></svg></span><span>Premiums</span></button>
-      <button type="button" data-target="screener"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5.5h10v2H4zm0 5h7v2H4zm0 5h5v2H4zm12.2-5a4.3 4.3 0 1 0 2.7 7.6l2.5 2.5 1.4-1.4-2.5-2.5a4.3 4.3 0 0 0-4.1-6.7zm0 2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z"/></svg></span><span>Screen</span></button>
-      <button type="button" data-target="alerts"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22a2.4 2.4 0 0 0 2.3-2h-4.6a2.4 2.4 0 0 0 2.3 2zm7-6.2-1.5-1.9V9a5.6 5.6 0 0 0-4.4-5.5V2h-2.2v1.5A5.6 5.6 0 0 0 6.5 9v4.9L5 15.8V18h14z"/></svg></span><span>Alerts</span></button>
+      <button class="is-active" type="button" data-target="overview" aria-current="page"><span class="nav-icon"
+          aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M3.5 10.5 12 3.7l8.5 6.8v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z" />
+          </svg></span><span>Home</span></button>
+      <button type="button" data-target="cycles"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M19.8 8.2A8.5 8.5 0 1 0 20 15h-2.7a6 6 0 1 1 .2-6.2L14 8.7l4.7 4.5L23 8.5z" />
+          </svg></span><span>Trades</span></button>
+      <button type="button" data-target="screener"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path
+              d="M4 5.5h10v2H4zm0 5h7v2H4zm0 5h5v2H4zm12.2-5a4.3 4.3 0 1 0 2.7 7.6l2.5 2.5 1.4-1.4-2.5-2.5a4.3 4.3 0 0 0-4.1-6.7zm0 2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z" />
+          </svg></span><span>Screen</span></button>
+      <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path
+              d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" />
+          </svg></span><span>More</span></button>
     </nav>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>
 </body>
+
 </html>

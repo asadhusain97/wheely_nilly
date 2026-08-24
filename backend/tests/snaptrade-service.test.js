@@ -139,6 +139,16 @@ describe('snaptrade service adapter', () => {
     assert.deepEqual(result.data.map(({ id }) => id), [1, 2, 3]);
   });
 
+  it('requests the full known activity history when no dates are supplied', async () => {
+    const client = makeFakeClient();
+    const service = createSnaptradeService({ config: makeConfig(), client });
+    await service.getActivities('acct-1');
+    assert.deepEqual(client.calls[0], [
+      'getAccountActivities',
+      { accountId: 'acct-1', offset: 0, limit: 1000 },
+    ]);
+  });
+
   it('redacts configured secrets from wrapped upstream messages', async () => {
     const client = makeFakeClient({
       listUserAccounts: () => Promise.reject(Object.assign(new Error('token commercial-secret'), { status: 401 })),

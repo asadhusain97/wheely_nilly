@@ -125,11 +125,10 @@ describe('ingest service', () => {
       ],
     );
     const activityCalls = snaptrade.calls.filter(([name]) => name === 'activities');
-    for (const [, , window] of activityCalls) {
-      const spanMs = new Date(window.endDate) - new Date(window.startDate);
-      const days = Math.round(spanMs / 86_400_000);
-      assert.ok(days >= 89 && days <= 91, `expected ~90 day window, got ${days}`);
-    }
+    assert.deepEqual(activityCalls, [
+      ['activities', 'acct-individual-1', undefined],
+      ['activities', 'acct-individual-2', undefined],
+    ]);
   });
 
   it('continues other endpoints when one step fails and marks the report', async () => {

@@ -284,7 +284,6 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `SNAPTRADE_ACCOUNT_IDS` | 1 | Empty | Comma-separated SnapTrade account IDs to ingest; required before refresh runs |
 | `INGEST_ENABLED` | 1 | `true` | Enables the scheduled ingestion job |
 | `INGEST_CRON` | 1 | `*/30 * * * *` | Cron expression for scheduled ingestion (in `TZ`) |
-| `INGEST_ACTIVITIES_DAYS` | 1 | `90` | Lookback window for account activities |
 | `INGEST_ORDERS_DAYS` | 1 | `90` | Lookback window for orders (SnapTrade caps at 90) |
 | `INGEST_STALE_AFTER_MINUTES` | 1 | `60` | Age after which the status endpoint marks persisted data stale |
 | `SNAPTRADE_TIMEOUT_MS` | 1 | `20000` | Per-request upstream timeout |
@@ -353,7 +352,7 @@ Snapshots land in `data/raw/accounts/<accountId>/<endpoint>/` as immutable, glob
 
 ### Phase 2 dashboard
 
-Open `http://127.0.0.1:3000` after starting the backend. The dashboard shows authoritative premium totals, cycle stages, current positions, adjusted and broker basis as separate concepts, review flags, source freshness, filters, and the option cash ledger. It is keyboard accessible and switches to a compact bottom navigation and single-column cycle board on mobile.
+Open `http://127.0.0.1:3000` after starting the backend. The home dashboard shows booked option profit, collateral-weighted and annualized returns, wheel capital, live CSP/CC counts, actionable uncovered-lot opportunities, open trades, calculation coverage, and source freshness. Trades are grouped into searchable ticker cards with summary KPIs and expandable open/closed contract history; screening, holdings, the source-linked premium ledger, and alerts remain available through four compact navigation destinations. The layout is keyboard accessible and stays in a centered, mobile-width column on desktop.
 
 The normalized schema, accounting conventions, idempotency keys, and migration approach are documented in [`docs/normalized-schema.md`](docs/normalized-schema.md). Derived endpoints use `Cache-Control: private, no-store` and include a calculation version and source freshness.
 

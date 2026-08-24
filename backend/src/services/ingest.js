@@ -50,21 +50,13 @@ export function createIngestService({
   }
 
   async function ingestAccount(account, report) {
-    const endDate = new Date();
-    const startDate = new Date(
-      endDate.getTime() - config.ingest.activitiesDays * 86_400_000,
-    );
     const steps = [
       ['balances', () => snaptrade.getBalances(account.id)],
       ['positions', () => snaptrade.getPositions(account.id)],
       ['orders', () => snaptrade.getOrders(account.id, config.ingest.ordersDays)],
       [
         'activities',
-        () =>
-          snaptrade.getActivities(account.id, {
-            startDate: startDate.toISOString().slice(0, 10),
-            endDate: endDate.toISOString().slice(0, 10),
-          }),
+        () => snaptrade.getActivities(account.id),
       ],
     ];
 

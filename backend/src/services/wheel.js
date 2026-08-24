@@ -1,5 +1,6 @@
 import { fromMinor, sumMinor } from '../lib/money.js';
 import { CALCULATION_VERSION } from './normalize.js';
+import { buildPerformanceDashboard } from './performance.js';
 
 function displayMoney(minor) {
   return minor === null || minor === undefined ? null : fromMinor(minor);
@@ -173,6 +174,8 @@ export function buildWheelCycles(normalized) {
 
 export function buildDerivedModel(normalized, freshness) {
   const cycles = buildWheelCycles(normalized);
+  const generatedAt = new Date().toISOString();
+  const holdings = normalized.holdings ?? normalized.positions.filter((position) => !position.option && position.quantity >= 100);
   const authoritativeEvents = normalized.events.filter((event) => event.authoritative);
   const optionEvents = authoritativeEvents.filter((event) => event.option);
   const trustedEventIds = new Set(cycles.filter((cycle) => !cycle.needsReview).flatMap((cycle) => cycle.events.map((event) => event.id)));
@@ -180,12 +183,12 @@ export function buildDerivedModel(normalized, freshness) {
   const premiumLedger = optionEvents.map((event) => ({ ...displayEvent(event), includedInTotals: trustedEventIds.has(event.id) }));
   return {
     calculationVersion: CALCULATION_VERSION,
-    generatedAt: new Date().toISOString(), freshness,
+    generatedAt, freshness,
     summary: {
       cycleCount: cycles.length,
       activeCycleCount: cycles.filter((cycle) => !cycle.closedAt).length,
       reviewCount: cycles.filter((cycle) => cycle.needsReview).length,
-      openPositionCount: normalized.positions.filter((position) => position.quantity !== 0).length,
+      openPositionCount: holdings.length,
       totalNetPremium: fromMinor(totalPremiumMinor),
       cash: normalized.balances.map((balance) => ({
         accountId: balance.accountId, currency: balance.currency,
@@ -193,9 +196,10 @@ export function buildDerivedModel(normalized, freshness) {
       })),
     },
     cycles,
-    positions: normalized.positions.map((position) => ({
+    positions: holdings.map((position) => ({
       ...position, price: displayMoney(position.priceMinor), brokerCostBasis: displayMoney(position.brokerCostBasisMinor),
     })),
+    dashboard: buildPerformanceDashboard(normalized, { now: new Date(generatedAt) }),
     premiumLedger,
     reconciliation: {
       sourceOptionCash: fromMinor(sumMinor(optionEvents.map((event) => event.netCashMinor))),

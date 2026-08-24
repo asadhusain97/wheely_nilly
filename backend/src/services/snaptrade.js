@@ -126,7 +126,7 @@ export function createSnaptradeService({ config, client }) {
       return response.data;
     },
 
-    async getActivities(accountId, { startDate, endDate, limit = 1000 }) {
+    async getActivities(accountId, { startDate, endDate, limit = 1000 } = {}) {
       let offset = 0;
       let combined = [];
       let firstPayload = null;
@@ -135,10 +135,10 @@ export function createSnaptradeService({ config, client }) {
           'accountInformation.getAccountActivities',
           () => snaptrade.accountInformation.getAccountActivities({
             accountId,
-            startDate,
-            endDate,
             offset,
             limit,
+            ...(startDate ? { startDate } : {}),
+            ...(endDate ? { endDate } : {}),
             ...userCredentials,
           }),
         );

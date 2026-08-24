@@ -47,7 +47,14 @@ describe('responsive dashboard shell', () => {
   it('keeps primary navigation to four clear destinations', () => {
     const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
     assert.equal((navigation.match(/<button/g) ?? []).length, 4);
-    for (const label of ['Home', 'Trades', 'Screen', 'More']) assert.match(navigation, new RegExp(`>${label}<`));
+    for (const label of ['Home', 'Trades', 'Screen', 'Settings']) assert.match(navigation, new RegExp(`>${label}<`));
+  });
+  it('keeps Settings as a minimal configuration destination', () => {
+    const settings = html.match(/<section class="app-screen" id="settings"[\s\S]*?<\/section>/)?.[0] ?? '';
+    assert.match(settings, /App configuration/);
+    assert.match(settings, /<h1 id="settings-title">Settings<\/h1>/);
+    assert.doesNotMatch(settings, /<table|<button|CC holdings|Premium ledger|Alerts/);
+    assert.doesNotMatch(js, /loadMore|loadAlerts|test-notification|\/api\/v1\/wheel\/(?:positions|premiums)/);
   });
   it('groups trades into searchable, expandable ticker histories', () => {
     for (const id of ['monthly-pnl-chart', 'monthly-pnl-tooltip', 'monthly-pnl-tooltip-label', 'monthly-pnl-tooltip-value', 'monthly-pnl-legend', 'ticker-filters', 'ticker-filter', 'ticker-status-filter', 'ticker-sort', 'ticker-sort-direction', 'ticker-sort-arrow', 'ticker-list']) {

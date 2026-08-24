@@ -202,90 +202,11 @@
         </div>
       </section>
 
-      <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
+      <section class="app-screen" id="settings" data-screen="settings" aria-labelledby="settings-title" hidden>
         <header class="screen-header">
-          <p>Records and settings</p>
-          <h1 id="more-title">More</h1>
+          <p>App configuration</p>
+          <h1 id="settings-title">Settings</h1>
         </header>
-        <section class="records-section" aria-labelledby="positions-title">
-          <div class="section-title">
-            <div>
-              <p>100 shares or more</p>
-              <h2 id="positions-title">CC holdings</h2>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table class="native-table holdings-table">
-              <thead>
-                <tr>
-                  <th>Stock</th>
-                  <th>Covered call</th>
-                  <th>Shares</th>
-                  <th>Price</th>
-                  <th>Basis</th>
-                </tr>
-              </thead>
-              <tbody id="positions-body">
-                <tr class="empty-row">
-                  <td colspan="5">Open More to load holdings.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <section class="records-section" aria-labelledby="premiums-title">
-          <div class="section-title">
-            <div>
-              <p>Source-linked cash flow</p>
-              <h2 id="premiums-title">Premium ledger</h2>
-            </div>
-          </div>
-          <div class="table-wrap">
-            <table class="native-table premium-table">
-              <thead>
-                <tr>
-                  <th>Activity</th>
-                  <th>Gross</th>
-                  <th>Fee</th>
-                  <th>Net</th>
-                </tr>
-              </thead>
-              <tbody id="premiums-body">
-                <tr class="empty-row">
-                  <td colspan="4">Open More to load premium activity.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <section class="records-section" aria-labelledby="alerts-title">
-          <div class="section-title">
-            <div>
-              <p>ntfy delivery</p>
-              <h2 id="alerts-title">Alerts</h2>
-            </div>
-          </div>
-          <section class="settings-card">
-            <div><strong id="alert-status">Not loaded</strong><small id="alert-detail">Open More to check the
-                outbox</small></div><button type="button" id="test-notification">Send test</button>
-          </section>
-          <div class="table-wrap">
-            <table class="native-table">
-              <thead>
-                <tr>
-                  <th>Event</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                </tr>
-              </thead>
-              <tbody id="alerts-body">
-                <tr class="empty-row">
-                  <td colspan="3">Open More to load alerts.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
       </section>
     </main>
 
@@ -301,10 +222,10 @@
             <path
               d="M4 5.5h10v2H4zm0 5h7v2H4zm0 5h5v2H4zm12.2-5a4.3 4.3 0 1 0 2.7 7.6l2.5 2.5 1.4-1.4-2.5-2.5a4.3 4.3 0 0 0-4.1-6.7zm0 2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z" />
           </svg></span><span>Screen</span></button>
-      <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
-            <path
-              d="M5 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 0a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" />
-          </svg></span><span>More</span></button>
+      <button type="button" data-target="settings"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path fill-rule="evenodd"
+              d="M19.4 13a7.7 7.7 0 0 0 0-2l2-1.6-2-3.5-2.5 1a8 8 0 0 0-1.7-1L14.8 3h-4l-.4 2.8a8 8 0 0 0-1.7 1l-2.5-1-2 3.5 2 1.6a7.7 7.7 0 0 0 0 2l-2 1.6 2 3.5 2.5-1a8 8 0 0 0 1.7 1l.4 2.8h4l.4-2.8a8 8 0 0 0 1.7-1l2.5 1 2-3.5zM12.8 15.4a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" />
+          </svg></span><span>Settings</span></button>
     </nav>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>

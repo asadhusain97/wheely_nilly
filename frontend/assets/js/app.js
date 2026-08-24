@@ -1,11 +1,8 @@
 const state = {
   dashboard: null,
-  positions: [],
-  premiums: [],
   tickerSort: 'date_desc',
   monthlyTicker: null,
   monthlyDetail: null,
-  loaded: { more: false },
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -92,80 +89,6 @@ function setFreshness(value) {
   updated.dateTime = value.lastSuccessAt ?? '';
   updated.classList.toggle('is-stale', value.stale);
   updated.title = value.stale ? 'Brokerage data may be stale' : 'Brokerage data is current';
-}
-
-function ccText(position) {
-  const cc = position.coveredCall;
-  if (cc.status === 'open') {
-    const expiry = cc.expirations.length ? cc.expirations.map(shortDate).join(', ') : 'No expiry';
-    return {
-      title: `${quantity(cc.contracts)} CC open`,
-      detail: `Expires ${expiry}${cc.availableLots ? ` · ${cc.availableLots} lot free` : ''}`,
-      open: true,
-    };
-  }
-  return { title: 'Ready for a CC', detail: `${cc.availableLots} lot${cc.availableLots === 1 ? '' : 's'} available`, open: false };
-}
-
-function positionRow(position) {
-  const row = el('tr');
-  const cc = ccText(position);
-  const symbolCell = el('td');
-  symbolCell.append(stack(position.symbol, `${position.coveredCall.totalLots} lot${position.coveredCall.totalLots === 1 ? '' : 's'}`));
-  const ccCell = el('td');
-  ccCell.append(stack(cc.title, cc.detail));
-  ccCell.querySelector('strong').className = `status-label${cc.open ? ' open' : ''}`;
-  row.append(
-    symbolCell,
-    ccCell,
-    el('td', 'number-cell', quantity(position.quantity)),
-    el('td', 'number-cell', money(position.price)),
-    el('td', 'number-cell', money(position.brokerCostBasis)),
-  );
-  return row;
-}
-
-function renderPositions() {
-  const body = $('#positions-body');
-  body.replaceChildren();
-  if (!state.positions.length) {
-    emptyRow(body, 5, 'No covered-call eligible holdings.');
-    return;
-  }
-  for (const position of state.positions) body.append(positionRow(position));
-}
-
-function premiumActivity(event) {
-  const contract = event.option;
-  const title = contract
-    ? `${contract.underlying} · ${contract.optionType === 'put' ? 'P' : 'C'} ${money(contract.strikeMinor / 100)}`
-    : 'Unknown contract';
-  return {
-    title,
-    detail: `${shortDate(event.occurredAt)} · ${label(event.action)}${event.includedInTotals ? '' : ' · Review'}`,
-  };
-}
-
-function renderPremiums() {
-  const body = $('#premiums-body');
-  body.replaceChildren();
-  if (!state.premiums.length) {
-    emptyRow(body, 4, 'No premium activity imported.');
-    return;
-  }
-  for (const event of state.premiums.slice().reverse().slice(0, 100)) {
-    const activity = premiumActivity(event);
-    const row = el('tr');
-    const activityCell = el('td');
-    activityCell.append(stack(activity.title, activity.detail));
-    row.append(
-      activityCell,
-      el('td', 'number-cell', money(event.amount)),
-      el('td', 'number-cell', money(event.fee)),
-      el('td', `number-cell ${Number(event.netCash) >= 0 ? 'positive' : 'negative'}`, money(event.netCash, { sign: true })),
-    );
-    body.append(row);
-  }
 }
 
 function openCoveredCallScreen(opportunity) {
@@ -820,40 +743,6 @@ async function loadDashboard() {
   renderDashboard(dashboard);
 }
 
-async function loadAlerts() {
-  const [status, audit] = await Promise.all([
-    json('/api/v1/notifications/status'),
-    json('/api/v1/notifications/audit'),
-  ]);
-  $('#alert-status').textContent = status.dryRun ? 'Dry run enabled' : status.configured ? 'ntfy configured' : 'ntfy not configured';
-  $('#alert-detail').textContent = Object.entries(status.counts).map(([key, value]) => `${value} ${key}`).join(' · ') || 'No notifications yet';
-  const body = $('#alerts-body');
-  body.replaceChildren();
-  if (!audit.notifications.length) {
-    emptyRow(body, 3, 'No notification attempts yet.');
-    return;
-  }
-  for (const item of audit.notifications) {
-    const row = el('tr');
-    row.append(el('td', '', label(item.eventType)), el('td', 'number-cell', label(item.status)), el('td', 'number-cell', shortDate(item.createdAt)));
-    body.append(row);
-  }
-}
-
-async function loadMore() {
-  if (state.loaded.more) return;
-  const [positions, premiums] = await Promise.all([
-    json('/api/v1/wheel/positions'),
-    json('/api/v1/wheel/premiums'),
-    loadAlerts(),
-  ]);
-  state.positions = positions.positions;
-  state.premiums = premiums.premiumLedger;
-  state.loaded.more = true;
-  renderPositions();
-  renderPremiums();
-}
-
 function showScreen(target) {
   for (const screen of document.querySelectorAll('.app-screen')) {
     const active = screen.dataset.screen === target;
@@ -866,7 +755,7 @@ function showScreen(target) {
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', more: 'Records and settings' };
+  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', settings: 'Settings' };
   const screenKicker = $('#screen-kicker');
   if (screenKicker) screenKicker.textContent = names[target];
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -874,7 +763,6 @@ function showScreen(target) {
     renderMonthlyPerformance(state.dashboard?.tickerPerformance ?? []);
     renderTickerTrades();
   }
-  if (target === 'more') loadMore().catch((error) => toast(error.message));
 }
 
 $('#ticker-filters').addEventListener('input', renderTickerTrades);
@@ -892,7 +780,6 @@ $('#refresh-button').addEventListener('click', async () => {
   button.setAttribute('aria-label', 'Refreshing portfolio data');
   try {
     const report = await json('/api/v1/snaptrade/refresh', { method: 'POST' });
-    state.loaded = { more: false };
     await loadDashboard();
     toast(report.ok ? 'Portfolio refreshed.' : 'Refresh completed with some errors.');
   } catch (error) {
@@ -944,16 +831,6 @@ $('#screener-form').addEventListener('submit', async (event) => {
     toast(error.message);
   } finally {
     button.disabled = false;
-  }
-});
-
-$('#test-notification').addEventListener('click', async () => {
-  try {
-    await json('/api/v1/notifications/test', { method: 'POST' });
-    toast('Test notification queued.');
-    await loadAlerts();
-  } catch (error) {
-    toast(error.message);
   }
 });
 

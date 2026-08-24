@@ -18,4 +18,14 @@ describe('normalization', () => {
     assert.equal(model.events.filter((event) => event.authoritative).length, 1);
     assert.equal(model.events[0].netCashMinor, 12497);
   });
+  it('normalizes refreshed equity quotes with their snapshot time', () => {
+    const model = normalizeSnapshots([snapshot('quotes', [{
+      symbol: { symbol: 'WXYZ' }, last_trade_price: 43.21, bid_price: 43.20, ask_price: 43.22,
+    }])]);
+    assert.deepEqual(model.quotes, [{
+      accountId: 'acct-1', symbol: 'WXYZ', lastTradePriceMinor: 4321,
+      bidPriceMinor: 4320, askPriceMinor: 4322, asOf: '2026-08-23T12:00:00.000Z',
+      snapshotHash: 'quotes-hash',
+    }]);
+  });
 });

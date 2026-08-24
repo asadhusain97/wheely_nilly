@@ -44,6 +44,15 @@ function stack(primary, secondary, className = 'cell-stack') {
   return node;
 }
 
+function stockPriceTag(value) {
+  const available = value !== null && value !== undefined;
+  const price = money(value);
+  const tag = el('span', `stock-price-tag${available ? '' : ' is-unavailable'}`, price);
+  tag.setAttribute('aria-label', available ? `Latest stock price ${price}` : 'Latest stock price unavailable');
+  tag.title = available ? 'Latest brokerage stock price' : 'Latest stock price unavailable';
+  return tag;
+}
+
 function emptyRow(body, columns, message) {
   const row = el('tr', 'empty-row');
   const cell = el('td', '', message);
@@ -637,9 +646,13 @@ function tickerCard(ticker) {
   const summary = el('summary', 'ticker-summary');
   const topline = el('div', 'ticker-topline');
   const name = el('div', 'ticker-name');
+  const nameCopy = el('div', 'ticker-name-copy');
+  const symbolLine = el('div', 'ticker-symbol-line');
+  symbolLine.append(el('strong', '', ticker.symbol), stockPriceTag(ticker.stockPrice));
+  nameCopy.append(symbolLine, el('small', '', contractCountText(ticker)));
   name.append(
     el('span', 'ticker-monogram', ticker.symbol.slice(0, 2)),
-    stack(ticker.symbol, contractCountText(ticker), 'ticker-name-copy'),
+    nameCopy,
   );
   const result = el('div', 'ticker-result');
   result.append(
@@ -740,7 +753,11 @@ function renderOpenTrades(dashboard) {
     const card = el('article', 'trade-card');
     const top = el('div', 'trade-topline');
     const identity = el('div', 'trade-identity');
-    identity.append(el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()), el('strong', '', trade.symbol));
+    identity.append(
+      el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
+      el('strong', '', trade.symbol),
+      stockPriceTag(trade.stockPrice),
+    );
     top.append(identity, el('span', trade.dte !== null && trade.dte <= 7 ? 'trade-timing urgent' : 'trade-timing', dteLabel(trade.dte)));
 
     const contract = el('div', 'trade-contract');

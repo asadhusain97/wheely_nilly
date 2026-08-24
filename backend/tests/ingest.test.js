@@ -55,6 +55,10 @@ function makeFakeSnaptrade(overrides = {}) {
       calls.push(['activities', accountId, window]);
       return [];
     },
+    async getQuotes(accountId, symbols) {
+      calls.push(['quotes', accountId, symbols]);
+      return [];
+    },
     ...overrides,
   };
 }
@@ -152,6 +156,34 @@ describe('ingest service', () => {
       report.endpoints.filter((entry) => entry.status === 'ok').length,
       3,
     );
+  });
+
+  it('discovers wheel tickers and snapshots refreshed equity quotes', async () => {
+    let requestedSymbols;
+    const snaptrade = makeFakeSnaptrade({
+      async getPositions() {
+        return { results: [{ symbol: { symbol: 'WXYZ' }, units: '100' }] };
+      },
+      async getActivities() {
+        return { data: [{ option_symbol: 'ABCD260918P00040000' }] };
+      },
+      async getQuotes(_accountId, symbols) {
+        requestedSymbols = symbols;
+        return symbols.map((symbol) => ({ symbol: { symbol }, last_trade_price: 42.15 }));
+      },
+    });
+    const snapshots = makeFakeSnapshots();
+    const ingest = createIngestService({
+      config: makeConfig({ SNAPTRADE_ACCOUNT_IDS: 'acct-individual-1' }),
+      snaptrade,
+      snapshots,
+      logger: { error: () => {}, info: () => {} },
+    });
+    const report = await ingest.run('manual');
+    assert.equal(report.ok, true);
+    assert.deepEqual(requestedSymbols, ['ABCD', 'WXYZ']);
+    assert.equal(report.endpoints.at(-1).endpoint, 'quotes');
+    assert.deepEqual(snapshots.writes.at(-1).payload.map((quote) => quote.symbol.symbol), ['ABCD', 'WXYZ']);
   });
 
   it('prevents overlapping runs by sharing the in-flight promise', async () => {

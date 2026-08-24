@@ -8,6 +8,7 @@ Activity ingestion requests the full transaction history known to SnapTrade and 
 
 - `events`: brokerage activities and orders with account, UTC occurrence time, action, option contract, quantity, integer minor-unit price/amount/fee/net cash, and review status. Activities are authoritative cash facts; orders are retained as non-authoritative execution context to prevent double counting.
 - `positions`: latest broker-reported equity or option quantity, price, and broker cost basis.
+- `quotes`: latest refresh-time brokerage equity quote by account and ticker, including last trade, bid, ask, and snapshot time. Quotes may be delayed by the brokerage and are never polled continuously.
 - `balances`: latest cash and buying power by account and currency.
 - `cycles`: derived lifecycle groupings with contracts, shares, premiums, adjusted basis, realized state, supported notes, and ambiguity flags.
 

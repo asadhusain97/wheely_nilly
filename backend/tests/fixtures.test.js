@@ -13,16 +13,18 @@ describe('sanitized Phase 1 fixtures', () => {
     const positions = load('positions.json').results;
     const orders = load('orders.json');
     const activities = load('activities.json');
+    const quotes = load('quotes.json');
     assert.ok(Number(balances[0].cash) > 0);
     assert.ok(positions.some((position) => Number(position.units) > 0));
     assert.ok(positions.some((position) => position.symbol.option_type === 'PUT' && Number(position.units) < 0));
     assert.ok(positions.some((position) => position.symbol.option_type === 'CALL' && Number(position.units) < 0));
     assert.ok(orders.every((order) => order.option_symbol));
     assert.equal(activities.data.length, activities.pagination.total);
+    assert.ok(Number(quotes[0].last_trade_price) > 0);
   });
 
   it('contain no account numbers or credential-shaped fields', () => {
-    const serialized = ['balances.json', 'positions.json', 'orders.json', 'activities.json']
+    const serialized = ['balances.json', 'positions.json', 'orders.json', 'activities.json', 'quotes.json']
       .map((name) => JSON.stringify(load(name))).join('');
     assert.doesNotMatch(serialized, /consumer.?key|user.?secret|authorization|account.?number/i);
   });

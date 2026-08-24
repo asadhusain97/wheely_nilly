@@ -19,6 +19,10 @@ describe('dashboard account and holding scope', () => {
         { accountId: 'other-account', symbol: 'OTHER', option: null, quantity: 500 },
       ],
       balances: [{ accountId: 'options-account' }, { accountId: 'other-account' }],
+      quotes: [
+        { accountId: 'options-account', symbol: 'KEEP', lastTradePriceMinor: 1234 },
+        { accountId: 'other-account', symbol: 'OTHER', lastTradePriceMinor: 5678 },
+      ],
     };
     const scoped = scopeToOptionsAccount(normalized);
     assert.equal(scoped.scope.accountId, 'options-account');
@@ -33,6 +37,7 @@ describe('dashboard account and holding scope', () => {
     });
     assert.equal(scoped.holdings[1].coveredCall.status, 'available');
     assert.equal(scoped.balances.length, 1);
+    assert.deepEqual(scoped.quotes.map(({ symbol }) => symbol), ['KEEP']);
   });
 
   it('falls back to option history when no option contract is currently open', () => {

@@ -127,7 +127,7 @@ function performanceRates(trades) {
   };
 }
 
-function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptions, equityBySymbol }) {
+function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptions, equityBySymbol, stockPriceBySymbol }) {
   const symbols = new Set([
     ...closedTrades.map((trade) => trade.option.underlying),
     ...openTrades.map((trade) => trade.symbol),
@@ -180,6 +180,7 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptio
 
     return {
       symbol,
+      stockPrice: fromMinor(stockPriceBySymbol.get(symbol)),
       bookedProfit: fromMinor(bookedProfitMinor),
       returnRate: rates.returnRate,
       annualizedReturnRate: rates.annualizedReturnRate,
@@ -206,6 +207,12 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
   const authoritativeOptionEvents = normalized.events.filter((event) => event.authoritative && event.option);
   const optionEventDates = authoritativeOptionEvents.map((event) => event.occurredAt).filter(Boolean).sort();
   const equityBySymbol = new Map(holdings.map((position) => [position.symbol, position]));
+  const stockPriceBySymbol = new Map(holdings
+    .filter((position) => Number.isSafeInteger(position.priceMinor))
+    .map((position) => [position.symbol, position.priceMinor]));
+  for (const quote of normalized.quotes ?? []) {
+    if (Number.isSafeInteger(quote.lastTradePriceMinor)) stockPriceBySymbol.set(quote.symbol, quote.lastTradePriceMinor);
+  }
   const { closedTrades, openLots, unmatchedCloseContracts } = buildOptionLots(normalized.events);
 
   const bookedProfitMinor = sumMinor(closedTrades.map((trade) => trade.profitMinor));
@@ -232,6 +239,7 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
     return {
       id: position.option.symbol,
       symbol: position.option.underlying,
+      stockPrice: fromMinor(stockPriceBySymbol.get(position.option.underlying)),
       contractSymbol: position.option.symbol,
       type: position.option.optionType === 'put' ? 'csp' : 'cc',
       contracts,
@@ -250,6 +258,7 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
     holdings,
     shortOptions,
     equityBySymbol,
+    stockPriceBySymbol,
   });
 
   const coveredCallOpportunities = holdings.filter((position) => position.coveredCall.availableLots > 0)

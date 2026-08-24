@@ -28,6 +28,7 @@ export function scopeToOptionsAccount(normalized) {
   if (!scopedAccountId) {
     return {
       ...normalized, events: [], positions: [], holdings: [], optionPositions: [], balances: [],
+      quotes: [],
       scope: { accountId: null, symbols: [], minimumSharesInclusive: MIN_VISIBLE_EQUITY_SHARES },
     };
   }
@@ -66,6 +67,7 @@ export function scopeToOptionsAccount(normalized) {
     holdings,
     optionPositions,
     balances: normalized.balances.filter((balance) => balance.accountId === scopedAccountId),
+    quotes: (normalized.quotes ?? []).filter((quote) => quote.accountId === scopedAccountId && symbols.has(quote.symbol)),
     scope: { accountId: scopedAccountId, symbols: [...symbols].sort(), minimumSharesInclusive: MIN_VISIBLE_EQUITY_SHARES },
   };
 }

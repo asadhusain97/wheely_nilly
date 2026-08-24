@@ -91,6 +91,10 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /\.ticker-sort-direction span\{[^}]*background:var\(--canvas\)/);
     assert.match(js, /toggleTickerSortDirection/);
     assert.match(js, /syncTickerSortDirection/);
+    assert.match(js, /stockPriceTag/);
+    assert.match(js, /trade\.stockPrice/);
+    assert.match(js, /ticker\.stockPrice/);
+    assert.match(css, /\.stock-price-tag\{/);
     assert.match(css, /\.ticker-kpis\{[^}]*grid-template-columns:repeat\(4,1fr\)/);
     assert.doesNotMatch(html, /id="cycles-body"/);
   });

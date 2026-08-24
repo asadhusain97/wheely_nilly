@@ -131,10 +131,25 @@ function normalizePosition(accountId, position, snapshot) {
   };
 }
 
+function normalizeQuote(accountId, quote, snapshot) {
+  const symbol = quote.symbol?.symbol ?? quote.symbol?.raw_symbol ?? quote.symbol;
+  if (typeof symbol !== 'string' || !symbol.trim()) return null;
+  return {
+    accountId,
+    symbol: symbol.trim().toUpperCase(),
+    lastTradePriceMinor: toMinor(quote.last_trade_price),
+    bidPriceMinor: toMinor(quote.bid_price),
+    askPriceMinor: toMinor(quote.ask_price),
+    asOf: snapshot.fetchedAt,
+    snapshotHash: snapshot.contentSha256,
+  };
+}
+
 export function normalizeSnapshots(snapshots) {
   const events = [];
   const positions = [];
   const balances = [];
+  const quotes = [];
   for (const snapshot of snapshots) {
     const accountId = snapshot.accountId;
     if (snapshot.endpoint === 'activities') {
@@ -148,9 +163,15 @@ export function normalizeSnapshots(snapshots) {
         accountId, currency: item.currency?.code ?? 'USD', cashMinor: toMinor(item.cash),
         buyingPowerMinor: toMinor(item.buying_power), snapshotHash: snapshot.contentSha256,
       });
+    } else if (snapshot.endpoint === 'quotes') {
+      for (const item of snapshot.payload ?? []) {
+        const quote = normalizeQuote(accountId, item, snapshot);
+        if (quote) quotes.push(quote);
+      }
     }
   }
   const uniqueEvents = [...new Map(events.map((event) => [event.id, event])).values()]
     .sort((a, b) => String(a.occurredAt).localeCompare(String(b.occurredAt)) || a.id.localeCompare(b.id));
-  return { schemaVersion: NORMALIZED_SCHEMA_VERSION, calculationVersion: CALCULATION_VERSION, events: uniqueEvents, positions, balances };
+  const uniqueQuotes = [...new Map(quotes.map((quote) => [`${quote.accountId}:${quote.symbol}`, quote])).values()];
+  return { schemaVersion: NORMALIZED_SCHEMA_VERSION, calculationVersion: CALCULATION_VERSION, events: uniqueEvents, positions, balances, quotes: uniqueQuotes };
 }

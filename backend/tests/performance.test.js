@@ -51,6 +51,7 @@ function model({ basisMinor = 4000 } = {}) {
       { accountId: 'acct-1', symbol: 'WXYZ', option: put, quantity: -1, priceMinor: 90, brokerCostBasisMinor: 100 },
       { accountId: 'acct-1', symbol: 'WXYZ', option: openCall, quantity: -1, priceMinor: 80, brokerCostBasisMinor: 120 },
     ],
+    quotes: [{ accountId: 'acct-1', symbol: 'WXYZ', lastTradePriceMinor: 4321, asOf: '2026-08-23T12:00:00.000Z' }],
     balances: [{ accountId: 'acct-1', currency: 'USD', cashMinor: 1250000, buyingPowerMinor: 2000000 }],
   };
 }
@@ -75,6 +76,7 @@ describe('wheel performance dashboard', () => {
       { type: 'cc', contracts: 1 },
       { type: 'csp', contracts: 1 },
     ]);
+    assert.ok(dashboard.openTrades.every((trade) => trade.stockPrice === '43.21'));
     assert.equal(dashboard.tickerPerformance.length, 1);
     const ticker = dashboard.tickerPerformance[0];
     assert.equal(ticker.symbol, 'WXYZ');
@@ -82,6 +84,7 @@ describe('wheel performance dashboard', () => {
     assert.equal(ticker.returnRate, 0.017778);
     assert.equal(ticker.annualizedReturnRate, 0.449231);
     assert.equal(ticker.capitalInvolved, '13000.00');
+    assert.equal(ticker.stockPrice, '43.21');
     assert.deepEqual(
       { total: ticker.openContracts, csps: ticker.openCspContracts, ccs: ticker.openCcContracts },
       { total: 2, csps: 1, ccs: 1 },
@@ -112,5 +115,13 @@ describe('wheel performance dashboard', () => {
     assert.equal(dashboard.tickerPerformance[0].quality.returnTradesExcluded, 1);
     assert.equal(dashboard.quality.returnTradesIncluded, 1);
     assert.equal(dashboard.quality.returnTradesExcluded, 1);
+  });
+
+  it('falls back to the refreshed position price when no quote is available', () => {
+    const input = model();
+    input.quotes = [];
+    const dashboard = buildPerformanceDashboard(input, { now: new Date('2026-08-23T00:00:00Z') });
+    assert.equal(dashboard.tickerPerformance[0].stockPrice, '43.00');
+    assert.ok(dashboard.openTrades.every((trade) => trade.stockPrice === '43.00'));
   });
 });

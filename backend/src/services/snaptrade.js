@@ -112,6 +112,22 @@ export function createSnaptradeService({ config, client }) {
       return response.data;
     },
 
+    async getQuotes(accountId, symbols) {
+      const tickers = [...new Set(symbols.map((symbol) => String(symbol).trim().toUpperCase()).filter(Boolean))];
+      if (tickers.length > 10) throw new RangeError('SnapTrade quotes accept at most 10 tickers per request');
+      if (!tickers.length) return [];
+      const response = await call(
+        'trading.getUserAccountQuotes',
+        () => snaptrade.trading.getUserAccountQuotes({
+          accountId,
+          symbols: tickers.join(','),
+          useTicker: true,
+          ...userCredentials,
+        }),
+      );
+      return response.data;
+    },
+
     async getOrders(accountId, days) {
       const response = await call(
         'accountInformation.getUserAccountOrders',

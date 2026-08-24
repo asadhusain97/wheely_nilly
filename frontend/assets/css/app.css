@@ -58,8 +58,10 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 
 .trade-card{padding:14px;border:1px solid var(--line);border-radius:18px;background:var(--canvas)}
 .trade-topline,.trade-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.trade-identity{display:flex;align-items:center;gap:8px}
+.trade-identity{min-width:0;display:flex;align-items:center;gap:8px}
 .trade-identity>strong{font-size:14px}
+.stock-price-tag{min-width:max-content;height:20px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;padding:0 7px;border:1px solid var(--soft-line);border-radius:7px;background:var(--card);color:var(--body);font-size:9px;font-weight:720;font-variant-numeric:tabular-nums;letter-spacing:-.08px;white-space:nowrap}
+.stock-price-tag.is-unavailable{color:var(--ash);font-weight:600}
 .trade-badge{display:inline-grid;min-width:36px;height:23px;place-items:center;border-radius:7px;background:#f7dfe3;color:var(--red-deep);font-size:8px;font-weight:850;letter-spacing:.04em}
 .trade-badge.cc{background:#e4e7f8;color:#3548a5}
 .trade-timing{color:var(--mute);font-size:9px;font-weight:700}
@@ -142,6 +144,7 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 .ticker-name-copy{min-width:0;display:grid;gap:3px}
 .ticker-name-copy strong{font-size:14px}
 .ticker-name-copy small{font-size:8px}
+.ticker-symbol-line{min-width:0;display:flex;align-items:center;gap:6px}
 .ticker-result{min-width:102px;display:grid;grid-template-columns:minmax(0,1fr) 16px;column-gap:6px;text-align:right}
 .ticker-result small,.ticker-result strong{grid-column:1}
 .ticker-result small{color:var(--mute);font-size:7px;line-height:1.2}

@@ -28,6 +28,7 @@ function makeFakeClient(overrides = {}) {
   return {
     calls,
     apiStatus: { check: () => Promise.resolve({ data: { version: 151 } }) },
+    trading: { getUserAccountQuotes: record('getUserAccountQuotes') },
     connections: { listBrokerageAuthorizations: record('listBrokerageAuthorizations') },
     authentication: { loginSnapTradeUser: record('loginSnapTradeUser') },
     accountInformation: {
@@ -120,6 +121,20 @@ describe('snaptrade service adapter', () => {
       'getUserAccountOrders',
       { accountId: 'acct-1', state: 'all', days: 45 },
     ]);
+  });
+
+  it('requests refreshed equity quotes by ticker', async () => {
+    const client = makeFakeClient();
+    const service = createSnaptradeService({ config: makeConfig(), client });
+    await service.getQuotes('acct-1', ['WXYZ', 'ABCD']);
+    assert.deepEqual(client.calls[0], [
+      'getUserAccountQuotes',
+      { accountId: 'acct-1', symbols: 'WXYZ,ABCD', useTicker: true },
+    ]);
+    await assert.rejects(
+      service.getQuotes('acct-1', Array.from({ length: 11 }, (_, index) => `S${index}`)),
+      /at most 10 tickers/,
+    );
   });
 
   it('paginates activities until the reported total is collected', async () => {

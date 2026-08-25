@@ -40,13 +40,13 @@ services:
     build:
       context: .
       dockerfile: docker/sidecar.Dockerfile
-    env_file:
-      - .env
     environment:
       PORT: 8000
+      ALPHAVANTAGE_API_KEY: ${ALPHAVANTAGE_API_KEY:-}
+      SCREENER_PROVIDERS: ${SCREENER_PROVIDERS:-alphavantage,yfinance}
       SCREENER_CACHE_TTL_SECONDS: ${SCREENER_CACHE_TTL_SECONDS:-120}
       SCREENER_MAX_CONCURRENCY: ${SCREENER_MAX_CONCURRENCY:-2}
-      SCREENER_TIMEOUT_SECONDS: 15
+      SCREENER_TIMEOUT_SECONDS: ${SCREENER_TIMEOUT_SECONDS:-15}
     expose:
       - "8000"
     volumes:

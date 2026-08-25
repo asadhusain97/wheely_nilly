@@ -14,7 +14,7 @@ const requestSchema = z.object({
 
 const responseSchema = z.object({ schema_version: z.literal(1), calculation_version: z.string(), provider: z.string(),
   quote_timestamp: z.string(), cache: z.object({ hit: z.boolean(), age_seconds: z.number().nullable(), stale: z.boolean() }),
-  degraded: z.boolean(), assumptions: z.record(z.string(), z.unknown()), exclusions: z.record(z.string(), z.number()),
+  degraded: z.boolean(), warning: z.string().nullable().optional(), assumptions: z.record(z.string(), z.unknown()), exclusions: z.record(z.string(), z.number()),
   candidates: z.array(z.object({ contract_symbol: z.string(), expiration: z.string(), dte: z.number(), strike: z.number(),
     executable_premium: z.number(), annualized_return: z.number(), delta: z.number().nullable(), quote_age_seconds: z.number() }).passthrough()),
 }).passthrough();

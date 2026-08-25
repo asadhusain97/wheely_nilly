@@ -4,6 +4,24 @@ A lightweight, self-hosted dashboard for observing and improving an options whee
 
 Phases 1–4 are implemented locally: the backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, screens options through an internal Python sidecar, and delivers deduplicated risk notifications through ntfy. Implementation follows [`PLAN.md`](PLAN.md).
 
+## First-run setup
+
+Wheely Nilly is designed for one person running their own local copy. It has no shared login system and never asks for brokerage credentials directly. SnapTrade handles brokerage authorization; this project stores only API credentials and read-only portfolio snapshots on the machine running it.
+
+Requires Node.js 22 or newer and Python 3.12 or newer. Docker is not required.
+
+```bash
+git clone <your-repository-url> wheely-nilly
+```
+```bash
+cd wheely-nilly/backend
+npm install
+npm run setup
+npm run app
+```
+
+The setup wizard explains each step, masks secrets while they are entered, verifies the SnapTrade key, opens the path to connect a brokerage, lets the user choose accounts, writes the ignored repository-root `.env` file with mode `0600`, and performs the first portfolio sync. `npm run app` prepares the Python screener on first use and starts both local services. Then open `http://127.0.0.1:3000`; press Ctrl+C in the terminal to stop the app.
+
 ## Architecture
 
 ```mermaid
@@ -11,8 +29,9 @@ flowchart LR
     Browser[Vanilla JS dashboard] -->|Same-origin HTTP| Node[Node.js + Express API]
     Node -->|Signed HTTPS requests| SnapTrade[SnapTrade API]
     SnapTrade --> Robinhood[Robinhood connection]
-    Node -->|Internal Docker network| Python[Python screener sidecar]
-    Python -->|Market-data HTTPS| Provider[yfinance / Alpha Vantage]
+    Node -->|Local HTTP| Python[Python screener sidecar]
+    Python -->|Primary| Alpha[Alpha Vantage realtime options]
+    Python -->|Fallback| Yahoo[yfinance]
     Node -->|HTTP POST| Ntfy[ntfy]
     Node --> Data[(Local data volume)]
     Python --> Data
@@ -24,7 +43,7 @@ flowchart LR
 | --- | --- | --- |
 | `backend` | SnapTrade integration, normalization, local API routes, scheduled jobs, static frontend hosting, and ntfy delivery | Bound to `127.0.0.1:3000` by default |
 | `frontend` | Dashboard rendering and local strategy-settings editing with vanilla HTML, CSS, and JavaScript | Served by `backend`; no secrets or direct vendor calls |
-| `screener` | Options-chain retrieval and pandas-based calculations | Internal Docker network only; opt-in Compose profile |
+| `screener` | Options-chain retrieval and pandas-based calculations | Loopback-only Python service |
 | `data` | Raw snapshots, future normalized records, and provider cache | Local bind mount; ignored by Git |
 
 The Node service is the trust boundary. SnapTrade and ntfy credentials must never be placed in frontend code, browser storage, API responses, query strings, images, or logs. The Python service receives only the symbols and strategy parameters it needs; it does not receive SnapTrade credentials.
@@ -79,49 +98,53 @@ The Node service is the trust boundary. SnapTrade and ntfy credentials must neve
 - Vendor calls must use HTTPS, explicit timeouts, bounded retries with jitter, and rate-limit-aware scheduling.
 - The dashboard has no application authentication yet. Do not expose port `3000` directly to the public internet.
 
-## SnapTrade Credentials
+## API keys and connection setup
 
-### 1. Create the local environment file
+### SnapTrade Personal key
 
-From the repository root:
+Use a Personal API key for this one-person, self-hosted application:
+
+1. [Create a free SnapTrade Personal account](https://dashboard.snaptrade.com/signup) and verify the email address.
+2. Enable two-factor authentication in the SnapTrade Dashboard.
+3. Open the [SnapTrade API Key page](https://dashboard.snaptrade.com/api-key) and create a Personal API key.
+4. Run `npm run setup` from `backend/` and enter the `clientId` and `consumerKey` when prompted. The consumer key is masked and written only to the local `.env` file.
+5. If a brokerage is not already connected, the wizard generates a short-lived SnapTrade Connection Portal URL. Complete the connection there, return to the terminal, and select the accounts to sync.
+
+The Personal key represents the person running this copy. Do not register a separate SnapTrade user, and do not enter Robinhood—or any brokerage—credentials into Wheely Nilly. Brokerage authentication occurs only in SnapTrade's hosted portal. See SnapTrade's [official Personal quickstart](https://docs.snaptrade.com/docs/getting-started#personal-quickstart) for the current upstream process.
+
+### Alpha Vantage key
+
+Request a key from the [official Alpha Vantage key form](https://www.alphavantage.co/support/#api-key), then enter it when the wizard asks or set `ALPHAVANTAGE_API_KEY` in `.env`.
+
+The Screener requests Alpha Vantage's real-time option chain with Greeks and its real-time underlying quote concurrently. Real-time US options are a premium Alpha Vantage function and require the appropriate data entitlement. A free key alone does not guarantee fresher options data. When the key is missing, rate-limited, not entitled, unavailable, or returns an invalid response, the same request automatically falls back to `yfinance` and is visibly marked degraded.
+
+### What each value does
+
+| Variable | Mode | Purpose | Handling rule |
+| --- | --- | --- | --- |
+| `SNAPTRADE_CLIENT_ID` | Both | Identifies the SnapTrade API key | Keep server-side |
+| `SNAPTRADE_CONSUMER_KEY` | Both | Signs API requests | Treat as a high-value secret; rotate if exposed |
+| `SNAPTRADE_USER_ID` | Commercial only | Stable application-level identifier for a registered SnapTrade user | Generate once; never recreate on every boot |
+| `SNAPTRADE_USER_SECRET` | Commercial only | Authenticates requests for that registered user | Store securely; never send to the browser or log it |
+| `SNAPTRADE_BROKERAGE_AUTHORIZATION_ID` | Both | Optional identifier for the discovered Robinhood connection | Set only after Phase 1 account discovery confirms the correct connection |
+| `SNAPTRADE_ACCOUNT_IDS` | Both | Brokerage accounts selected by the wizard | Comma-separated; the first sync requires at least one |
+| `SCREENER_PROVIDERS` | Optional | Ordered options-provider chain | Defaults to `alphavantage,yfinance` |
+| `ALPHAVANTAGE_API_KEY` | Optional | Authenticates the primary options provider | Falls back to `yfinance` when missing or unusable |
+
+### Manual setup
+
+If the wizard cannot run, copy the template and edit it directly:
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-Populate these values in `.env` (Personal API key mode, recommended for this self-hosted dashboard):
+Set `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY`, and—after account discovery—`SNAPTRADE_ACCOUNT_IDS`. Leave `SNAPTRADE_USER_ID` and `SNAPTRADE_USER_SECRET` empty for Personal mode. Start the backend, use `GET /api/v1/snaptrade/accounts` to discover IDs, restart after editing `.env`, and call `POST /api/v1/snaptrade/refresh`.
 
-```dotenv
-SNAPTRADE_CLIENT_ID=your_personal_client_id
-SNAPTRADE_CONSUMER_KEY=your_personal_consumer_key
-```
+### Advanced Commercial mode
 
-SnapTrade supports two SDK authentication modes. In **Personal API key** mode your key identifies your own SnapTrade account: do not register users, and omit `userId`/`userSecret` from account-data calls. **Commercial API key** mode is for apps managing many end users and additionally requires `SNAPTRADE_USER_ID` and `SNAPTRADE_USER_SECRET`. This project defaults to Personal mode; leave the two user variables empty unless you deliberately migrate to Commercial.
-
-### 2. Understand each value
-
-| Variable | Mode | Purpose | Handling rule |
-| --- | --- | --- | --- |
-| `SNAPTRADE_CLIENT_ID` | Both | Identifies the SnapTrade application | Keep server-side even if it is not treated as the primary signing secret |
-| `SNAPTRADE_CONSUMER_KEY` | Both | Signs/authenticates application requests | Treat as a high-value secret; rotate if exposed |
-| `SNAPTRADE_USER_ID` | Commercial only | Stable application-level identifier for a registered SnapTrade user | Generate once; never recreate on every boot |
-| `SNAPTRADE_USER_SECRET` | Commercial only | Authenticates requests for that registered user | Store securely; never send to the browser or log it |
-| `SNAPTRADE_BROKERAGE_AUTHORIZATION_ID` | Both | Optional identifier for the discovered Robinhood connection | Set only after Phase 1 account discovery confirms the correct connection |
-
-The `User ID` and `User Secret` are SnapTrade user credentials, not Robinhood login credentials. Robinhood authentication takes place through SnapTrade's connection portal. This application must never collect or store a Robinhood username, password, MFA seed, or session cookie.
-
-### 3. Connection lifecycle
-
-Phase 1 implements this flow deliberately rather than on every application start:
-
-1. Initialize the official SDK with the matching auth helper (`SnaptradeAuth.personalApiKey(...)` for this project).
-2. Generate a short-lived SnapTrade connection portal URL.
-3. Complete Robinhood authorization in the SnapTrade-hosted flow.
-4. Discover brokerage authorizations and accounts, then record the intended Robinhood authorization ID.
-5. Fetch holdings and options data server-side using the configured auth mode.
-
-Commercial-mode apps additionally register a user first and pass its credentials on every account-data call. Never register a new user reactively when authentication fails; that can orphan an existing brokerage connection and complicate diagnosis.
+Commercial mode is retained for developers extending the project into a multi-user product, but it is not part of the personal setup wizard. It requires both `SNAPTRADE_USER_ID` and `SNAPTRADE_USER_SECRET` on every account-data call. Never register a new user reactively when authentication fails; that can orphan an existing brokerage connection.
 
 For a new Commercial-mode user, run this once with a stable, non-secret identifier:
 
@@ -132,35 +155,39 @@ npm run register:snaptrade-user -- wheel-dashboard-primary
 
 The command writes the returned credentials to `data/private/snaptrade-user.json` with mode `0600` without printing the secret. Copy both values into `.env`, then securely remove that temporary file. Deleting and re-registering a SnapTrade user can sever access to existing brokerage authorizations; do it only as an intentional recovery action after reviewing SnapTrade's current documentation.
 
-### 4. Connection recovery and rate limits
+### Connection recovery and rate limits
 
 If an existing Robinhood authorization stops syncing, do not register another user. Check `/api/v1/snaptrade/authorizations` and `/api/v1/snaptrade/accounts`, generate a new portal with `POST /api/v1/snaptrade/connection-portal`, and reconnect the existing stable user. Re-pin account IDs only after confirming that SnapTrade issued replacement identifiers.
 
 SnapTrade limits depend on the API mode and current provider policy, so this project does not encode an undocumented requests-per-minute number. It refreshes conservatively every 30 minutes by default, retries only network errors, HTTP 429, and HTTP 5xx responses with bounded jitter, and returns `UPSTREAM_RATE_LIMITED` when the retry budget is exhausted. Increase the schedule frequency only after checking the limits shown for the active SnapTrade application.
 
-### 4. Secret hygiene
+### Secret hygiene
 
 - Never commit `.env`; verify with `git status` before every commit.
 - Never paste real credentials into issues, screenshots, fixtures, shell history, or chat transcripts.
 - Prefer an encrypted password manager for the off-device backup.
-- Restrict `.env` to the account running Docker with `chmod 600 .env`.
+- Restrict `.env` to the local account running the app with `chmod 600 .env`.
 - Rotate the Consumer Key and user credentials according to SnapTrade's current incident-recovery process if either is exposed.
 - Use mock payloads with synthetic account numbers in tests.
 
 ## Local Development
 
-### Backend and frontend
+### Run everything locally
 
-Requires Node.js 22 or newer.
+Requires Node.js 22 or newer and Python 3.12 or newer.
 
 ```bash
-cp .env.example .env
 cd backend
 npm install
-npm run dev
+npm run setup
+npm run app
 ```
 
-Open `http://127.0.0.1:3000`. Express serves `frontend/` and exposes `GET /api/health`.
+The launcher creates `sidecar/.venv`, installs the Python dependencies when needed, and starts both services. Open `http://127.0.0.1:3000`; press Ctrl+C to stop them.
+
+### Run services separately for development
+
+Start the backend with `cd backend && npm run dev`. Express serves `frontend/` and exposes `GET /api/health`.
 
 ### Python sidecar
 
@@ -175,9 +202,9 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The sidecar exposes `GET /health` and the internal `POST /v1/screens` contract. It is intentionally not published to the host network.
+The sidecar exposes `GET /health` and the internal `POST /v1/screens` contract on loopback only.
 
-## Raspberry Pi Deployment
+## Optional Docker deployment on Raspberry Pi
 
 ### Hardware and operating system
 
@@ -214,11 +241,9 @@ For a production host, Docker's official apt repository is preferable when you n
 ```bash
 git clone <your-repository-url> wheel-dashboard
 cd wheel-dashboard
-cp .env.example .env
-chmod 600 .env
 ```
 
-Edit `.env` locally on the Pi and provide the two Personal-mode SnapTrade variables, or all four user/application variables for Commercial mode. Keep `DASHBOARD_BIND_ADDRESS=127.0.0.1` unless a secured access layer is already in place.
+If Node.js 22 or newer is installed on the Pi, run the guided setup with `cd backend && npm install && npm run setup`. On a Docker-only host, follow the manual setup above. Keep `DASHBOARD_BIND_ADDRESS=127.0.0.1` unless a secured access layer is already in place.
 
 Validate and start the Node service:
 
@@ -291,8 +316,8 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `RETRY_BASE_MS` | 1 | `500` | Base delay for exponential backoff with jitter |
 | `DATA_DIR` | 1 | `./data` | Root for raw snapshots and future normalized data |
 | `PYTHON_SIDECAR_URL` | 3 | `http://127.0.0.1:8000` | Sidecar URL for direct local runs; Compose overrides it with `http://screener:8000` |
-| `SCREENER_PROVIDER` | 3 | `yfinance` | Selected market-data adapter |
-| `ALPHAVANTAGE_API_KEY` | 3 | Empty | Optional Alpha Vantage credential |
+| `SCREENER_PROVIDERS` | 3 | `alphavantage,yfinance` | Ordered market-data providers; first successful snapshot wins |
+| `ALPHAVANTAGE_API_KEY` | 3 | Empty | Primary provider key; real-time options require an eligible premium entitlement |
 | `NTFY_BASE_URL` | 4 | `https://ntfy.sh` | Hosted or self-hosted ntfy base URL |
 | `NTFY_TOPIC` | 4 | Empty | Private, hard-to-guess topic name |
 | `NTFY_TOKEN` | 4 | Empty | Optional ntfy access token |
@@ -332,7 +357,9 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 
 ### Phase 3 screener
 
-Start both services with `docker compose --profile screener up -d --build`, then use the Screener tab. The current provider is `yfinance`; Alpha Vantage is not implemented. Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+Start the app with `cd backend && npm run app`, then use the Screener tab. Alpha Vantage is queried first for a real-time option chain, provider Greeks, and a real-time underlying quote. Those two Alpha Vantage requests run concurrently. If either request fails, is rate-limited, lacks entitlement, or returns unusable data, the sidecar fetches a complete `yfinance` snapshot instead. Fallback snapshots are labeled unofficial and degraded; they remain visible but do not produce screener alerts. The 120-second cache applies to whichever provider succeeds, limiting duplicate upstream calls.
+
+Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
 
 ### Opportunity-monitoring settings foundation
 

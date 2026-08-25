@@ -61,6 +61,11 @@ describe('responsive dashboard shell', () => {
     assert.equal((navigation.match(/<button/g) ?? []).length, 4);
     for (const label of ['Home', 'Trades', 'Screener', 'Settings']) assert.match(navigation, new RegExp(`>${label}<`));
   });
+  it('shows the active screener provider and any fallback warning', () => {
+    assert.match(html, /Provider and quote status appear after screening/);
+    assert.match(js, /result\.provider_unofficial/);
+    assert.match(js, /result\.warning/);
+  });
   it('keeps strategy settings focused and opens the glossary in an accessible sheet', () => {
     const moreStart = html.indexOf('<section class="app-screen" id="more"');
     const more = html.slice(moreStart, html.indexOf('</main>', moreStart));

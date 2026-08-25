@@ -60,13 +60,6 @@ export function createSnaptradeService({ config, client }) {
   return {
     authMode: config.snaptrade.authMode,
 
-    async checkStatus() {
-      const response = await call('apiStatus.check', () =>
-        snaptrade.apiStatus.check(),
-      );
-      return response.data;
-    },
-
     async listAccounts() {
       const response = await call('accountInformation.listUserAccounts', () =>
         snaptrade.accountInformation.listUserAccounts(userCredentials),

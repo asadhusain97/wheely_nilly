@@ -873,7 +873,7 @@ $('#screener-form').addEventListener('submit', async (event) => {
     rememberScreenedTicker(values.symbol.trim().toUpperCase(), values.leg);
     strategySettingsController.refresh();
     body.replaceChildren();
-    $('#screener-meta').textContent = `${result.provider}${result.provider_unofficial ? ' (unofficial)' : ''} · quote ${updatedAt(result.quote_timestamp)} · cache ${Math.round(result.cache.age_seconds ?? 0)}s${result.degraded ? ' · degraded' : ''}`;
+    $('#screener-meta').textContent = `${result.provider}${result.provider_unofficial ? ' (unofficial)' : ''} · quote ${updatedAt(result.quote_timestamp)} · cache ${Math.round(result.cache.age_seconds ?? 0)}s${result.degraded ? ' · degraded' : ''}${result.warning ? ` · ${result.warning}` : ''}`;
     if (!result.candidates.length) {
       emptyRow(body, 4, `No candidates passed. ${Object.entries(result.exclusions).map(([key, value]) => `${label(key)}: ${value}`).join(' · ')}`);
     }

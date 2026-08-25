@@ -38,3 +38,9 @@ def test_invalid_volatility_returns_null_greeks():
 def test_contract_rejects_invalid_bounds_and_oversized_symbol():
     response = TestClient(app).post("/v1/screens", json={"symbol": "TOO-LONG-SYMBOL", "leg": "cash_secured_put", "min_dte": 50, "max_dte": 10})
     assert response.status_code == 422
+
+
+def test_health_reports_provider_priority():
+    response = TestClient(app).get("/health")
+    assert response.status_code == 200
+    assert response.json()["providers"] == "alphavantage,yfinance"

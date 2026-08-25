@@ -108,6 +108,6 @@ class ScreenerService:
         candidates, exclusions = screen(snapshot, request, now)
         return {"schema_version": 1, "calculation_version": CALCULATION_VERSION, "symbol": request.symbol, "leg": request.leg,
             "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "quote_timestamp": snapshot.fetched_at,
-            "cache": {"hit": cache_hit, "age_seconds": cache_age, "stale": snapshot.stale}, "degraded": degraded or snapshot.stale,
+            "cache": {"hit": cache_hit, "age_seconds": cache_age, "stale": snapshot.stale}, "degraded": degraded or snapshot.degraded or snapshot.stale,
             "warning": snapshot.warning, "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net premium", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
             "candidates": candidates, "exclusions": exclusions, "duration_ms": round((time.monotonic() - started) * 1000, 2)}

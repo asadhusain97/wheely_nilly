@@ -10,6 +10,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
+    "app": "node scripts/start-local.js",
+    "setup": "node scripts/setup.js",
     "check": "node --check src/server.js",
     "check:snaptrade": "node scripts/check-snaptrade-connection.js",
     "register:snaptrade-user": "node scripts/register-snaptrade-user.js",

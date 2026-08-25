@@ -4,12 +4,14 @@ import { describe, it } from 'node:test';
 import { createScreenerService } from '../src/services/screener.js';
 
 const config = { screener: { url: 'http://screener:8000', timeoutMs: 1000 } };
-const valid = { schema_version: 1, calculation_version: 'screener-1.0.0', provider: 'fixture', quote_timestamp: '2026-08-23T12:00:00Z', cache: { hit: false, age_seconds: 0, stale: false }, degraded: false, assumptions: {}, exclusions: {}, candidates: [] };
+const valid = { schema_version: 1, calculation_version: 'screener-1.0.0', provider: 'fixture', quote_timestamp: '2026-08-23T12:00:00Z', cache: { hit: false, age_seconds: 0, stale: false }, degraded: true, warning: 'alphavantage rate limit was reached; using yfinance fallback', assumptions: {}, exclusions: {}, candidates: [] };
 
 describe('screener adapter', () => {
   it('validates requests and responses', async () => {
     const service = createScreenerService({ config, fetchImpl: async () => new Response(JSON.stringify(valid), { status: 200 }) });
-    assert.equal((await service.screen({ symbol: 'AAPL', leg: 'cash_secured_put' })).provider, 'fixture');
+    const result = await service.screen({ symbol: 'AAPL', leg: 'cash_secured_put' });
+    assert.equal(result.provider, 'fixture');
+    assert.match(result.warning, /yfinance fallback/);
     await assert.rejects(service.screen({ symbol: '<bad>', leg: 'put' }), /Invalid screen request/);
   });
   it('rejects malformed sidecar output', async () => {

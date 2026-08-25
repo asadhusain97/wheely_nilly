@@ -57,4 +57,5 @@ class ChainSnapshot(BaseModel):
     fetched_at: datetime
     quotes: list[OptionQuote]
     stale: bool = False
+    degraded: bool = False
     warning: str | None = None

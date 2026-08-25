@@ -12,13 +12,14 @@ import { createSnaptradeRouter } from './routes/snaptrade.js';
 import { createWheelRouter } from './routes/wheel.js';
 import { createScreenerRouter } from './routes/screener.js';
 import { createNotificationsRouter } from './routes/notifications.js';
+import { createStrategySettingsRouter } from './routes/strategy-settings.js';
 
 const frontendDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../frontend',
 );
 
-export function createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications }) {
+export function createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications, strategySettings }) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -49,6 +50,7 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived, scree
 
   if (screener) app.use('/api/v1/screens', createScreenerRouter({ screener, notifications, config }));
   if (notifications) app.use('/api/v1/notifications', createNotificationsRouter({ notifications }));
+  if (strategySettings) app.use('/api/v1/strategy-settings', createStrategySettingsRouter({ strategySettings }));
 
   if (config.corsOrigins.length > 0) {
     app.use(cors({ origin: config.corsOrigins }));

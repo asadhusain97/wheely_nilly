@@ -9,6 +9,7 @@ import { createSnapshotStore } from './services/snapshots.js';
 import { createSnaptradeService } from './services/snaptrade.js';
 import { createScreenerService } from './services/screener.js';
 import { createNotificationService } from './services/notifications.js';
+import { createStrategySettingsService } from './services/strategy-settings.js';
 
 let config;
 try {
@@ -30,8 +31,9 @@ const ingest = createIngestService({
 const derived = createDerivedService({ snapshots, config });
 const screener = createScreenerService({ config });
 const notifications = createNotificationService({ config });
+const strategySettings = createStrategySettingsService({ dataDir: config.dataDir });
 const scheduler = createScheduler({ config, ingest, notifications, derived });
-const app = createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications });
+const app = createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications, strategySettings });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(

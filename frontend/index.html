@@ -10,6 +10,7 @@
   <link rel="icon" type="image/png" href="/assets/images/favicon.png">
   <link rel="apple-touch-icon" href="/assets/images/logo.png">
   <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/settings.css">
   <script type="module" src="/assets/js/app.js"></script>
 </head>
 
@@ -202,35 +203,207 @@
 
       <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
         <header class="screen-header more-header">
-          <p>Reference &amp; preferences</p>
-          <h1 id="more-title">More</h1>
+          <div>
+            <p>Monitoring preferences</p>
+            <h1 id="more-title">Strategy settings</h1>
+            <small>Shape the rules first. Screening will use them in a later phase.</small>
+          </div>
+          <button class="glossary-trigger" id="open-glossary" type="button" aria-haspopup="dialog"
+            aria-controls="glossary-dialog" aria-expanded="false" title="Open glossary">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 11v6M12 7.5v.01"></path>
+            </svg><span class="sr-only">Open glossary</span>
+          </button>
         </header>
 
-        <section class="more-section" aria-labelledby="configuration-title">
-          <div class="section-title more-section-title">
-            <div>
-              <p>Configs to change</p>
-              <h2 id="configuration-title">Configuration</h2>
-            </div>
-          </div>
-          <div class="configuration-placeholder">
-            <span class="configuration-mark" aria-hidden="true">⌁</span>
-            <div>
-              <strong>Controls are coming here</strong>
-              <p>Future portfolio and calculation preferences will live in this section.</p>
-            </div>
-          </div>
-        </section>
+        <div class="settings-status is-loading" id="settings-status" role="status" aria-live="polite" tabindex="-1">
+          Loading strategy settings…
+        </div>
 
-        <section class="more-section glossary-section" aria-labelledby="glossary-title">
-          <div class="section-title more-section-title">
-            <div>
-              <p>How the numbers work</p>
-              <h2 id="glossary-title">Glossary</h2>
+        <div class="settings-stack" id="strategy-settings-workspace" aria-label="Strategy settings hierarchy">
+          <section class="settings-layer" aria-labelledby="settings-global-title">
+            <header class="settings-layer-heading">
+              <div>
+                <h2 id="settings-global-title">Defaults</h2>
+                <small>Used when a goal or ticker does not set its own value.</small>
+              </div>
+              <button class="settings-edit" id="edit-global-settings" type="button" title="Edit default settings"
+                disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
+                </svg><span class="sr-only">Edit default settings</span></button>
+            </header>
+            <div class="layer-tabs" id="global-leg-tabs" role="tablist" aria-label="Default strategy"></div>
+            <div id="global-rules-view" role="tabpanel" aria-live="polite"></div>
+          </section>
+
+          <section class="settings-layer" aria-labelledby="settings-goals-title">
+            <header class="settings-layer-heading">
+              <div>
+                <h2 id="settings-goals-title">Goals</h2>
+                <small>Starting profiles that adjust the Defaults layer.</small>
+              </div>
+              <button class="settings-edit" id="edit-goal-settings" type="button" title="Edit selected goal"
+                disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
+                </svg><span class="sr-only">Edit selected goal</span></button>
+            </header>
+            <div class="layer-tabs goal-tabs" id="goal-preset-tabs" role="tablist" aria-label="Goal profile"></div>
+            <div id="goal-rules-view" role="tabpanel" aria-live="polite"></div>
+            <p class="inheritance-key"><span class="inheritance-swatch" aria-hidden="true"></span>Lighter values come
+              from Defaults.</p>
+          </section>
+
+          <section class="settings-layer ticker-layer" aria-labelledby="settings-tickers-title">
+            <header class="settings-layer-heading">
+              <div>
+                <h2 id="settings-tickers-title">Tickers</h2>
+                <small>Recent Screener and traded tickers, with custom settings.</small>
+              </div>
+            </header>
+            <div class="settings-ticker-tools">
+              <label class="settings-ticker-search" for="settings-ticker-search">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4 4"></path>
+                </svg>
+                <span class="sr-only">Search settings tickers</span>
+                <input id="settings-ticker-search" type="search" placeholder="Search tickers" autocomplete="off">
+              </label>
+              <span class="settings-ticker-count" id="settings-ticker-count" aria-live="polite"></span>
             </div>
+            <div class="ticker-capsules" id="ticker-playbook-list"></div>
+          </section>
+        </div>
+        <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
+
+      </section>
+    </main>
+
+    <div class="settings-editor-overlay" id="settings-editor-dialog" hidden>
+      <button class="settings-editor-backdrop" type="button" data-settings-editor-close tabindex="-1"
+        aria-label="Close settings editor"></button>
+      <section class="settings-editor-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-editor-title"
+        aria-describedby="settings-editor-description" tabindex="-1">
+        <header class="settings-editor-header" id="settings-editor-drag-zone">
+          <span class="settings-editor-handle" aria-hidden="true"></span>
+          <div>
+            <p id="settings-editor-description">Change only what matters here</p>
+            <h2 id="settings-editor-title">Edit settings</h2>
           </div>
+          <button class="settings-editor-close" type="button" data-settings-editor-close
+            aria-label="Close settings editor"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg></button>
+        </header>
+        <form class="settings-editor-form" id="settings-editor-form" novalidate>
+          <div class="settings-editor-body" id="settings-editor-body"></div>
+          <footer class="settings-editor-actions">
+            <button class="settings-reset" id="settings-reset-defaults" type="button">Reset to default</button>
+            <button class="settings-save" id="save-strategy-settings" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
+    <div class="glossary-overlay" id="glossary-dialog" hidden>
+      <button class="glossary-backdrop" type="button" data-glossary-close tabindex="-1"
+        aria-label="Close glossary"></button>
+      <section class="glossary-sheet" role="dialog" aria-modal="true" aria-labelledby="glossary-title"
+        aria-describedby="glossary-description" tabindex="-1">
+        <header class="glossary-sheet-header" id="glossary-drag-zone">
+          <span class="glossary-handle" aria-hidden="true"></span>
+          <div>
+            <p>How the numbers work</p>
+            <h2 id="glossary-title">Glossary</h2>
+          </div>
+          <button class="glossary-close" id="close-glossary" type="button" data-glossary-close
+            aria-label="Close glossary"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg></button>
+        </header>
+        <div class="glossary-search-region">
+          <label class="glossary-search" for="glossary-search">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4 4"></path>
+            </svg>
+            <span class="sr-only">Search glossary definitions</span>
+            <input id="glossary-search" type="search" placeholder="Search definitions" autocomplete="off"
+              enterkeyhint="search" aria-controls="glossary-results">
+          </label>
+          <span class="sr-only" id="glossary-search-status" role="status" aria-live="polite"></span>
+        </div>
+        <div class="glossary-sheet-body" id="glossary-results">
           <p class="glossary-intro">A field guide to the portfolio and screener metrics used throughout Wheely
             Nilly. Dashboard returns use matched, closed contracts; open credits remain unrealized.</p>
+          <p class="sr-only" id="glossary-description">Definitions for portfolio performance, capital, contracts,
+            strategy settings, and options screener terms.</p>
+
+          <section class="glossary-group" aria-labelledby="glossary-settings-title">
+            <h3 id="glossary-settings-title">Strategy settings</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Defaults, goals &amp; ticker changes <span>Settings layers</span></dt>
+                <dd>Defaults are the base rules. A goal changes only its filled-in values, and a ticker change applies
+                  only to that ticker and strategy. A lighter value is still coming from an earlier layer.</dd>
+                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value, otherwise Default</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Goal profiles <span>Protect · Income · Exit · Acquire</span></dt>
+                <dd>Editable starting points for different intentions. Protect and Exit apply to covered calls,
+                  Acquire applies to cash-secured puts, and Income can apply to either. The names organize rules; they
+                  are not trading recommendations.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>DTE range <span>Time window</span></dt>
+                <dd>The shortest and longest time an option may have before expiration. An option must fall inside
+                  both limits to pass.</dd>
+                <dd class="glossary-formula">Minimum DTE ≤ days to expiration ≤ maximum DTE</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Moneyness <span>Strike / stock</span></dt>
+                <dd>How the strike price compares with the current stock price. 100% means they are equal; 90% means
+                  the strike is 10% below the stock; 110% means it is 10% above.</dd>
+                <dd class="glossary-formula">Moneyness = strike price ÷ stock price × 100%</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Target delta range <span>Absolute delta</span></dt>
+                <dd>Keeps options whose delta falls between your chosen limits. Wheely Nilly uses the size of delta,
+                  so a put delta of −0.25 is treated as 0.25. A blank limit leaves that side open.</dd>
+                <dd class="glossary-formula">Minimum delta ≤ |option delta| ≤ maximum delta</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Liquidity rules <span>Spread · OI · Volume</span></dt>
+                <dd>The spread measures the gap between buyers and sellers; a smaller gap usually means a more usable
+                  quote. Open interest counts contracts still open, while volume counts contracts traded today.</dd>
+                <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100</dd>
+                <dd class="glossary-formula">Passes when spread ≤ maximum, OI ≥ minimum, and volume ≥ minimum</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Maximum quote age <span>Freshness</span></dt>
+                <dd>The oldest price quote the screener may use. Older quotes are left out because the market may have
+                  moved since they were recorded.</dd>
+                <dd class="glossary-formula">Quote age = current time − quote timestamp</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum period return <span>One option period</span></dt>
+                <dd>The smallest estimated return accepted over that option's own DTE. It is not an annualized rate.
+                  Net premium is the estimated option credit after the estimated fee.</dd>
+                <dd class="glossary-formula">Covered call = net premium ÷ current value of 100 shares</dd>
+                <dd class="glossary-formula">Cash-secured put = net premium ÷ (strike × 100 − net premium)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net price guard <span>Ticker setting</span></dt>
+                <dd>An optional per-share limit for one ticker. It can set the lowest net sale price for a covered
+                  call or the highest net purchase price for a cash-secured put. When monitoring begins using these
+                  settings, it will filter choices; it will not place an order.</dd>
+                <dd class="glossary-formula">Covered-call net sale price = strike + net premium per share</dd>
+                <dd class="glossary-formula">Put net purchase price = strike − net premium per share</dd>
+              </div>
+            </dl>
+          </section>
 
           <section class="glossary-group" aria-labelledby="glossary-performance-title">
             <h3 id="glossary-performance-title">Performance</h3>
@@ -344,17 +517,15 @@
               <div class="glossary-entry">
                 <dt>Delta</dt>
                 <dd>The estimated option-price change for a $1 move in the stock, also commonly read as a rough
-                  sensitivity measure. It comes from the provider when available, otherwise a Black–Scholes estimate.</dd>
-              </div>
-              <div class="glossary-entry">
-                <dt>OI <span>Open interest</span></dt>
-                <dd>The number of option contracts currently open in the market for that exact contract.</dd>
+                  sensitivity measure. It comes from the provider when available, otherwise a Black–Scholes estimate.
+                </dd>
               </div>
             </dl>
           </section>
-        </section>
+          <p class="glossary-empty" id="glossary-empty" hidden>No definitions match that search.</p>
+        </div>
       </section>
-    </main>
+    </div>
 
     <nav class="bottom-nav" aria-label="Primary navigation">
       <button class="is-active" type="button" data-target="overview" aria-current="page"><span class="nav-icon"
@@ -365,14 +536,12 @@
             <path d="M19.8 8.2A8.5 8.5 0 1 0 20 15h-2.7a6 6 0 1 1 .2-6.2L14 8.7l4.7 4.5L23 8.5z" />
           </svg></span><span>Trades</span></button>
       <button type="button" data-target="screener"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
-            <path
-              d="M4 5.5h10v2H4zm0 5h7v2H4zm0 5h5v2H4zm12.2-5a4.3 4.3 0 1 0 2.7 7.6l2.5 2.5 1.4-1.4-2.5-2.5a4.3 4.3 0 0 0-4.1-6.7zm0 2a2.3 2.3 0 1 1 0 4.6 2.3 2.3 0 0 1 0-4.6z" />
-          </svg></span><span>Screen</span></button>
+            <path d="M4.6 4h14.8a1.6 1.6 0 0 1 1.23 2.62L15 13.4v4.1a1 1 0 0 1-.45.83l-4 2.67A1 1 0 0 1 9 20.17V13.4L3.37 6.62A1.6 1.6 0 0 1 4.6 4Z" />
+          </svg></span><span>Screener</span></button>
       <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
-            <circle cx="5" cy="12" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="19" cy="12" r="2" />
-          </svg></span><span>More</span></button>
+            <path
+              d="M12 3.5a2.1 2.1 0 0 1 2 1.5l.3 1a7.7 7.7 0 0 1 1.3.8l1-.3a2.1 2.1 0 0 1 2.4 1l.6 1a2.1 2.1 0 0 1-.4 2.6l-.7.7v1.5l.7.7a2.1 2.1 0 0 1 .4 2.6l-.6 1a2.1 2.1 0 0 1-2.4 1l-1-.3a7.7 7.7 0 0 1-1.3.8l-.3 1a2.1 2.1 0 0 1-2 1.5h-1.2a2.1 2.1 0 0 1-2-1.5l-.3-1a7.7 7.7 0 0 1-1.3-.8l-1 .3a2.1 2.1 0 0 1-2.4-1l-.6-1a2.1 2.1 0 0 1 .4-2.6l.7-.7v-1.5l-.7-.7A2.1 2.1 0 0 1 3.2 8l.6-1a2.1 2.1 0 0 1 2.4-1l1 .3a7.7 7.7 0 0 1 1.3-.8l.3-1a2.1 2.1 0 0 1 2-1.5zm-.6 5.2a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6z" />
+          </svg></span><span>Settings</span></button>
     </nav>
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   </div>

@@ -1,8 +1,23 @@
+import { initializeGlossary } from './glossary.js';
+import { createStrategySettingsController } from './settings.js';
+
+const SCREENED_TICKERS_KEY = 'wheely-nilly.screened-tickers.v1';
+
+function loadScreenedTickers() {
+  try {
+    const saved = JSON.parse(globalThis.localStorage?.getItem(SCREENED_TICKERS_KEY) ?? '[]');
+    return Array.isArray(saved) ? saved.filter((ticker) => /^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker?.symbol)) : [];
+  } catch {
+    return [];
+  }
+}
+
 const state = {
   dashboard: null,
   tickerSort: 'date_desc',
   monthlyTicker: null,
   monthlyDetail: null,
+  screenedTickers: loadScreenedTickers(),
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -79,6 +94,48 @@ function toast(message) {
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { node.hidden = true; }, 4000);
 }
+
+function rememberScreenedTicker(symbol, leg) {
+  const preferredLeg = leg === 'cash_secured_put' ? 'cashSecuredPut' : 'coveredCall';
+  const ticker = {
+    symbol,
+    preferredLeg,
+    goal: preferredLeg === 'cashSecuredPut' ? 'acquire' : 'income',
+    lastActivityAt: new Date().toISOString(),
+  };
+  state.screenedTickers = [ticker, ...state.screenedTickers.filter((item) => item.symbol !== symbol)].slice(0, 100);
+  try {
+    globalThis.localStorage?.setItem(SCREENED_TICKERS_KEY, JSON.stringify(state.screenedTickers));
+  } catch {
+    // Browser storage can be unavailable; the ticker still remains for this session.
+  }
+}
+
+function settingsTickerFromActivity(ticker) {
+  const trades = [...(ticker.openTrades ?? []), ...(ticker.pastTrades ?? [])];
+  const recentTrade = trades.slice().sort((a, b) => {
+    const time = (trade) => Math.max(Date.parse(trade.closedAt) || 0, Date.parse(trade.openedAt) || 0);
+    return time(b) - time(a);
+  })[0];
+  const preferredLeg = recentTrade?.type === 'csp' ? 'cashSecuredPut' : 'coveredCall';
+  return {
+    symbol: ticker.symbol,
+    preferredLeg,
+    goal: preferredLeg === 'cashSecuredPut' ? 'acquire' : 'income',
+    lastActivityAt: recentTrade?.closedAt ?? recentTrade?.openedAt ?? null,
+  };
+}
+
+const strategySettingsController = createStrategySettingsController({
+  request: json,
+  notify: toast,
+  getTrackedTickers: () => [
+    ...(state.dashboard?.tickerPerformance ?? []).map(settingsTickerFromActivity),
+    ...state.screenedTickers,
+  ],
+});
+strategySettingsController.initialize();
+initializeGlossary();
 
 function setFreshness(value) {
   const updated = $('#last-updated');
@@ -737,11 +794,14 @@ function renderDashboard(dashboard) {
 async function loadDashboard() {
   const dashboard = await json('/api/v1/wheel/dashboard');
   state.dashboard = dashboard;
+  strategySettingsController.refresh();
   setFreshness(dashboard.freshness);
   renderDashboard(dashboard);
 }
 
 function showScreen(target) {
+  const current = document.querySelector('.app-screen.is-active')?.dataset.screen;
+  if (current === 'more' && target !== 'more' && !strategySettingsController.confirmLeave()) return false;
   for (const screen of document.querySelectorAll('.app-screen')) {
     const active = screen.dataset.screen === target;
     screen.hidden = !active;
@@ -753,7 +813,7 @@ function showScreen(target) {
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', more: 'More' };
+  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', more: 'Strategy settings' };
   const screenKicker = $('#screen-kicker');
   if (screenKicker) screenKicker.textContent = names[target];
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -761,6 +821,8 @@ function showScreen(target) {
     renderMonthlyPerformance(state.dashboard?.tickerPerformance ?? []);
     renderTickerTrades();
   }
+  if (target === 'more') strategySettingsController.load();
+  return true;
 }
 
 $('#ticker-filters').addEventListener('input', renderTickerTrades);
@@ -808,6 +870,8 @@ $('#screener-form').addEventListener('submit', async (event) => {
         covered_shares: Number(values.covered_shares),
       }),
     });
+    rememberScreenedTicker(values.symbol.trim().toUpperCase(), values.leg);
+    strategySettingsController.refresh();
     body.replaceChildren();
     $('#screener-meta').textContent = `${result.provider}${result.provider_unofficial ? ' (unofficial)' : ''} · quote ${updatedAt(result.quote_timestamp)} · cache ${Math.round(result.cache.age_seconds ?? 0)}s${result.degraded ? ' · degraded' : ''}`;
     if (!result.candidates.length) {

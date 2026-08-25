@@ -23,7 +23,7 @@ flowchart LR
 | Component | Responsibility | Exposure |
 | --- | --- | --- |
 | `backend` | SnapTrade integration, normalization, local API routes, scheduled jobs, static frontend hosting, and ntfy delivery | Bound to `127.0.0.1:3000` by default |
-| `frontend` | Read-only dashboard rendering with vanilla HTML, CSS, and JavaScript | Served by `backend`; no secrets or direct vendor calls |
+| `frontend` | Dashboard rendering and local strategy-settings editing with vanilla HTML, CSS, and JavaScript | Served by `backend`; no secrets or direct vendor calls |
 | `screener` | Options-chain retrieval and pandas-based calculations | Internal Docker network only; opt-in Compose profile |
 | `data` | Raw snapshots, future normalized records, and provider cache | Local bind mount; ignored by Git |
 
@@ -326,10 +326,17 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `PATCH` | `/api/v1/notifications/rules` | Enable or disable each alert rule |
 | `POST` | `/api/v1/notifications/test` | Enqueue and attempt a credential-free test notification |
 | `POST` | `/api/v1/notifications/flush` | Process due outbox entries |
+| `GET` | `/api/v1/strategy-settings` | Load saved monitoring rules or deterministic built-in defaults |
+| `PUT` | `/api/v1/strategy-settings` | Validate and atomically replace the complete strategy settings document |
+| `GET` | `/api/v1/strategy-settings/effective` | Resolve global → goal → ticker rules for a symbol and strategy leg |
 
 ### Phase 3 screener
 
-Start both services with `docker compose --profile screener up -d --build`, then use the Screen tab. The current provider is `yfinance`; Alpha Vantage is not implemented. Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+Start both services with `docker compose --profile screener up -d --build`, then use the Screener tab. The current provider is `yfinance`; Alpha Vantage is not implemented. Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+
+### Opportunity-monitoring settings foundation
+
+The Settings tab edits persistent global rules, goal presets, and ticker playbooks. These settings are not wired into Home or Screener yet. See [Strategy Settings v1](docs/strategy-settings.md) for inheritance, fields, starter presets, persistence, and API contracts.
 
 ### Phase 4 notifications
 

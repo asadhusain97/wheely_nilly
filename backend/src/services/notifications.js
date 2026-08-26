@@ -59,7 +59,7 @@ export function createNotificationService({ config, fetchImpl = fetch, now = Dat
 
 export function screenerAlert(candidate, screen, config, history = [], now = Date.now()) {
   const rule = config.notifications.screenerRule;
-  if (!rule || screen.degraded || screen.cache.stale || candidate.annualized_return < rule.minAnnualizedReturn || Math.abs(candidate.delta ?? 99) > rule.maxDelta || candidate.spread_percent > rule.maxSpreadPercent || candidate.quote_age_seconds > rule.maxQuoteAgeSeconds) return null;
+  if (!rule || candidate.annualized_return < rule.minAnnualizedReturn || Math.abs(candidate.delta ?? 99) > rule.maxDelta || candidate.spread_percent > rule.maxSpreadPercent || candidate.quote_age_seconds > rule.maxQuoteAgeSeconds) return null;
   const today = new Date(now).toISOString().slice(0, 10);
   if (history.filter((item) => item.eventType === 'screener' && item.createdAt.startsWith(today)).length >= config.notifications.dailyCap) return null;
   const lastForContract = history.find((item) => item.eventType === 'screener' && item.eventKey === candidate.contract_symbol);

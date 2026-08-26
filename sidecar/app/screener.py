@@ -7,7 +7,7 @@ from scipy.stats import norm
 
 from .models import ChainSnapshot, ScreenRequest
 
-CALCULATION_VERSION = "screener-2.0.0"
+CALCULATION_VERSION = "screener-2.1.0"
 
 
 def estimated_greeks(kind, spot, strike, years, volatility, rate, dividend):
@@ -32,7 +32,7 @@ def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
         reasons = []
         dte = (quote.expiration - now.date()).days
         moneyness = quote.strike / snapshot.underlying_price
-        age = max(0, (now - quote.quote_time.astimezone(UTC)).total_seconds())
+        age = math.inf if quote.quote_time is None else max(0, (now - quote.quote_time.astimezone(UTC)).total_seconds())
         if not request.min_dte <= dte <= request.max_dte: reasons.append("dte")
         if not request.min_moneyness <= moneyness <= request.max_moneyness: reasons.append("moneyness")
         if wanted == "put" and quote.strike > snapshot.underlying_price: reasons.append("in_the_money")
@@ -41,8 +41,12 @@ def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
         midpoint = ((quote.bid or 0) + (quote.ask or 0)) / 2
         spread = ((quote.ask or 0) - (quote.bid or 0)) / midpoint if midpoint > 0 else math.inf
         if spread > request.max_spread_percent: reasons.append("spread")
-        if (quote.open_interest or 0) < request.min_open_interest: reasons.append("open_interest")
-        if (quote.volume or 0) < request.min_volume: reasons.append("volume")
+        if quote.open_interest is None:
+            if request.min_open_interest > 0: reasons.append("open_interest_unavailable")
+        elif quote.open_interest < request.min_open_interest: reasons.append("open_interest")
+        if quote.volume is None:
+            if request.min_volume > 0: reasons.append("volume_unavailable")
+        elif quote.volume < request.min_volume: reasons.append("volume")
         if age > request.max_quote_age_seconds: reasons.append("stale_quote")
         executable = midpoint if spread <= request.max_spread_percent else (quote.bid or 0)
         gross_credit = round(executable * 100, 2)
@@ -60,11 +64,8 @@ def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
             if request.covered_shares < 100: reasons.append("insufficient_shares")
             if request.min_net_sale_price is not None and net_sale_price < request.min_net_sale_price: reasons.append("min_net_sale_price")
             basis_yield = net / (request.adjusted_basis_per_share * 100) if request.adjusted_basis_per_share else None
-        delta, theta = quote.delta, quote.theta
-        greek_source = "provider"
-        if delta is None or theta is None:
-            delta, theta = estimated_greeks(wanted, snapshot.underlying_price, quote.strike, dte / 365, quote.implied_volatility, request.risk_free_rate, request.dividend_yield)
-            greek_source = "black_scholes_estimate" if delta is not None else "unavailable"
+        delta, theta = estimated_greeks(wanted, snapshot.underlying_price, quote.strike, dte / 365, quote.implied_volatility, request.risk_free_rate, request.dividend_yield)
+        greek_source = "black_scholes_estimate" if delta is not None else "unavailable"
         absolute_delta = abs(delta) if delta is not None else None
         if request.target_delta_min is not None and (absolute_delta is None or absolute_delta < request.target_delta_min): reasons.append("delta_low")
         if request.target_delta_max is not None and (absolute_delta is None or absolute_delta > request.target_delta_max): reasons.append("delta_high")
@@ -126,24 +127,16 @@ class ScreenerService:
         cached = self.cache.get(cache_key)
         cache_age = (now - cached.fetched_at).total_seconds() if cached else None
         cache_hit = cached is not None and cache_age <= self.ttl
-        degraded = False
         if cache_hit:
             snapshot = cached
         else:
-            try:
-                snapshot = await self._fetch(request.symbol, chain_min_dte, chain_max_dte)
-                self.cache[cache_key] = snapshot
-                cache_age = max(0, (now - snapshot.fetched_at).total_seconds())
-            except Exception as error:
-                if not cached: raise
-                snapshot, degraded = cached, True
-                snapshot.stale, snapshot.warning = True, f"provider unavailable; using stale cache: {type(error).__name__}"
-                cache_age = max(0, (now - snapshot.fetched_at).total_seconds())
+            snapshot = await self._fetch(request.symbol, chain_min_dte, chain_max_dte)
+            self.cache[cache_key] = snapshot
+            cache_age = max(0, (now - snapshot.fetched_at).total_seconds())
         candidates, exclusions = screen(snapshot, request, now)
+        quote_timestamp = max((quote.quote_time for quote in snapshot.quotes if quote.quote_time is not None), default=None)
         return {"schema_version": 1, "calculation_version": CALCULATION_VERSION, "symbol": request.symbol, "leg": request.leg,
-            "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "quote_timestamp": snapshot.fetched_at,
-            "underlying_provider": snapshot.underlying_provider or snapshot.provider,
-            "underlying_provider_unofficial": snapshot.underlying_provider_unofficial if snapshot.underlying_provider_unofficial is not None else snapshot.unofficial,
-            "cache": {"hit": cache_hit, "age_seconds": cache_age, "stale": snapshot.stale}, "degraded": degraded or snapshot.degraded or snapshot.stale,
-            "warning": snapshot.warning, "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "fees": "estimated fee is subtracted from gross contract credit", "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net contract credit", "call_breakeven": "broker cost basis when available, otherwise current underlying price, less net credit per share; never used as a sale-price gate", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
+            "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "quote_timestamp": quote_timestamp,
+            "cache": {"hit": cache_hit, "age_seconds": cache_age},
+            "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "fees": "estimated fee is subtracted from gross contract credit", "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net contract credit", "call_breakeven": "broker cost basis when available, otherwise current underlying price, less net credit per share; never used as a sale-price gate", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
             "candidates": candidates, "exclusions": exclusions, "duration_ms": round((time.monotonic() - started) * 1000, 2)}

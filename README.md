@@ -30,8 +30,7 @@ flowchart LR
     Node -->|Signed HTTPS requests| SnapTrade[SnapTrade API]
     SnapTrade --> Robinhood[Robinhood connection]
     Node -->|Local HTTP| Python[Python screener sidecar]
-    Python -->|Options primary| Alpha[Alpha Vantage realtime options]
-    Python -->|Stock prices + options fallback| Yahoo[yfinance]
+    Python -->|Stock and options data| Yahoo[yfinance]
     Node -->|HTTP POST| Ntfy[ntfy]
     Node --> Data[(Local data volume)]
     Python --> Data
@@ -112,12 +111,6 @@ Use a Personal API key for this one-person, self-hosted application:
 
 The Personal key represents the person running this copy. Do not register a separate SnapTrade user, and do not enter Robinhood—or any brokerage—credentials into Wheely Nilly. Brokerage authentication occurs only in SnapTrade's hosted portal. See SnapTrade's [official Personal quickstart](https://docs.snaptrade.com/docs/getting-started#personal-quickstart) for the current upstream process.
 
-### Alpha Vantage key
-
-Request a key from the [official Alpha Vantage key form](https://www.alphavantage.co/support/#api-key), then enter it when the wizard asks or set `ALPHAVANTAGE_API_KEY` in `.env`.
-
-Radar spends one Alpha Vantage request on the real-time option chain and Greeks. It gets the underlying stock price from `yfinance`, so stock quotes do not consume Alpha Vantage credits. Real-time US options are a premium Alpha Vantage function and require the appropriate data entitlement. When the Alpha key is missing, rate-limited, not entitled, unavailable, or returns an invalid option chain, the request falls back to the `yfinance` option chain.
-
 ### What each value does
 
 | Variable | Mode | Purpose | Handling rule |
@@ -128,8 +121,6 @@ Radar spends one Alpha Vantage request on the real-time option chain and Greeks.
 | `SNAPTRADE_USER_SECRET` | Commercial only | Authenticates requests for that registered user | Store securely; never send to the browser or log it |
 | `SNAPTRADE_BROKERAGE_AUTHORIZATION_ID` | Both | Optional identifier for the discovered Robinhood connection | Set only after Phase 1 account discovery confirms the correct connection |
 | `SNAPTRADE_ACCOUNT_IDS` | Both | Brokerage accounts selected by the wizard | Comma-separated; the first sync requires at least one |
-| `SCREENER_PROVIDERS` | Optional | Ordered options-provider chain | Defaults to `alphavantage,yfinance` |
-| `ALPHAVANTAGE_API_KEY` | Optional | Authenticates the primary options provider | Falls back to `yfinance` when missing or unusable |
 
 ### Manual setup
 
@@ -320,8 +311,6 @@ The checked-in units under `deploy/systemd/` run both services as the non-root `
 | `RETRY_BASE_MS` | 1 | `500` | Base delay for exponential backoff with jitter |
 | `DATA_DIR` | 1 | `./data` | Root for raw snapshots and future normalized data |
 | `PYTHON_SIDECAR_URL` | 3 | `http://127.0.0.1:8000` | Sidecar URL for direct local runs; Compose overrides it with `http://screener:8000` |
-| `SCREENER_PROVIDERS` | 3 | `alphavantage,yfinance` | Ordered market-data providers; first successful snapshot wins |
-| `ALPHAVANTAGE_API_KEY` | 3 | Empty | Primary provider key; real-time options require an eligible premium entitlement |
 | `NTFY_BASE_URL` | 4 | `https://ntfy.sh` | Hosted or self-hosted ntfy base URL |
 | `NTFY_TOPIC` | 4 | Empty | Private, hard-to-guess topic name |
 | `NTFY_TOKEN` | 4 | Empty | Optional ntfy access token |
@@ -367,9 +356,9 @@ The checked-in units under `deploy/systemd/` run both services as the non-root `
 
 ### Radar opportunity finder
 
-Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Alpha Vantage is queried first for the real-time option chain and provider Greeks. Yahoo Finance supplies the underlying stock price without using an Alpha Vantage credit. If the Alpha options request fails, is rate-limited, lacks entitlement, or returns unusable data, the sidecar falls back to Yahoo's option chain. The 120-second cache applies to whichever option provider succeeds, limiting duplicate upstream calls.
+Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Yahoo Finance supplies the underlying stock price, option chains, quote timestamps, and liquidity fields through `yfinance`. The 120-second cache limits duplicate Yahoo calls. An expired cache is never served when Yahoo is unavailable.
 
-Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless an Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless an Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are Black–Scholes estimates when Yahoo supplies usable implied volatility. Contract freshness uses Yahoo's `lastTradeDate`, not the local fetch time. Missing volume or open interest stays unavailable and fails only a configured positive minimum for that field. Yahoo data is unofficial and may be delayed or unavailable.
 
 ### Opportunity-monitoring settings foundation
 

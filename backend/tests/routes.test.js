@@ -77,7 +77,7 @@ describe('HTTP API', () => {
 
   it('returns verified instrument identity through the monitoring route', async () => {
     const opportunityMonitoring = {
-      instruments: async (query) => ({ provider: 'fixture', provider_unofficial: false, degraded: false, warning: null,
+      instruments: async (query) => ({ provider: 'fixture', provider_unofficial: false,
         matches: [{ symbol: query.toUpperCase(), name: 'Apple Inc.', instrument_type: 'Equity', exchange: 'NASDAQ', currency: 'USD' }] }),
     };
     const response = await request(createApp(makeDeps({ opportunityMonitoring }))).get('/api/v1/screens/instruments?query=aapl');

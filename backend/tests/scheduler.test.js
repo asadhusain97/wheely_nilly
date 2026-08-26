@@ -27,8 +27,8 @@ describe('scheduled opportunity alerts', () => {
     const result = await runOpportunityAlerts({
       config: config(), now: () => Date.parse('2026-08-25T15:00:00Z'),
       monitoring: { scanAll: async () => ({ results: [
-        { status: 'success', result: { symbol: 'AAPL', leg: 'cash_secured_put', degraded: false, cache: { stale: false }, candidates: [candidate, { ...candidate, contract_symbol: 'second' }] } },
-        { status: 'success', result: { symbol: 'MSFT', leg: 'covered_call', degraded: true, cache: { stale: false }, candidates: [{ ...candidate, contract_symbol: 'degraded' }] } },
+        { status: 'success', result: { symbol: 'AAPL', leg: 'cash_secured_put', candidates: [candidate, { ...candidate, contract_symbol: 'second' }] } },
+        { status: 'success', result: { symbol: 'MSFT', leg: 'covered_call', candidates: [{ ...candidate, contract_symbol: 'msft' }] } },
         { status: 'error', error: { message: 'provider unavailable' } },
       ] }) },
       notifications: {
@@ -38,8 +38,8 @@ describe('scheduled opportunity alerts', () => {
       },
       logger: { warn() {} },
     });
-    assert.deepEqual(events.map((event) => event.key), [candidate.contract_symbol]);
-    assert.deepEqual(result, { scanned: true, candidates: 2, enqueued: 1, failures: 1 });
+    assert.deepEqual(events.map((event) => event.key), [candidate.contract_symbol, 'msft']);
+    assert.deepEqual(result, { scanned: true, candidates: 2, enqueued: 2, failures: 1 });
     assert.equal(flushes, 1);
   });
 

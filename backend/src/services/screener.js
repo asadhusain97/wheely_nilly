@@ -22,22 +22,21 @@ const candidateSchema = z.object({
   strike: z.number(), underlying_price: z.number(), bid: z.number(), ask: z.number(),
   executable_option_price_per_share: z.number(), gross_contract_credit: z.number(), estimated_fees: z.number(),
   net_contract_credit: z.number(), period_return: z.number(), annualized_return: z.number(), delta: z.number().nullable(),
-  theta_per_day: z.number().nullable(), greek_source: z.enum(['provider', 'black_scholes_estimate', 'unavailable']),
+  theta_per_day: z.number().nullable(), greek_source: z.enum(['black_scholes_estimate', 'unavailable']),
   implied_volatility: z.number().nullable(), spread_percent: z.number(), volume: z.number().int().nullable(),
   open_interest: z.number().int().nullable(), quote_time: z.string(), quote_age_seconds: z.number(), breakeven: z.number(),
   downside_buffer: z.number(), strike_distance: z.number(), net_sale_price: z.number().nullable(), net_purchase_price: z.number().nullable(),
 }).passthrough();
 
 const responseSchema = z.object({ schema_version: z.literal(1), calculation_version: z.string(), provider: z.string(),
-  underlying_provider: z.string(), underlying_provider_unofficial: z.boolean(),
-  quote_timestamp: z.string(), cache: z.object({ hit: z.boolean(), age_seconds: z.number().nullable(), stale: z.boolean() }),
-  degraded: z.boolean(), warning: z.string().nullable().optional(), assumptions: z.record(z.string(), z.unknown()), exclusions: z.record(z.string(), z.number()),
+  quote_timestamp: z.string().nullable(), cache: z.object({ hit: z.boolean(), age_seconds: z.number().nullable() }),
+  assumptions: z.record(z.string(), z.unknown()), exclusions: z.record(z.string(), z.number()),
   provider_unofficial: z.boolean(), candidates: z.array(candidateSchema),
 }).passthrough();
 
 const instrumentQuerySchema = z.string().trim().min(1).max(50).regex(/^[A-Za-z0-9 .&'-]+$/);
 const instrumentResponseSchema = z.object({
-  provider: z.string(), provider_unofficial: z.boolean(), degraded: z.boolean(), warning: z.string().nullable(),
+  provider: z.string(), provider_unofficial: z.boolean(),
   matches: z.array(z.object({ symbol: z.string().regex(/^[A-Z][A-Z0-9.-]{0,9}$/), name: z.string().min(1),
     instrument_type: z.enum(['Equity', 'ETF', 'Mutual Fund']), exchange: z.string().nullable(), currency: z.string().nullable() }).strict()),
 }).strict();

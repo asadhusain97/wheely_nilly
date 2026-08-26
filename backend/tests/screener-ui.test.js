@@ -8,7 +8,6 @@ import {
   goalsForLeg,
   hydrateTargetIdentities,
   providerName,
-  providerSummary,
   targetIdentity,
 } from '../../frontend/assets/js/screener.js';
 import { settingsWithoutTicker, settingsWithTicker } from '../../frontend/assets/js/settings.js';
@@ -27,12 +26,10 @@ it('defaults the compact add flow to CSP-compatible goals', () => {
 
 it('uses plain scan metadata and summarizes no-match filters without counts', () => {
   assert.equal(providerName('yfinance'), 'Yahoo Finance');
-  assert.equal(providerName('alphavantage'), 'Alpha Vantage');
-  assert.equal(providerSummary({ provider: 'alphavantage', underlying_provider: 'yfinance' }), 'Alpha Vantage options · Yahoo Finance stock');
-  assert.equal(providerSummary({ provider: 'yfinance', underlying_provider: 'yfinance' }), 'Yahoo Finance');
   assert.deepEqual(exclusionSummary({ period_return: 18, delta_low: 8, delta_high: 7, spread: 4 }), [
     'term return', 'delta range', 'bid-ask spread',
   ]);
+  assert.deepEqual(exclusionSummary({ open_interest_unavailable: 2 }), ['available open-interest data']);
 });
 
 it('shows the instrument name and type beside the ticker mark without repeating the ticker', () => {

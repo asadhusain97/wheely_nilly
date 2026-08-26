@@ -18,7 +18,7 @@ The circular plus action in Radar opens a focused add sheet. A provider-backed s
 
 For every symbol and leg, Node loads Phase 1 settings and applies global → selected goal preset → ticker override resolution. Browser requests identify only `symbol` and `leg`; browser-supplied thresholds are rejected. The resolved camelCase fields are translated to the sidecar's validated snake_case fields.
 
-Each successful result includes the complete effective settings, per-field `sourceMap`, grouped source summary, applicable rules, price guard, option and underlying provider identities, unofficial/degraded flags, quote timestamp, cache state, assumptions, warning, and named exclusion counts.
+Each successful result includes the complete effective settings, per-field `sourceMap`, grouped source summary, applicable rules, price guard, provider identity, unofficial-data flag, quote timestamp, cache state, assumptions, and named exclusion counts.
 
 ## Credits, fees, and price guards
 
@@ -51,9 +51,9 @@ There is no composite score.
 
 ## Provider and caching behavior
 
-Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Existing TTL and stale-cache fallback behavior remain. Provider calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics.
+Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Cache entries are used only within their TTL. Yahoo calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics.
 
-Alpha Vantage is the primary option-chain provider and receives one `REALTIME_OPTIONS` request per uncached fetch. Yahoo Finance supplies the underlying stock price. If Alpha Vantage cannot return a usable option chain, Yahoo Finance supplies both the fallback option chain and the underlying price.
+Yahoo Finance supplies instrument search, the underlying stock price, and option chains through `yfinance`.
 
 ## Displayed metrics and sources
 
@@ -61,16 +61,16 @@ Alpha Vantage is the primary option-chain provider and receives one `REALTIME_OP
 | --- | --- |
 | Contract symbol, option type, expiration, DTE, strike | Provider contract identity; DTE is calculated from expiration and evaluation date. |
 | Underlying price | Yahoo Finance snapshot. |
-| Bid, ask, volume, open interest, IV | Provider quote fields. Missing volume/OI are evaluated as zero for hard gates and remain visibly unavailable. |
+| Bid, ask, volume, open interest, IV | Yahoo quote fields. Missing volume/OI remain unavailable. A missing field passes when its minimum is zero and is conservatively excluded when its configured minimum is positive. |
 | Executable option price per share | Estimated bid/ask midpoint after the spread gate; not contract credit. |
 | Gross contract credit | Executable per-share price × 100. |
 | Estimated fees | Configured sidecar fee estimate; marked estimated. |
 | Net contract credit | Gross contract credit less estimated fees; the primary credit displayed in collapsed results. |
 | Period return | Calculated for the candidate's actual term and used as the primary return metric. |
 | Annualized return | Simple period return × 365 ÷ DTE; shown only in expanded details. |
-| Delta and theta/day | Provider Greeks when both are usable; otherwise Black–Scholes estimates, or explicitly unavailable. `greekSource` identifies which. |
+| Delta and theta/day | Black–Scholes estimates when Yahoo supplies usable IV, otherwise explicitly unavailable. `greekSource` identifies which. |
 | Spread percent | `(ask − bid) ÷ midpoint`. |
-| Quote time and age | Provider quote timestamp and calculated elapsed seconds. Cache age is reported separately. |
+| Quote time and age | Yahoo `lastTradeDate` and calculated elapsed seconds. A missing trade date is stale. Cache age is reported separately. |
 | Breakeven | Put: net purchase price. Call: broker cost basis when available (otherwise current underlying price) less net credit per share. The basis is informational and is never a sale-price gate. |
 | Downside buffer | `(underlying − strike) ÷ underlying`. |
 | Strike distance | `(strike − underlying) ÷ underlying`. |
@@ -78,4 +78,4 @@ Alpha Vantage is the primary option-chain provider and receives one `REALTIME_OP
 | Applied rules and guard | Backend-resolved Phase 1 configuration, including source lineage. |
 | Exclusion counts | Named hard-gate failures accumulated across evaluated contracts. |
 
-The workspace distinguishes provider values, estimated execution/fees/Greeks, degraded or unofficial data, stale quotes/cache, and provider failures in plain wording.
+The workspace distinguishes Yahoo values, estimated execution/fees/Greeks, unofficial data, stale quotes, and provider failures in plain wording.

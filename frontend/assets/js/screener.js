@@ -17,6 +17,7 @@ const exchangeLabel = (instrument) => instrument.exchange && instrument.exchange
 const EXCLUSION_LABELS = {
   dte: 'expiration window', moneyness: 'strike range', in_the_money: 'in-the-money contracts',
   invalid_quote: 'usable quotes', spread: 'bid-ask spread', open_interest: 'open interest', volume: 'volume',
+  open_interest_unavailable: 'available open-interest data', volume_unavailable: 'available volume data',
   stale_quote: 'quote freshness', insufficient_cash: 'available cash', insufficient_shares: 'share coverage',
   max_net_purchase_price: 'maximum purchase price', min_net_sale_price: 'minimum sale price',
   delta_low: 'delta range', delta_high: 'delta range', period_return: 'term return',
@@ -42,13 +43,7 @@ export function exclusionSummary(exclusions = {}) {
 }
 
 export function providerName(provider) {
-  return ({ yfinance: 'Yahoo Finance', alphavantage: 'Alpha Vantage' })[provider] ?? sentence(provider);
-}
-
-export function providerSummary(result) {
-  const options = providerName(result.provider);
-  const underlying = providerName(result.underlying_provider);
-  return result.provider === result.underlying_provider ? options : `${options} options · ${underlying} stock`;
+  return provider === 'yfinance' ? 'Yahoo Finance' : sentence(provider);
 }
 
 export function targetIdentity(target, savedIdentity = null) {
@@ -134,12 +129,12 @@ function candidateCard(candidate, result, rank) {
   const detail = node('div', 'candidate-detail');
   const quote = node('dl', 'candidate-detail-grid');
   quote.append(
-    detailRow('Underlying price', money(candidate.underlying_price), providerName(result.underlying_provider)),
+    detailRow('Underlying price', money(candidate.underlying_price), providerName(result.provider)),
     detailRow('Executable option price', `${money(candidate.executable_option_price_per_share)} per share`, `Bid ${money(candidate.bid)} · Ask ${money(candidate.ask)}`),
     detailRow('Spread', percent(candidate.spread_percent)),
     detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`),
     detailRow('Implied volatility', percent(candidate.implied_volatility), 'Provider-derived'),
-    detailRow('Theta per day', number(candidate.theta_per_day, 4), candidate.greek_source === 'provider' ? 'Provider Greek' : candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
+    detailRow('Theta per day', number(candidate.theta_per_day, 4), candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
     detailRow('Breakeven', money(candidate.breakeven)),
     detailRow('Strike distance', percent(Math.abs(candidate.strike_distance))),
     detailRow('Annualized return', percent(candidate.annualized_return), 'Secondary metric'),
@@ -168,8 +163,8 @@ function scanResultView(entry) {
   }
   const result = entry.result;
   const source = node('div', 'scan-source');
-  source.append(node('time', '', dateTime(result.quote_timestamp)), node('small', '', providerSummary(result)));
-  source.firstChild.dateTime = result.quote_timestamp;
+  source.append(node('time', '', dateTime(result.quote_timestamp)), node('small', '', providerName(result.provider)));
+  if (result.quote_timestamp) source.firstChild.dateTime = result.quote_timestamp;
   container.append(source);
   if (!result.candidates.length) {
     const noMatch = node('section', 'scan-empty');

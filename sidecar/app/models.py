@@ -59,19 +59,12 @@ class OptionQuote(BaseModel):
     volume: int | None = None
     open_interest: int | None = None
     implied_volatility: float | None = None
-    delta: float | None = None
-    theta: float | None = None
-    quote_time: datetime
+    quote_time: datetime | None = None
 
 
 class ChainSnapshot(BaseModel):
     provider: str
     unofficial: bool = False
-    underlying_provider: str | None = None
-    underlying_provider_unofficial: bool | None = None
     underlying_price: float = Field(gt=0)
     fetched_at: datetime
     quotes: list[OptionQuote]
-    stale: bool = False
-    degraded: bool = False
-    warning: str | None = None

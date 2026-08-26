@@ -38,14 +38,12 @@ describe('local launcher helpers', () => {
   it('passes only required runtime and screener values to the sidecar', () => {
     const env = createSidecarEnvironment({
       PATH: '/usr/bin',
-      ALPHAVANTAGE_API_KEY: 'alpha-key',
-      SCREENER_PROVIDERS: 'alphavantage,yfinance',
+      SCREENER_TIMEOUT_SECONDS: '15',
       SNAPTRADE_CONSUMER_KEY: 'snaptrade-secret',
       NTFY_TOKEN: 'ntfy-secret',
     });
     assert.equal(env.PATH, '/usr/bin');
-    assert.equal(env.ALPHAVANTAGE_API_KEY, 'alpha-key');
-    assert.equal(env.SCREENER_PROVIDERS, 'alphavantage,yfinance');
+    assert.equal(env.SCREENER_TIMEOUT_SECONDS, '15');
     assert.equal(env.SNAPTRADE_CONSUMER_KEY, undefined);
     assert.equal(env.NTFY_TOKEN, undefined);
   });

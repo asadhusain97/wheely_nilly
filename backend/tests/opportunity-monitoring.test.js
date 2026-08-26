@@ -37,8 +37,7 @@ function screenResult() {
   return {
     schema_version: 1, calculation_version: 'screener-2.0.0', symbol: 'AAPL', leg: 'covered_call',
     provider: 'fixture', provider_unofficial: false, quote_timestamp: '2026-08-25T12:00:00Z',
-    underlying_provider: 'yfinance', underlying_provider_unofficial: true,
-    cache: { hit: false, age_seconds: 0, stale: false }, degraded: false, warning: null,
+    cache: { hit: false, age_seconds: 0 },
     assumptions: { executable_price: 'midpoint' }, exclusions: {}, candidates: [],
   };
 }

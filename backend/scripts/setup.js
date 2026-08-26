@@ -21,7 +21,6 @@ const exampleEnvPath = path.join(rootDirectory, '.env.example');
 
 const SNAPTRADE_SIGNUP_URL = 'https://dashboard.snaptrade.com/signup';
 const SNAPTRADE_KEY_URL = 'https://dashboard.snaptrade.com/api-key';
-const ALPHA_VANTAGE_KEY_URL = 'https://www.alphavantage.co/support/#api-key';
 
 function envLine(key, value) {
   const text = String(value ?? '');
@@ -171,7 +170,7 @@ export async function runSetup() {
     }
 
     console.log(`
-Step 1 of 4 · SnapTrade Personal API key
+Step 1 of 3 · SnapTrade Personal API key
 Create a free Personal account: ${SNAPTRADE_SIGNUP_URL}
 Enable two-factor authentication, then create a key: ${SNAPTRADE_KEY_URL}
 The key has a client ID and consumer key. Keep the consumer key private.
@@ -181,22 +180,11 @@ The key has a client ID and consumer key. Keep the consumer key private.
     if (!clientId || !consumerKey) throw new Error('Both SnapTrade values are required.');
     secrets.push(clientId, consumerKey);
 
-    console.log(`
-Step 2 of 4 · Primary options-data key
-Get an Alpha Vantage key: ${ALPHA_VANTAGE_KEY_URL}
-Wheely Nilly tries Alpha Vantage first. Its real-time options endpoint requires an eligible premium plan.
-If the key is missing, rate-limited, or not entitled, the Screener falls back to Yahoo Finance.
-`);
-    const alphaVantageKey = await prompt.ask('Alpha Vantage API key (optional)', { current: stored.values.ALPHAVANTAGE_API_KEY, secret: true });
-    if (alphaVantageKey) secrets.push(alphaVantageKey);
-
     const baseUpdates = {
       SNAPTRADE_CLIENT_ID: clientId,
       SNAPTRADE_CONSUMER_KEY: consumerKey,
       SNAPTRADE_USER_ID: '',
       SNAPTRADE_USER_SECRET: '',
-      SCREENER_PROVIDERS: 'alphavantage,yfinance',
-      ALPHAVANTAGE_API_KEY: alphaVantageKey,
     };
     const initialConfig = loadConfig({ ...process.env, ...stored.values, ...baseUpdates });
     const snaptrade = createSnaptradeService({ config: initialConfig });
@@ -205,7 +193,7 @@ If the key is missing, rate-limited, or not entitled, the Screener falls back to
     let accounts = await snaptrade.listAccounts();
     console.log('  Key accepted.');
 
-    console.log('\nStep 3 of 4 · Brokerage connection');
+    console.log('\nStep 2 of 3 · Brokerage connection');
     while (accounts.length === 0) {
       const portal = await snaptrade.createConnectionPortal();
       console.log(`No brokerage accounts are connected yet.
@@ -228,7 +216,7 @@ SnapTrade—not Wheely Nilly—handles the brokerage sign-in and authorization.`
     const updates = { ...baseUpdates, SNAPTRADE_ACCOUNT_IDS: selected.map((account) => account.id).join(',') };
     await writeEnv(stored.content, updates);
     console.log(`
-Step 4 of 4 · First portfolio sync
+Step 3 of 3 · First portfolio sync
 Saved ${selected.length} account selection${selected.length === 1 ? '' : 's'} to ${envPath}.
 Downloading balances, positions, orders, activities, and quotes…`);
 

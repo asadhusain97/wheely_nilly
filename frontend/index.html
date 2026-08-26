@@ -611,7 +611,7 @@
               <div class="glossary-entry">
                 <dt>Delta</dt>
                 <dd>The estimated option-price change for a $1 move in the stock, also commonly read as a rough
-                  sensitivity measure. It comes from the provider when available, otherwise a Black–Scholes estimate.
+                  sensitivity measure. Radar calculates it with Black–Scholes when Yahoo supplies implied volatility.
                 </dd>
               </div>
               <div class="glossary-entry">
@@ -622,7 +622,7 @@
               <div class="glossary-entry">
                 <dt>Theta per day</dt>
                 <dd>The estimated daily change in the option's value from one day passing, with other inputs held
-                  constant. It comes from the provider or the Black–Scholes fallback.</dd>
+                  constant. Radar calculates it with Black–Scholes when Yahoo supplies implied volatility.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Breakeven</dt>
@@ -641,7 +641,7 @@
               </div>
               <div class="glossary-entry">
                 <dt>Radar calculation inputs <span>Model assumptions</span></dt>
-                <dd>Standard contracts use a 100-share multiplier. The Black–Scholes fallback uses a 4.5% risk-free
+                <dd>Standard contracts use a 100-share multiplier. The Black–Scholes estimate uses a 4.5% risk-free
                   rate and 0% dividend yield. Annualized return uses period return × 365 ÷ DTE.</dd>
               </div>
             </dl>

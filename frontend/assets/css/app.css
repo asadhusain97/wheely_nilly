@@ -55,7 +55,6 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 .layer-tabs::-webkit-scrollbar{display:none}
 .layer-tabs button{min-width:66px;min-height:37px;flex:0 0 auto;border:1px solid var(--line);border-radius:999px;padding:0 14px;background:var(--canvas);color:var(--mute);font-size:9px;font-weight:770;cursor:pointer}
 .layer-tabs button.is-active{border-color:#f2b8c0;background:#fff0f2;color:var(--red-deep);box-shadow:inset 0 0 0 1px rgba(230,0,35,.04)}
-.goal-tabs button{min-width:max-content}
 .rule-view-context{min-height:51px;display:flex;align-items:center;gap:9px;padding:9px 14px;border-top:1px solid var(--soft-line);background:var(--wash)}
 .rule-view-context>strong{font-size:11px}
 .goal-context{justify-content:space-between}
@@ -143,21 +142,11 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 .editor-advanced-rules>summary small{color:var(--mute);font-size:7px}
 .editor-advanced-rules>.editor-rule-list{border:0;border-top:1px solid var(--line);border-radius:0}
 .sheet-tabs{padding:0 0 10px}
-.ticker-sheet-primary{overflow:hidden;margin-bottom:10px;border:1px solid var(--line);border-radius:15px;background:var(--canvas)}
-.ticker-sheet-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:10px}
-.sheet-primary-field{min-width:0;display:grid;align-content:start;gap:5px}
-.sheet-primary-field>label,.sheet-primary-field>.field-label{color:var(--body);font-size:8px;font-weight:750;line-height:1.3}
-.sheet-primary-field select,.money-input{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;background:var(--wash)}
-.sheet-primary-field select{padding:0 9px;color:var(--ink);font-size:10px;font-weight:700}
-.money-input{display:flex;align-items:center;overflow:hidden}
-.money-input span{padding-left:9px;color:var(--mute);font-size:10px}
-.money-input input{min-width:0;width:100%;height:100%;border:0;padding:0 8px 0 3px;background:transparent;font-size:10px;font-weight:700;outline:0}
-.money-input:focus-within{border-color:var(--ink)}
 .editor-effective-note{margin:0 2px 9px;color:var(--mute);font-size:8px;line-height:1.4}
 .remove-playbook{width:100%;min-height:44px;margin-top:12px;border:1px solid #efcbd0;border-radius:12px;background:#fff6f7;color:var(--error);font-size:8px;font-weight:750;cursor:pointer}
 
 @media(min-width:700px){.settings-editor-sheet{width:min(calc(100% - 40px),560px);margin-bottom:20px;border-bottom:1px solid rgba(17,17,15,.12);border-radius:26px}}
-@media(max-width:380px){.settings-stack{padding-left:15px}.settings-layer::before{left:-15px}.settings-layer-heading{padding-right:11px;padding-left:11px}.settings-rule-list{padding-right:11px;padding-left:11px}.settings-rule-advanced{margin-right:-11px;margin-left:-11px}.ticker-sheet-fields{grid-template-columns:1fr}.editor-rule-row{grid-template-columns:minmax(0,1fr) minmax(106px,126px);padding-right:8px;padding-left:8px}}
+@media(max-width:380px){.settings-stack{padding-left:15px}.settings-layer::before{left:-15px}.settings-layer-heading{padding-right:11px;padding-left:11px}.settings-rule-list{padding-right:11px;padding-left:11px}.settings-rule-advanced{margin-right:-11px;margin-left:-11px}.editor-rule-row{grid-template-columns:minmax(0,1fr) minmax(106px,126px);padding-right:8px;padding-left:8px}}
 @media(prefers-reduced-motion:reduce){.settings-editor-sheet,.settings-editor-backdrop{transition:none}.settings-edit:active{transform:none}}
 
 /* Performance home */
@@ -331,5 +320,5 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 .history-metrics dd{margin:3px 0 0;overflow:hidden;font-size:11px;font-weight:750;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
 .history-cashflow{display:block;margin-top:8px;color:var(--ash);font-size:8px;line-height:1.35}
 
-@media(max-width:480px){.hero-total{font-size:46px}.efficiency-grid dd{font-size:15px}.opportunity-card{grid-template-columns:34px minmax(0,1fr) auto}.opportunity-icon{width:34px;height:34px}.ticker-result{min-width:94px}}
+@media(max-width:480px){.hero-total{font-size:clamp(36px,10.5vw,42px);letter-spacing:-1.9px}.efficiency-grid dd{font-size:15px}.opportunity-card{grid-template-columns:34px minmax(0,1fr) auto}.opportunity-icon{width:34px;height:34px}.ticker-result{min-width:94px}}
 @media(max-width:350px){.ticker-kpis dd{font-size:12px}.ticker-kpis>div{padding-inline:5px}.ticker-result strong{font-size:14px}}

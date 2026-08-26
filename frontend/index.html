@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/assets/css/app.css">
   <link rel="stylesheet" href="/assets/css/settings.css">
   <link rel="stylesheet" href="/assets/css/screener.css">
+  <link rel="stylesheet" href="/assets/css/goal-selector.css">
   <script type="module" src="/assets/js/app.js"></script>
 </head>
 
@@ -175,12 +176,9 @@
             <p>Radar</p>
             <h1 id="screener-title">Find your next wheel trade</h1>
           </div>
-          <div class="monitor-header-actions">
-            <button class="monitor-add-button" id="open-monitor-add" type="button" aria-haspopup="dialog"
-              aria-controls="monitor-add-dialog" aria-expanded="false"><span aria-hidden="true">+</span><span
-                class="sr-only">Add ticker</span></button>
-            <button class="scan-all-button" id="scan-all" type="button">Scan all</button>
-          </div>
+          <button class="monitor-add-button" id="open-monitor-add" type="button" aria-haspopup="dialog"
+            aria-controls="monitor-add-dialog" aria-expanded="false"><span aria-hidden="true">+</span><span
+              class="sr-only">Add ticker</span></button>
         </header>
         <p class="monitor-notice" id="screener-meta" role="status" aria-live="polite" hidden></p>
         <section class="monitor-group" id="owned-monitor-group" aria-labelledby="owned-monitor-title" hidden>
@@ -238,7 +236,8 @@
                   <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
                 </svg><span class="sr-only">Edit default settings</span></button>
             </header>
-            <div class="layer-tabs" id="global-leg-tabs" role="tablist" aria-label="Default strategy"></div>
+            <div class="layer-tabs strategy-tabs" id="global-leg-tabs" role="tablist"
+              aria-label="Default strategy"></div>
             <div id="global-rules-view" role="tabpanel" aria-live="polite"></div>
           </section>
 
@@ -253,7 +252,8 @@
                   <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
                 </svg><span class="sr-only">Edit selected goal</span></button>
             </header>
-            <div class="layer-tabs goal-tabs" id="goal-preset-tabs" role="tablist" aria-label="Goal profile"></div>
+            <div class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs" role="tablist"
+              aria-label="Goal profile"></div>
             <div id="goal-rules-view" role="tabpanel" aria-live="polite"></div>
             <p class="inheritance-key"><span class="inheritance-swatch" aria-hidden="true"></span>Lighter values come
               from Defaults.</p>
@@ -350,12 +350,16 @@
           </div>
           <fieldset class="monitor-leg-picker">
             <legend>Strategy</legend>
-            <label><input type="radio" name="leg" value="cashSecuredPut" checked><span>CSP</span></label>
-            <label><input type="radio" name="leg" value="coveredCall"><span>CC</span></label>
+            <div class="layer-tabs strategy-tabs" id="monitor-leg-tabs">
+              <label class="strategy-option"><input type="radio" name="leg" value="cashSecuredPut"
+                  checked><span>CSP</span></label>
+              <label class="strategy-option"><input type="radio" name="leg"
+                  value="coveredCall"><span>CC</span></label>
+            </div>
           </fieldset>
           <fieldset class="monitor-goal-picker">
             <legend>Goal</legend>
-            <div id="monitor-goal-tabs"></div>
+            <div class="goal-picker" id="monitor-goal-tabs"></div>
           </fieldset>
           <p class="monitor-add-guidance">You can customize monitoring configs for this ticker from the Settings page.
           </p>

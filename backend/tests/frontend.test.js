@@ -12,6 +12,7 @@ const glossaryJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/glo
 const settingsJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/settings.js'), 'utf8');
 const screenerJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/screener.js'), 'utf8');
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
+const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
 
 describe('responsive dashboard shell', () => {
   it('has semantic landmarks, labels, live regions, and keyboard navigation support', () => {
@@ -64,12 +65,12 @@ describe('responsive dashboard shell', () => {
     for (const label of ['Home', 'Trades', 'Radar', 'Settings']) assert.match(navigation, new RegExp(`>${label}<`));
   });
   it('provides a playbook-aware mobile opportunity workspace', () => {
-    for (const id of ['scan-all', 'open-monitor-add', 'monitor-add-dialog', 'screener-add-ticker', 'screener-add-symbol', 'monitor-goal-tabs', 'owned-monitor-group', 'owned-monitor-targets', 'tracked-monitor-targets', 'monitor-open-settings']) {
+    for (const id of ['open-monitor-add', 'monitor-add-dialog', 'screener-add-ticker', 'screener-add-symbol', 'monitor-leg-tabs', 'monitor-goal-tabs', 'owned-monitor-group', 'owned-monitor-targets', 'tracked-monitor-targets', 'monitor-open-settings']) {
       assert.match(html, new RegExp(`id="${id}"`));
     }
     assert.match(html, /<p>Radar<\/p>[\s\S]*?<h1 id="screener-title">Find your next wheel trade<\/h1>/);
     assert.match(html, /Find your next wheel trade/);
-    assert.match(html, /value="cashSecuredPut" checked/);
+    assert.match(html, /value="cashSecuredPut"\s+checked/);
     assert.doesNotMatch(html, /id="screener-add-goal"|class="monitor-goal-field"/);
     assert.match(html, /You can customize monitoring configs for this ticker from the Settings page/);
     assert.match(html, /Search by ticker or company name/);
@@ -82,7 +83,7 @@ describe('responsive dashboard shell', () => {
     for (const token of ['Fits ', 'candidate-fit', 'contract_symbol', 'Option type', 'Quote time', 'gross_contract_credit', 'downside_buffer', 'quote_age_seconds', 'Applied rules', 'candidate-rules', 'Calculation assumptions', 'candidate-assumptions', 'Why other contracts were filtered', 'candidate-exclusions', 'exclusionsText']) {
       assert.doesNotMatch(screenerJs, new RegExp(token));
     }
-    assert.match(screenerJs, /epoch !== state\.epoch/);
+    assert.doesNotMatch(screenerJs, /scanAll|scan-all/);
     assert.match(screenerJs, /state\.loading\.has/);
     assert.match(screenerJs, /\/api\/v1\/screens\/instruments\?query=/);
     assert.match(screenerJs, /Select a verified instrument from the results/);
@@ -118,9 +119,21 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /@media \(max-width: 360px\)/);
     assert.match(screenerCss, /prefers-reduced-motion: reduce/);
     assert.match(screenerCss, /backdrop-filter: blur\(22px\) saturate\(165%\)/);
-    assert.match(screenerCss, /\.monitor-leg-picker legend \{ grid-column: 1 \/ -1; \}/);
+    assert.match(html, /class="layer-tabs strategy-tabs" id="global-leg-tabs"/);
+    assert.match(html, /class="layer-tabs strategy-tabs" id="monitor-leg-tabs"/);
+    assert.match(settingsCss, /\.layer-tabs button,[\s\S]*?\.layer-tabs \.strategy-option > span/);
+    assert.match(settingsCss, /\.layer-tabs button,\s*\.layer-tabs \.strategy-option > span\s*\{\s*min-height: 38px/);
+    assert.match(settingsCss, /\.strategy-tabs > button,[\s\S]*?flex: 1 1 0/);
     assert.match(screenerCss, /\.instrument-search-results\[hidden\] \{ display: none; \}/);
-    for (const goal of ['protect', 'income', 'exit', 'acquire']) assert.match(screenerCss, new RegExp(`data-goal="${goal}"`));
+    for (const goal of ['protect', 'income', 'exit', 'acquire']) assert.match(goalSelectorCss, new RegExp(`data-goal="${goal}"`));
+    assert.match(goalSelectorCss, /#goal-preset-tabs[\s\S]*?#monitor-goal-tabs/);
+    assert.match(goalSelectorCss, /backdrop-filter: blur\(12px\) saturate\(135%\)/);
+    assert.doesNotMatch(goalSelectorCss, /linear-gradient|::before|::after|animation:/);
+    assert.match(goalSelectorCss, /#goal-preset-tabs \.goal-chip\s*\{[^}]*min-width: 0[^}]*flex: 1 1 0/);
+    assert.match(html, /class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs"/);
+    assert.match(html, /class="goal-picker" id="monitor-goal-tabs"/);
+    assert.match(screenerCss, /\.monitor-leg-picker legend, \.monitor-goal-picker legend \{[^}]*margin-bottom: 6px/);
+    assert.match(goalSelectorCss, /prefers-reduced-transparency: reduce/);
     assert.match(screenerCss, /\.monitor-remove-button\.is-confirming/);
     assert.match(screenerCss, /\.monitor-symbol-mark \{[^}]*width: auto[^}]*white-space: nowrap/);
     assert.match(screenerCss, /\.monitor-target-body\[hidden\]/);
@@ -129,11 +142,12 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /\.candidate-open-label::after \{[^}]*width: 6px[^}]*height: 6px[^}]*transform: rotate\(45deg\)/);
     assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-open-label::after \{ transform: rotate\(225deg\); \}/);
     assert.doesNotMatch(screenerCss, /content: "⌄"/);
-    assert.match(screenerCss, /\.scan-all-button \{[^}]*background: transparent/);
+    assert.doesNotMatch(screenerCss, /\.scan-all-button/);
     assert.match(screenerCss, /\.scan-source small/);
     assert.doesNotMatch(screenerCss, /\.provider-strip/);
     assert.doesNotMatch(screenerCss, /background:\s*(?:#000|black|rgba\(0,\s*0,\s*0)/i);
     assert.match(html, /href="\/assets\/css\/screener\.css"/);
+    assert.match(html, /href="\/assets\/css\/goal-selector\.css"/);
     assert.match(js, /toast-mark/);
     assert.match(css, /\.toast\.is-success \.toast-mark/);
   });
@@ -188,6 +202,10 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.settings-layer-heading small\s*\{[^}]*font-size: 12px/);
     assert.match(settingsCss, /\.rule-value\.is-inherited\s*\{[^}]*color: #9a9a94/);
     assert.match(settingsCss, /\.ticker-leg-panel \.editor-rule-copy small\s*\{[^}]*color: rgba\(85, 85, 79, \.48\)[^}]*font-weight: 500/);
+    assert.match(settingsJs, /goal-picker ticker-goal-picker/);
+    assert.match(settingsJs, /tickerRules\.querySelector\('\.editor-rule-list'\)\.prepend\(priceGuard/);
+    assert.doesNotMatch(settingsJs, /document\.createElement\('select'\)/);
+    assert.match(settingsCss, /\.ticker-price-guard \.editor-rule-controls\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 34px/);
     assert.match(settingsCss, /\.rule-separator\s*\{[^}]*color: inherit/);
     assert.match(settingsCss, /\.settings-rule-advanced > summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 20px/);
     assert.match(settingsCss, /\.disclosure-icon\s*\{[^}]*justify-self: end/);
@@ -217,6 +235,7 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.glossary-sheet\s*\{[^}]*grid-template-rows: auto auto minmax\(0, 1fr\)/);
     assert.match(settingsCss, /\.glossary-search\s*\{[^}]*border-radius: 999px/);
     assert.match(settingsCss, /\.glossary-search:focus-within/);
+    assert.match(settingsCss, /\.glossary-search input::\-webkit-search-cancel-button\s*\{[^}]*display: none/);
     for (const term of ['Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Opening credit', 'DTE', 'Delta', 'Open interest', 'Settings layers', 'Goal profiles', 'Moneyness', 'Target delta range', 'Liquidity rules', 'Maximum quote age', 'Minimum period return', 'Net price guard', 'Candidate rank', 'Strike price', 'Underlying price', 'Executable option price', 'Net contract credit', 'Period return', 'Net sale / purchase price', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Estimated fee', 'Radar calculation inputs']) {
       assert.match(glossary, new RegExp(term));
     }

@@ -183,7 +183,7 @@ export function goalsForLeg(leg) {
 }
 
 export function createScreenerController({ request, notify, addTicker, removeTicker, rememberTicker, getTickerIdentity, openSettings }) {
-  const state = { targets: [], results: new Map(), epoch: 0, loading: new Set(), scanAll: false, loaded: false,
+  const state = { targets: [], results: new Map(), loading: new Set(), loaded: false,
     removing: new Set(), collapsed: new Set(), identities: new Map(), selectedInstrument: null, searchSequence: 0, searchTimer: null };
   const key = (symbol, leg) => `${symbol}:${leg}`;
 
@@ -265,7 +265,7 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       copy.append(node('strong', '', LEG_LABELS[targetLeg.leg]), ruleSummary, node('small', 'price-guard-copy', priceGuardText(targetLeg.effectiveSettings)));
       const scan = node('button', 'scan-target-button', state.loading.has(key(target.symbol, targetLeg.leg)) ? 'Scanning…' : 'Scan');
       scan.type = 'button';
-      scan.disabled = state.scanAll || state.loading.has(key(target.symbol, targetLeg.leg));
+      scan.disabled = state.loading.has(key(target.symbol, targetLeg.leg));
       scan.addEventListener('click', () => scanTarget(target.symbol, targetLeg.leg));
       heading.append(copy, scan);
       leg.append(heading, scanResultView(state.results.get(key(target.symbol, targetLeg.leg))));
@@ -288,9 +288,6 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     ownedTargets.forEach((target) => owned.append(targetCard(target)));
     if (!trackedOnly.length) tracked.append(node('p', 'monitor-empty', 'No tracked tickers yet. Use + to add one.'));
     else trackedOnly.forEach((target) => tracked.append(targetCard(target)));
-    const scanAll = document.querySelector('#scan-all');
-    scanAll.disabled = state.scanAll || !state.targets.length;
-    scanAll.textContent = state.scanAll ? 'Scanning…' : 'Scan all';
   }
 
   async function loadTargets(force = false) {
@@ -316,21 +313,18 @@ export function createScreenerController({ request, notify, addTicker, removeTic
   async function scanTarget(symbol, leg) {
     await loadTargets();
     const target = state.targets.find((item) => item.symbol === symbol && item.legs.some((itemLeg) => itemLeg.leg === leg));
-    if (!target || state.scanAll || state.loading.has(key(symbol, leg))) return;
-    const epoch = state.epoch;
+    if (!target || state.loading.has(key(symbol, leg))) return;
     state.loading.add(key(symbol, leg));
     state.results.set(key(symbol, leg), { status: 'loading' });
     render();
     try {
       const result = await request('/api/v1/screens', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, leg }) });
-      if (epoch !== state.epoch) return;
       state.results.set(key(symbol, leg), { status: 'success', result });
     } catch (error) {
-      if (epoch !== state.epoch) return;
       state.results.set(key(symbol, leg), { status: 'error', error });
     } finally {
       state.loading.delete(key(symbol, leg));
-      if (epoch === state.epoch) render();
+      render();
     }
   }
 
@@ -349,26 +343,6 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     } finally {
       state.removing.delete(symbol);
       render();
-    }
-  }
-
-  async function scanAll() {
-    if (state.scanAll) return;
-    await loadTargets();
-    const epoch = ++state.epoch;
-    state.scanAll = true;
-    for (const target of state.targets) for (const leg of target.legs) state.results.set(key(target.symbol, leg.leg), { status: 'loading' });
-    render();
-    try {
-      const response = await request('/api/v1/screens/scan-all', { method: 'POST' });
-      if (epoch !== state.epoch) return;
-      state.targets = response.targets;
-      for (const entry of response.results) state.results.set(key(entry.symbol, entry.leg), entry.status === 'success' ? { status: 'success', result: entry.result } : { status: 'error', error: entry.error });
-    } catch (error) {
-      if (epoch !== state.epoch) return;
-      notify('Scan all could not be completed. Try again.', 'error');
-    } finally {
-      if (epoch === state.epoch) { state.scanAll = false; render(); }
     }
   }
 
@@ -490,7 +464,6 @@ export function createScreenerController({ request, notify, addTicker, removeTic
   }
 
   function initialize() {
-    document.querySelector('#scan-all').addEventListener('click', scanAll);
     document.querySelector('#open-monitor-add').addEventListener('click', openAdd);
     document.querySelector('#monitor-open-settings').addEventListener('click', openSettings);
     for (const close of document.querySelectorAll('[data-monitor-add-close]')) close.addEventListener('click', closeAdd);

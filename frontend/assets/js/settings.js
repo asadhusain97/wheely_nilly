@@ -310,8 +310,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     container.replaceChildren();
     for (const [key, label] of items) {
       const active = key === selected;
-      const button = element('button', `${prefix === 'goal' ? 'goal-chip ' : ''}${active ? 'is-active' : ''}`.trim(), label);
-      if (prefix === 'goal') button.dataset.goal = key;
+      const isGoal = ['goal', 'ticker-goal'].includes(prefix);
+      const button = element('button', `${isGoal ? 'goal-chip ' : ''}${active ? 'is-active' : ''}`.trim(), label);
+      if (isGoal) button.dataset.goal = key;
       button.type = 'button';
       button.id = `${prefix}-${key}-tab`;
       button.setAttribute('role', 'tab');
@@ -717,12 +718,15 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
 
   function priceGuard(symbol, leg, legSettings) {
     const key = leg === 'coveredCall' ? 'minNetSalePriceMinor' : 'maxNetPurchasePriceMinor';
-    const field = element('div', 'sheet-primary-field');
+    const row = element('div', 'editor-rule-row ticker-price-guard');
     const id = `price-guard-${symbol}-${leg}`;
-    const label = element('label', '', leg === 'coveredCall' ? 'Minimum net sale price' : 'Maximum net purchase price');
+    const copy = element('div', 'editor-rule-copy');
+    const label = element('label', '', leg === 'coveredCall' ? 'Minimum net sale price' : 'Max. net purchase price');
     label.htmlFor = id;
-    const wrap = element('div', 'money-input');
-    wrap.append(element('span', '', '$'));
+    copy.append(label, element('small', '', 'Optional'));
+    const controls = element('div', 'editor-rule-controls');
+    const wrap = element('div', 'rule-input');
+    wrap.append(element('span', 'currency-prefix', '$'));
     const input = document.createElement('input');
     input.id = id;
     constrainNumericInput(input);
@@ -738,8 +742,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       editorError();
     });
     wrap.append(input);
-    field.append(label, wrap);
-    return field;
+    controls.append(wrap);
+    row.append(copy, controls);
+    return row;
   }
 
   function renderTickerEditor(body) {
@@ -765,29 +770,26 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     body.append(tabs, panel);
 
     const legSettings = playbook[leg];
-    const primary = element('div', 'ticker-sheet-primary');
-
-    const controls = element('div', 'ticker-sheet-fields');
-    const goalField = element('div', 'sheet-primary-field goal-tone');
-    goalField.dataset.goal = legSettings.goal;
-    const goalLabel = element('label');
-    const goal = document.createElement('select');
-    for (const allowed of ALLOWED_GOALS[leg]) {
-      const option = element('option', '', GOAL_LABELS[allowed]);
-      option.value = allowed;
-      option.selected = allowed === legSettings.goal;
-      goal.append(option);
-    }
-    goal.addEventListener('change', () => {
-      legSettings.goal = goal.value;
-      markEditorDirty();
-      renderEditor();
-    });
-    goalLabel.append(goal);
-    goalField.append(element('span', 'field-label', 'Goal'), goalLabel);
-    controls.append(goalField, priceGuard(symbol, leg, legSettings));
-    primary.append(controls);
-    panel.append(primary);
+    const goalField = document.createElement('fieldset');
+    goalField.className = 'ticker-goal-field';
+    goalField.append(element('legend', '', 'Goal'));
+    const goalTabs = element('div', 'goal-picker ticker-goal-picker');
+    goalTabs.setAttribute('role', 'tablist');
+    goalTabs.setAttribute('aria-label', `${symbol} goal`);
+    renderTabs(
+      goalTabs,
+      ALLOWED_GOALS[leg].map((goal) => [goal, GOAL_LABELS[goal]]),
+      legSettings.goal,
+      (nextGoal) => {
+        legSettings.goal = nextGoal;
+        markEditorDirty();
+        renderEditor();
+      },
+      'ticker-goal',
+      'ticker-rules-editor',
+    );
+    goalField.append(goalTabs);
+    panel.append(goalField);
 
     const preset = draft.goalPresets[legSettings.goal].rules;
     const inherited = { ...draft.globalRules[leg], ...preset };
@@ -796,9 +798,12 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       Object.hasOwn(preset, key) ? GOAL_LABELS[legSettings.goal] : 'Defaults',
     ]));
     const count = Object.keys(legSettings.overrides).length;
+    const tickerRules = ruleEditor(legSettings.overrides, { partial: true, inherited, inheritLabels });
+    tickerRules.id = 'ticker-rules-editor';
+    tickerRules.querySelector('.editor-rule-list').prepend(priceGuard(symbol, leg, legSettings));
     panel.append(
       element('p', 'editor-effective-note', `Using ${GOAL_LABELS[legSettings.goal]} with ${count} ${symbol} change${count === 1 ? '' : 's'}.`),
-      ruleEditor(legSettings.overrides, { partial: true, inherited, inheritLabels }),
+      tickerRules,
     );
 
     if (model.settings.tickerPlaybooks[symbol]) {

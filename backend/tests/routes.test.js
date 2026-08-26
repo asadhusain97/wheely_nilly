@@ -75,6 +75,16 @@ describe('HTTP API', () => {
     assert.equal(response.body.scheduler.enabled, false);
   });
 
+  it('returns verified instrument identity through the monitoring route', async () => {
+    const opportunityMonitoring = {
+      instruments: async (query) => ({ provider: 'fixture', provider_unofficial: false, degraded: false, warning: null,
+        matches: [{ symbol: query.toUpperCase(), name: 'Apple Inc.', instrument_type: 'Equity', exchange: 'NASDAQ', currency: 'USD' }] }),
+    };
+    const response = await request(createApp(makeDeps({ opportunityMonitoring }))).get('/api/v1/screens/instruments?query=aapl');
+    assert.equal(response.status, 200);
+    assert.equal(response.body.matches[0].name, 'Apple Inc.');
+  });
+
   it('lists accounts with masked numbers only', async () => {
     const response = await request(createApp(makeDeps())).get(
       '/api/v1/snaptrade/accounts',

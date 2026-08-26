@@ -30,8 +30,8 @@ flowchart LR
     Node -->|Signed HTTPS requests| SnapTrade[SnapTrade API]
     SnapTrade --> Robinhood[Robinhood connection]
     Node -->|Local HTTP| Python[Python screener sidecar]
-    Python -->|Primary| Alpha[Alpha Vantage realtime options]
-    Python -->|Fallback| Yahoo[yfinance]
+    Python -->|Options primary| Alpha[Alpha Vantage realtime options]
+    Python -->|Stock prices + options fallback| Yahoo[yfinance]
     Node -->|HTTP POST| Ntfy[ntfy]
     Node --> Data[(Local data volume)]
     Python --> Data
@@ -116,7 +116,7 @@ The Personal key represents the person running this copy. Do not register a sepa
 
 Request a key from the [official Alpha Vantage key form](https://www.alphavantage.co/support/#api-key), then enter it when the wizard asks or set `ALPHAVANTAGE_API_KEY` in `.env`.
 
-The Screener requests Alpha Vantage's real-time option chain with Greeks and its real-time underlying quote concurrently. Real-time US options are a premium Alpha Vantage function and require the appropriate data entitlement. A free key alone does not guarantee fresher options data. When the key is missing, rate-limited, not entitled, unavailable, or returns an invalid response, the same request automatically falls back to `yfinance` and is visibly marked degraded.
+Radar spends one Alpha Vantage request on the real-time option chain and Greeks. It gets the underlying stock price from `yfinance`, so stock quotes do not consume Alpha Vantage credits. Real-time US options are a premium Alpha Vantage function and require the appropriate data entitlement. When the Alpha key is missing, rate-limited, not entitled, unavailable, or returns an invalid option chain, the request falls back to the `yfinance` option chain.
 
 ### What each value does
 
@@ -345,7 +345,10 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `GET` | `/api/v1/wheel/premiums` | Source-linked option premium ledger |
 | `GET` | `/api/v1/wheel/review` | Unsupported or ambiguous source events |
 | `GET` | `screener:8000/health` | Internal Python container health check |
-| `POST` | `/api/v1/screens` | Validate and proxy an informational options screen |
+| `POST` | `/api/v1/screens` | Resolve authoritative settings and screen one eligible symbol/leg |
+| `GET` | `/api/v1/screens/targets` | Discover deduplicated owned and playbook monitoring targets with effective rules |
+| `GET` | `/api/v1/screens/instruments` | Find provider-verified US stocks, ETFs, and mutual funds for the add flow |
+| `POST` | `/api/v1/screens/scan-all` | Scan every eligible target with partial-failure isolation |
 | `GET` | `/api/v1/notifications/status` | ntfy configuration, dry-run, rules, and outbox counts |
 | `GET` | `/api/v1/notifications/audit` | Redacted local notification audit trail |
 | `PATCH` | `/api/v1/notifications/rules` | Enable or disable each alert rule |
@@ -355,15 +358,15 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `PUT` | `/api/v1/strategy-settings` | Validate and atomically replace the complete strategy settings document |
 | `GET` | `/api/v1/strategy-settings/effective` | Resolve global → goal → ticker rules for a symbol and strategy leg |
 
-### Phase 3 screener
+### Radar opportunity finder
 
-Start the app with `cd backend && npm run app`, then use the Screener tab. Alpha Vantage is queried first for a real-time option chain, provider Greeks, and a real-time underlying quote. Those two Alpha Vantage requests run concurrently. If either request fails, is rate-limited, lacks entitlement, or returns unusable data, the sidecar fetches a complete `yfinance` snapshot instead. Fallback snapshots are labeled unofficial and degraded; they remain visible but do not produce screener alerts. The 120-second cache applies to whichever provider succeeds, limiting duplicate upstream calls.
+Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Alpha Vantage is queried first for the real-time option chain and provider Greeks. Yahoo Finance supplies the underlying stock price without using an Alpha Vantage credit. If the Alpha options request fails, is rate-limited, lacks entitlement, or returns unusable data, the sidecar falls back to Yahoo's option chain. The 120-second cache applies to whichever option provider succeeds, limiting duplicate upstream calls.
 
-Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. The default absolute-delta ceiling is 0.35, puts must be at or out of the money, and calls must be at or above both spot and any supplied adjusted basis. Put return uses strike collateral less net premium; covered-call output reports adjusted-basis and market-value yields separately. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
+Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless an Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are provider values when present, otherwise Black–Scholes estimates using the response's timestamp and assumptions. Yahoo data is unofficial and may be delayed or unavailable.
 
 ### Opportunity-monitoring settings foundation
 
-The Settings tab edits persistent global rules, goal presets, and ticker playbooks. These settings are not wired into Home or Screener yet. See [Strategy Settings v1](docs/strategy-settings.md) for inheritance, fields, starter presets, persistence, and API contracts.
+The Settings tab edits persistent global rules, goal presets, and ticker playbooks. Radar resolves those settings on the backend for every request. See [Strategy Settings v1](docs/strategy-settings.md) for inheritance and [Playbook-aware opportunity monitoring](docs/opportunity-monitoring.md) for target discovery, calculations, ranking, metrics, and provider behavior.
 
 ### Phase 4 notifications
 

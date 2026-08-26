@@ -11,6 +11,7 @@
   <link rel="apple-touch-icon" href="/assets/images/logo.png">
   <link rel="stylesheet" href="/assets/css/app.css">
   <link rel="stylesheet" href="/assets/css/settings.css">
+  <link rel="stylesheet" href="/assets/css/screener.css">
   <script type="module" src="/assets/js/app.js"></script>
 </head>
 
@@ -169,36 +170,40 @@
       </section>
 
       <section class="app-screen" id="screener" data-screen="screener" aria-labelledby="screener-title" hidden>
-        <header class="screen-header">
-          <p>Informational estimates</p>
-          <h1 id="screener-title">Options screener</h1>
+        <header class="screen-header monitor-header">
+          <div>
+            <p>Radar</p>
+            <h1 id="screener-title">Find your next wheel trade</h1>
+          </div>
+          <div class="monitor-header-actions">
+            <button class="monitor-add-button" id="open-monitor-add" type="button" aria-haspopup="dialog"
+              aria-controls="monitor-add-dialog" aria-expanded="false"><span aria-hidden="true">+</span><span
+                class="sr-only">Add ticker</span></button>
+            <button class="scan-all-button" id="scan-all" type="button">Scan all</button>
+          </div>
         </header>
-        <form class="panel-form" id="screener-form"><label>Symbol<input name="symbol" required
-              pattern="[A-Z][A-Z0-9.-]{0,9}" maxlength="10" placeholder="AAPL"
-              autocomplete="off"></label><label>Strategy<select name="leg">
-              <option value="cash_secured_put">Cash-secured put</option>
-              <option value="covered_call">Covered call</option>
-            </select></label><label>Cash available<input name="cash_available" type="number" min="0" step="100"
-              value="10000"></label><label>Covered shares<input name="covered_shares" type="number" min="0" step="100"
-              value="0"></label><button type="submit">Screen options</button></form>
-        <p class="data-note" id="screener-meta">Provider and quote status appear after screening. Verify quotes with your broker.</p>
-        <div class="table-wrap">
-          <table class="native-table">
-            <thead>
-              <tr>
-                <th>Contract</th>
-                <th>Premium</th>
-                <th>Annualized</th>
-                <th>Delta</th>
-              </tr>
-            </thead>
-            <tbody id="screener-body">
-              <tr class="empty-row">
-                <td colspan="4">Run a screen to view ranked candidates.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <p class="monitor-notice" id="screener-meta" role="status" aria-live="polite" hidden></p>
+        <section class="monitor-group" id="owned-monitor-group" aria-labelledby="owned-monitor-title" hidden>
+          <header>
+            <div>
+              <p>Shares ready</p>
+              <h2 id="owned-monitor-title">Eligible owned tickers</h2>
+            </div><span id="owned-monitor-count">—</span>
+          </header>
+          <div class="monitor-target-list" id="owned-monitor-targets" aria-live="polite"></div>
+        </section>
+        <section class="monitor-group" aria-labelledby="tracked-monitor-title">
+          <header>
+            <div>
+              <h2 id="tracked-monitor-title">Manually tracked tickers</h2>
+            </div><span id="tracked-monitor-count">—</span>
+          </header>
+          <div class="monitor-target-list" id="tracked-monitor-targets" aria-live="polite"></div>
+        </section>
+        <p class="monitor-settings-note">Want to customize a ticker’s rules? Use the <button id="monitor-open-settings"
+            type="button">Settings page</button>.</p>
+        <p class="monitor-disclaimer">Informational estimates only. Verify current quotes and buying power with your
+          broker.</p>
       </section>
 
       <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
@@ -206,7 +211,7 @@
           <div>
             <p>Monitoring preferences</p>
             <h1 id="more-title">Strategy settings</h1>
-            <small>Shape the rules first. Screening will use them in a later phase.</small>
+            <small>Shape the rules Radar uses to find your next wheel trade.</small>
           </div>
           <button class="glossary-trigger" id="open-glossary" type="button" aria-haspopup="dialog"
             aria-controls="glossary-dialog" aria-expanded="false" title="Open glossary">
@@ -258,7 +263,7 @@
             <header class="settings-layer-heading">
               <div>
                 <h2 id="settings-tickers-title">Tickers</h2>
-                <small>Recent Screener and traded tickers, with custom settings.</small>
+                <small>Recent Radar and traded tickers, with custom settings.</small>
               </div>
             </header>
             <div class="settings-ticker-tools">
@@ -276,6 +281,10 @@
           </section>
         </div>
         <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
+        <aside class="settings-support" aria-label="Support Wheely Nilly">
+          <p>If Wheely Nilly has been useful, you can<a href="https://ko-fi.com/asadhusain" target="_blank"
+              rel="noopener noreferrer">leave a tip<span class="sr-only"> (opens in a new tab)</span></a>.</p>
+        </aside>
 
       </section>
     </main>
@@ -302,6 +311,56 @@
             <button class="settings-reset" id="settings-reset-defaults" type="button">Reset to default</button>
             <button class="settings-save" id="save-strategy-settings" type="submit">Save changes</button>
           </footer>
+        </form>
+      </section>
+    </div>
+
+    <div class="monitor-add-overlay" id="monitor-add-dialog" hidden>
+      <button class="monitor-add-backdrop" type="button" data-monitor-add-close tabindex="-1"
+        aria-label="Close add ticker"></button>
+      <section class="monitor-add-sheet" role="dialog" aria-modal="true" aria-labelledby="monitor-add-title"
+        aria-describedby="monitor-add-description" tabindex="-1">
+        <header class="monitor-add-sheet-header">
+          <span class="monitor-add-handle" aria-hidden="true"></span>
+          <div>
+            <p id="monitor-add-description">Search by ticker or company name</p>
+            <h2 id="monitor-add-title">Add ticker</h2>
+          </div>
+          <button class="monitor-add-close" type="button" data-monitor-add-close aria-label="Close add ticker">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg>
+          </button>
+        </header>
+        <form class="monitor-add-form" id="screener-add-ticker">
+          <div class="instrument-search-field">
+            <label for="screener-add-symbol">Ticker or name</label>
+            <div class="instrument-search-control">
+              <div class="instrument-search-input"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4 4"></path>
+                </svg>
+                <input id="screener-add-symbol" name="symbol" required maxlength="50" placeholder="Apple or AAPL"
+                  autocomplete="off" spellcheck="false" aria-autocomplete="list"
+                  aria-controls="instrument-search-results" aria-expanded="false">
+              </div>
+              <div class="instrument-search-results" id="instrument-search-results" role="listbox" hidden></div>
+            </div>
+            <p id="instrument-search-status" role="status" aria-live="polite">Type a symbol or company name.</p>
+          </div>
+          <fieldset class="monitor-leg-picker">
+            <legend>Strategy</legend>
+            <label><input type="radio" name="leg" value="cashSecuredPut" checked><span>CSP</span></label>
+            <label><input type="radio" name="leg" value="coveredCall"><span>CC</span></label>
+          </fieldset>
+          <fieldset class="monitor-goal-picker">
+            <legend>Goal</legend>
+            <div id="monitor-goal-tabs"></div>
+          </fieldset>
+          <p class="monitor-add-guidance">You can customize monitoring configs for this ticker from the Settings page.
+          </p>
+          <p class="monitor-add-error" id="monitor-add-error" role="alert" hidden></p>
+          <button class="monitor-add-submit" id="monitor-add-submit" type="submit" disabled>Add to Radar</button>
         </form>
       </section>
     </div>
@@ -335,10 +394,10 @@
           <span class="sr-only" id="glossary-search-status" role="status" aria-live="polite"></span>
         </div>
         <div class="glossary-sheet-body" id="glossary-results">
-          <p class="glossary-intro">A field guide to the portfolio and screener metrics used throughout Wheely
+          <p class="glossary-intro">A field guide to the portfolio and Radar metrics used throughout Wheely
             Nilly. Dashboard returns use matched, closed contracts; open credits remain unrealized.</p>
           <p class="sr-only" id="glossary-description">Definitions for portfolio performance, capital, contracts,
-            strategy settings, and options screener terms.</p>
+            strategy settings, and Radar terms.</p>
 
           <section class="glossary-group" aria-labelledby="glossary-settings-title">
             <h3 id="glossary-settings-title">Strategy settings</h3>
@@ -347,7 +406,8 @@
                 <dt>Defaults, goals &amp; ticker changes <span>Settings layers</span></dt>
                 <dd>Defaults are the base rules. A goal changes only its filled-in values, and a ticker change applies
                   only to that ticker and strategy. A lighter value is still coming from an earlier layer.</dd>
-                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value, otherwise Default</dd>
+                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value, otherwise Default
+                </dd>
               </div>
               <div class="glossary-entry">
                 <dt>Goal profiles <span>Protect · Income · Exit · Acquire</span></dt>
@@ -426,7 +486,7 @@
                   collateral and days held; same-day trades count as one day. The screener annualizes each candidate's
                   estimated period return.</dd>
                 <dd class="glossary-formula">Dashboard: qualified booked profit × 365 ÷ Σ(collateral × days held)</dd>
-                <dd class="glossary-formula">Screener: net premium ÷ return collateral × 365 ÷ DTE</dd>
+                <dd class="glossary-formula">Radar: net premium ÷ return collateral × 365 ÷ DTE</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Capital velocity</dt>
@@ -506,19 +566,83 @@
           </section>
 
           <section class="glossary-group" aria-labelledby="glossary-screener-title">
-            <h3 id="glossary-screener-title">Options screener</h3>
+            <h3 id="glossary-screener-title">Radar opportunities</h3>
             <dl class="glossary-list">
               <div class="glossary-entry">
-                <dt>Premium <span>Estimated</span></dt>
-                <dd>The candidate option's estimated per-share execution price. The screener uses the bid/ask
-                  midpoint only when the spread passes its configured limit.</dd>
-                <dd class="glossary-formula">Net premium = estimated premium × 100 − estimated fee</dd>
+                <dt>Candidate rank</dt>
+                <dd>The order of matching contracts. Radar sorts first by closeness to the target delta, then the
+                  middle of the DTE range, period return, spread, expiration, and strike.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Strike price</dt>
+                <dd>The fixed per-share price at which the option holder may buy shares for a call or sell shares for
+                  a put if the option is exercised.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Underlying price</dt>
+                <dd>The market-data provider's stock or fund price captured with the option chain and used for Radar
+                  calculations.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Executable option price <span>Midpoint · Bid · Ask</span></dt>
+                <dd>The estimated per-share execution price. Bid is the highest displayed buyer price and ask is the
+                  lowest displayed seller price. Radar uses their midpoint only after the spread passes the saved
+                  liquidity limit.</dd>
+                <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net contract credit</dt>
+                <dd>The estimated cash received for one standard 100-share contract after the estimated fee.</dd>
+                <dd class="glossary-formula">Net contract credit = executable option price × 100 − estimated fee</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Period return <span>Contract term</span></dt>
+                <dd>The candidate's estimated net credit divided by its return collateral for this option period.</dd>
+                <dd class="glossary-formula">Covered call = net contract credit ÷ current value of 100 shares</dd>
+                <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net sale / purchase price</dt>
+                <dd>The effective per-share stock price after the option's estimated net credit. Calls show a net
+                  sale price; puts show a net purchase price.</dd>
+                <dd class="glossary-formula">Net sale price = strike + net contract credit ÷ 100</dd>
+                <dd class="glossary-formula">Net purchase price = strike − net contract credit ÷ 100</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Delta</dt>
                 <dd>The estimated option-price change for a $1 move in the stock, also commonly read as a rough
                   sensitivity measure. It comes from the provider when available, otherwise a Black–Scholes estimate.
                 </dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Implied volatility <span>IV</span></dt>
+                <dd>The annualized volatility implied by the option's market price. Higher values mean the market is
+                  pricing a wider range of possible stock moves.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Theta per day</dt>
+                <dd>The estimated daily change in the option's value from one day passing, with other inputs held
+                  constant. It comes from the provider or the Black–Scholes fallback.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Breakeven</dt>
+                <dd>For a put, the strike minus net credit per share. For a call, Radar subtracts net credit per share
+                  from broker cost basis when available, otherwise from the current stock price.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Strike distance</dt>
+                <dd>The absolute percentage gap between the strike and current stock price.</dd>
+                <dd class="glossary-formula">Strike distance = |strike − stock price| ÷ stock price</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Estimated fee</dt>
+                <dd>The per-contract fee estimate subtracted from gross option credit. Radar currently assumes $0.65
+                  for one contract.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Radar calculation inputs <span>Model assumptions</span></dt>
+                <dd>Standard contracts use a 100-share multiplier. The Black–Scholes fallback uses a 4.5% risk-free
+                  rate and 0% dividend yield. Annualized return uses period return × 365 ÷ DTE.</dd>
               </div>
             </dl>
           </section>
@@ -536,8 +660,13 @@
             <path d="M19.8 8.2A8.5 8.5 0 1 0 20 15h-2.7a6 6 0 1 1 .2-6.2L14 8.7l4.7 4.5L23 8.5z" />
           </svg></span><span>Trades</span></button>
       <button type="button" data-target="screener"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
-            <path d="M4.6 4h14.8a1.6 1.6 0 0 1 1.23 2.62L15 13.4v4.1a1 1 0 0 1-.45.83l-4 2.67A1 1 0 0 1 9 20.17V13.4L3.37 6.62A1.6 1.6 0 0 1 4.6 4Z" />
-          </svg></span><span>Screener</span></button>
+            <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M12 12 18.2 5.8" fill="none" stroke="currentColor" stroke-width="1.7"
+              stroke-linecap="round" />
+            <circle cx="12" cy="12" r="1.35" />
+            <circle cx="16.15" cy="10.1" r="1.15" />
+          </svg></span><span>Radar</span></button>
       <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
             <path
               d="M12 3.5a2.1 2.1 0 0 1 2 1.5l.3 1a7.7 7.7 0 0 1 1.3.8l1-.3a2.1 2.1 0 0 1 2.4 1l.6 1a2.1 2.1 0 0 1-.4 2.6l-.7.7v1.5l.7.7a2.1 2.1 0 0 1 .4 2.6l-.6 1a2.1 2.1 0 0 1-2.4 1l-1-.3a7.7 7.7 0 0 1-1.3.8l-.3 1a2.1 2.1 0 0 1-2 1.5h-1.2a2.1 2.1 0 0 1-2-1.5l-.3-1a7.7 7.7 0 0 1-1.3-.8l-1 .3a2.1 2.1 0 0 1-2.4-1l-.6-1a2.1 2.1 0 0 1 .4-2.6l.7-.7v-1.5l-.7-.7A2.1 2.1 0 0 1 3.2 8l.6-1a2.1 2.1 0 0 1 2.4-1l1 .3a7.7 7.7 0 0 1 1.3-.8l.3-1a2.1 2.1 0 0 1 2-1.5zm-.6 5.2a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6z" />

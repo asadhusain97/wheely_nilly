@@ -1,4 +1,5 @@
 import { initializeGlossary } from './glossary.js';
+import { createScreenerController } from './screener.js';
 import { createStrategySettingsController } from './settings.js';
 
 const SCREENED_TICKERS_KEY = 'wheely-nilly.screened-tickers.v1';
@@ -65,14 +66,6 @@ function stockPriceTag(value) {
   return tag;
 }
 
-function emptyRow(body, columns, message) {
-  const row = el('tr', 'empty-row');
-  const cell = el('td', '', message);
-  cell.colSpan = columns;
-  row.append(cell);
-  body.append(row);
-}
-
 function emptyCard(container, message) {
   container.append(el('p', 'empty-card', message));
 }
@@ -83,22 +76,36 @@ async function json(path, options = {}) {
     headers: { Accept: 'application/json', ...(options.headers ?? {}) },
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error?.message ?? `Request returned ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(body.error?.message ?? `Request returned ${response.status}`);
+    error.status = response.status;
+    error.code = body.error?.code;
+    throw error;
+  }
   return body;
 }
 
-function toast(message) {
+function toast(message, tone = 'neutral') {
   const node = $('#toast');
-  node.textContent = message;
+  const safeTone = ['success', 'error'].includes(tone) ? tone : 'neutral';
+  node.className = `toast is-${safeTone}`;
+  node.setAttribute('role', safeTone === 'error' ? 'alert' : 'status');
+  node.replaceChildren(
+    el('span', 'toast-mark', safeTone === 'success' ? '✓' : safeTone === 'error' ? '!' : 'i'),
+    el('span', 'toast-copy', message),
+  );
   node.hidden = false;
   clearTimeout(toast.timer);
   toast.timer = setTimeout(() => { node.hidden = true; }, 4000);
 }
 
-function rememberScreenedTicker(symbol, leg) {
+function rememberScreenedTicker(instrument, leg) {
+  const symbol = typeof instrument === 'string' ? instrument : instrument.symbol;
   const preferredLeg = leg === 'cash_secured_put' ? 'cashSecuredPut' : 'coveredCall';
   const ticker = {
     symbol,
+    name: typeof instrument === 'object' ? instrument.name : null,
+    instrumentType: typeof instrument === 'object' ? instrument.instrument_type : null,
     preferredLeg,
     goal: preferredLeg === 'cashSecuredPut' ? 'acquire' : 'income',
     lastActivityAt: new Date().toISOString(),
@@ -108,6 +115,15 @@ function rememberScreenedTicker(symbol, leg) {
     globalThis.localStorage?.setItem(SCREENED_TICKERS_KEY, JSON.stringify(state.screenedTickers));
   } catch {
     // Browser storage can be unavailable; the ticker still remains for this session.
+  }
+}
+
+function forgetScreenedTicker(symbol) {
+  state.screenedTickers = state.screenedTickers.filter((item) => item.symbol !== symbol);
+  try {
+    globalThis.localStorage?.setItem(SCREENED_TICKERS_KEY, JSON.stringify(state.screenedTickers));
+  } catch {
+    // Browser storage can be unavailable; the ticker is still removed for this session.
   }
 }
 
@@ -135,6 +151,21 @@ const strategySettingsController = createStrategySettingsController({
   ],
 });
 strategySettingsController.initialize();
+const screenerController = createScreenerController({
+  request: json,
+  notify: toast,
+  rememberTicker: rememberScreenedTicker,
+  getTickerIdentity: (symbol) => state.screenedTickers.find((ticker) => ticker.symbol === symbol),
+  addTicker: (symbol, leg, goal) => strategySettingsController.addTicker(symbol, leg, goal),
+  removeTicker: async (symbol) => {
+    const result = await strategySettingsController.removeTicker(symbol);
+    forgetScreenedTicker(symbol);
+    strategySettingsController.refresh();
+    return result;
+  },
+  openSettings: () => showScreen('more'),
+});
+screenerController.initialize();
 initializeGlossary();
 
 function setFreshness(value) {
@@ -149,12 +180,8 @@ function setFreshness(value) {
 }
 
 function openCoveredCallScreen(opportunity) {
-  const form = $('#screener-form');
-  form.elements.symbol.value = opportunity.symbol;
-  form.elements.leg.value = 'covered_call';
-  form.elements.covered_shares.value = opportunity.availableLots * 100;
   showScreen('screener');
-  form.elements.symbol.focus();
+  screenerController.scanTarget(opportunity.symbol, 'coveredCall');
 }
 
 function renderOpportunities(dashboard) {
@@ -813,7 +840,7 @@ function showScreen(target) {
     if (active) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
-  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Options screener', more: 'Strategy settings' };
+  const names = { overview: 'Portfolio', cycles: 'Wheel trades', screener: 'Radar', more: 'Strategy settings' };
   const screenKicker = $('#screen-kicker');
   if (screenKicker) screenKicker.textContent = names[target];
   window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -821,6 +848,7 @@ function showScreen(target) {
     renderMonthlyPerformance(state.dashboard?.tickerPerformance ?? []);
     renderTickerTrades();
   }
+  if (target === 'screener') screenerController.loadTargets(true);
   if (target === 'more') strategySettingsController.load();
   return true;
 }
@@ -841,9 +869,9 @@ $('#refresh-button').addEventListener('click', async () => {
   try {
     const report = await json('/api/v1/snaptrade/refresh', { method: 'POST' });
     await loadDashboard();
-    toast(report.ok ? 'Portfolio refreshed.' : 'Refresh completed with some errors.');
+    toast(report.ok ? 'Portfolio refreshed.' : 'Refresh completed with some errors.', report.ok ? 'success' : 'error');
   } catch (error) {
-    toast(error.message);
+    toast(error.message, 'error');
   } finally {
     button.disabled = false;
     button.classList.remove('is-refreshing');
@@ -852,52 +880,8 @@ $('#refresh-button').addEventListener('click', async () => {
   }
 });
 
-$('#screener-form').addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const button = form.querySelector('button');
-  const body = $('#screener-body');
-  button.disabled = true;
-  try {
-    const values = Object.fromEntries(new FormData(form));
-    const result = await json('/api/v1/screens', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        symbol: values.symbol.trim().toUpperCase(),
-        leg: values.leg,
-        cash_available: Number(values.cash_available),
-        covered_shares: Number(values.covered_shares),
-      }),
-    });
-    rememberScreenedTicker(values.symbol.trim().toUpperCase(), values.leg);
-    strategySettingsController.refresh();
-    body.replaceChildren();
-    $('#screener-meta').textContent = `${result.provider}${result.provider_unofficial ? ' (unofficial)' : ''} · quote ${updatedAt(result.quote_timestamp)} · cache ${Math.round(result.cache.age_seconds ?? 0)}s${result.degraded ? ' · degraded' : ''}${result.warning ? ` · ${result.warning}` : ''}`;
-    if (!result.candidates.length) {
-      emptyRow(body, 4, `No candidates passed. ${Object.entries(result.exclusions).map(([key, value]) => `${label(key)}: ${value}`).join(' · ')}`);
-    }
-    for (const candidate of result.candidates) {
-      const row = el('tr');
-      const contract = el('td');
-      contract.append(stack(`${money(candidate.strike)} · ${candidate.expiration}`, `${candidate.dte} DTE · OI ${candidate.open_interest ?? '—'}`));
-      row.append(
-        contract,
-        el('td', 'number-cell', money(candidate.executable_premium)),
-        el('td', 'number-cell positive', percent(candidate.annualized_return)),
-        el('td', 'number-cell', candidate.delta?.toFixed(2) ?? '—'),
-      );
-      body.append(row);
-    }
-  } catch (error) {
-    toast(error.message);
-  } finally {
-    button.disabled = false;
-  }
-});
-
 loadDashboard().catch((error) => {
-  toast(`Dashboard unavailable: ${error.message}`);
+  toast(`Dashboard unavailable: ${error.message}`, 'error');
   const opportunities = $('#opportunity-list');
   const trades = $('#open-trade-list');
   $('#opportunities-section').hidden = true;

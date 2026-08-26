@@ -264,6 +264,8 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
   const coveredCallOpportunities = holdings.filter((position) => position.coveredCall.availableLots > 0)
     .map((position) => ({
       symbol: position.symbol,
+      name: position.name,
+      instrumentType: position.instrumentType,
       shares: position.quantity,
       availableLots: position.coveredCall.availableLots,
       price: fromMinor(position.priceMinor),

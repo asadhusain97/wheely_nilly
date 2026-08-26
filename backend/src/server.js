@@ -10,6 +10,7 @@ import { createSnaptradeService } from './services/snaptrade.js';
 import { createScreenerService } from './services/screener.js';
 import { createNotificationService } from './services/notifications.js';
 import { createStrategySettingsService } from './services/strategy-settings.js';
+import { createOpportunityMonitoringService } from './services/opportunity-monitoring.js';
 
 let config;
 try {
@@ -32,12 +33,13 @@ const derived = createDerivedService({ snapshots, config });
 const screener = createScreenerService({ config });
 const notifications = createNotificationService({ config });
 const strategySettings = createStrategySettingsService({ dataDir: config.dataDir });
+const opportunityMonitoring = createOpportunityMonitoringService({ derived, strategySettings, screener });
 const scheduler = createScheduler({ config, ingest, notifications, derived });
-const app = createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications, strategySettings });
+const app = createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(
-    `Wheel dashboard listening on ${config.host}:${config.port} (SnapTrade auth mode: ${config.snaptrade.authMode})`,
+    `Wheel dashboard listening on http://${config.host}:${config.port} (SnapTrade auth mode: ${config.snaptrade.authMode})`,
   );
   scheduler.start();
 });

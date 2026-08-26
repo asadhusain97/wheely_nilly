@@ -1,6 +1,6 @@
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 
 from .models import ScreenRequest
 from .providers import build_provider_chain
@@ -18,7 +18,15 @@ service = ScreenerService(provider, ttl_seconds=int(os.getenv("SCREENER_CACHE_TT
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"service": "wheel-strategy-screener", "status": "ok", "calculation_version": "screener-1.0.0", "providers": ",".join(provider.provider_names)}
+    return {"service": "wheel-strategy-screener", "status": "ok", "calculation_version": "screener-2.0.0", "providers": ",".join(provider.provider_names)}
+
+
+@app.get("/v1/instruments")
+async def search_instruments(query: str = Query(min_length=1, max_length=50, pattern=r"^[A-Za-z0-9 .&'-]+$")):
+    try:
+        return await provider.search_instruments(query.strip(), 8)
+    except Exception as error:
+        raise HTTPException(status_code=503, detail={"code": "PROVIDER_UNAVAILABLE", "message": f"Instrument lookup unavailable ({type(error).__name__})"}) from error
 
 
 @app.post("/v1/screens")

@@ -122,10 +122,12 @@ function normalizePosition(accountId, position, snapshot) {
   const instrument = position.instrument ?? position.symbol;
   const option = optionFrom(instrument);
   const symbol = option?.underlying ?? instrument?.symbol ?? instrument?.raw_symbol ?? null;
+  const instrumentType = typeof instrument?.type === 'string' ? instrument.type : instrument?.type?.description;
   return {
     id: `snaptrade:position:${accountId}:${instrument?.id ?? option?.symbol ?? symbol}`,
     source: 'snaptrade', sourceHash: hash(position), snapshotHash: snapshot.contentSha256,
-    accountId, symbol, option, quantity: Number(position.units ?? 0),
+    accountId, symbol, name: text(instrument?.description ?? instrument?.name), instrumentType: text(instrumentType),
+    option, quantity: Number(position.units ?? 0),
     priceMinor: toMinor(position.price), brokerCostBasisMinor: toMinor(position.cost_basis),
     currency: position.currency?.code ?? instrument?.currency?.code ?? 'USD',
   };

@@ -141,6 +141,25 @@ function defaultPlaybook() {
   };
 }
 
+export function settingsWithTicker(settings, symbol, leg, goal) {
+  if (!ALLOWED_GOALS[leg]?.includes(goal)) throw new Error('Choose a goal supported by this strategy.');
+  const draft = deepCopy(settings);
+  if (!draft.tickerPlaybooks[symbol]) {
+    draft.tickerPlaybooks[symbol] = defaultPlaybook();
+    draft.tickerPlaybooks[symbol].coveredCall.enabled = false;
+    draft.tickerPlaybooks[symbol].cashSecuredPut.enabled = false;
+  }
+  draft.tickerPlaybooks[symbol][leg].enabled = true;
+  draft.tickerPlaybooks[symbol][leg].goal = goal;
+  return draft;
+}
+
+export function settingsWithoutTicker(settings, symbol) {
+  const draft = deepCopy(settings);
+  delete draft.tickerPlaybooks[symbol];
+  return draft;
+}
+
 function mergedRules(settings, symbol, leg) {
   const ticker = settings.tickerPlaybooks[symbol]?.[leg];
   const preset = ticker ? settings.goalPresets[ticker.goal].rules : {};
@@ -291,7 +310,8 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     container.replaceChildren();
     for (const [key, label] of items) {
       const active = key === selected;
-      const button = element('button', active ? 'is-active' : '', label);
+      const button = element('button', `${prefix === 'goal' ? 'goal-chip ' : ''}${active ? 'is-active' : ''}`.trim(), label);
+      if (prefix === 'goal') button.dataset.goal = key;
       button.type = 'button';
       button.id = `${prefix}-${key}-tab`;
       button.setAttribute('role', 'tab');
@@ -402,7 +422,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     view.replaceChildren();
     const context = element('div', 'rule-view-context goal-context');
     const copy = element('div');
-    copy.append(element('strong', '', GOAL_LABELS[model.preset]), element('small', '', GOAL_COPY[model.preset]));
+    const goalName = element('strong', 'goal-tone', GOAL_LABELS[model.preset]);
+    goalName.dataset.goal = model.preset;
+    copy.append(goalName, element('small', '', GOAL_COPY[model.preset]));
     context.append(copy, element('span', 'applies-chip', preset.applicableLegs.map((leg) => LEG_SHORT_LABELS[leg]).join(' + ')));
     view.append(context, ruleSummary(effective, new Set(Object.keys(preset.rules)), 'Defaults'));
     document.querySelector('#edit-goal-settings').setAttribute('aria-label', `Edit ${GOAL_LABELS[model.preset]} goal`);
@@ -440,9 +462,12 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       const playbook = model.settings.tickerPlaybooks[symbol] ?? seededPlaybook(symbol);
       const button = element('button', `ticker-capsule${model.settings.tickerPlaybooks[symbol] ? '' : ' is-starting'}`);
       button.type = 'button';
+      const displayedGoal = resolveTickerGoal(playbook, ticker);
+      const goalName = element('small', 'goal-tone', GOAL_LABELS[displayedGoal]);
+      goalName.dataset.goal = displayedGoal;
       button.append(
         element('strong', '', symbol),
-        element('small', '', GOAL_LABELS[resolveTickerGoal(playbook, ticker)]),
+        goalName,
       );
       button.setAttribute('aria-label', `Edit ${symbol} ticker settings`);
       button.addEventListener('click', () => openTickerEditor(symbol));
@@ -509,6 +534,37 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
 
   function openTickerEditor(symbol) {
     openEditor({ kind: 'ticker', symbol, leg: trackedTickers().get(symbol)?.preferredLeg ?? 'coveredCall' });
+  }
+
+  async function addTicker(symbol, leg, goal) {
+    await load();
+    const draft = settingsWithTicker(model.settings, symbol, leg, goal);
+    validateDraft(draft);
+    const result = await request('/api/v1/strategy-settings', {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft),
+    });
+    model.settings = deepCopy(result.settings);
+    model.persistence = result.persistence;
+    renderAll();
+    setStatus('Settings saved', 'success');
+    notify(`${symbol} added to Radar`, 'success');
+    return result;
+  }
+
+  async function removeTicker(symbol) {
+    await load();
+    if (!model.settings.tickerPlaybooks[symbol]) return null;
+    const draft = settingsWithoutTicker(model.settings, symbol);
+    validateDraft(draft);
+    const result = await request('/api/v1/strategy-settings', {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft),
+    });
+    model.settings = deepCopy(result.settings);
+    model.persistence = result.persistence;
+    renderAll();
+    setStatus('Settings saved', 'success');
+    notify(`${symbol} removed from Radar`, 'success');
+    return result;
   }
 
   function finishClose() {
@@ -645,9 +701,11 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const preset = draft.goalPresets[goal];
     const inherited = draft.globalRules[preset.applicableLegs[0]];
     const intro = element('div', 'goal-editor-intro');
+    const goalName = element('strong', 'goal-tone', GOAL_LABELS[goal]);
+    goalName.dataset.goal = goal;
     intro.append(
       element('span', 'applies-chip', preset.applicableLegs.map((leg) => LEG_SHORT_LABELS[leg]).join(' + ')),
-      element('strong', '', GOAL_LABELS[goal]),
+      goalName,
       element('small', '', 'Light values continue to use Defaults.'),
     );
     body.append(intro, ruleEditor(preset.rules, {
@@ -710,7 +768,8 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const primary = element('div', 'ticker-sheet-primary');
 
     const controls = element('div', 'ticker-sheet-fields');
-    const goalField = element('div', 'sheet-primary-field');
+    const goalField = element('div', 'sheet-primary-field goal-tone');
+    goalField.dataset.goal = legSettings.goal;
     const goalLabel = element('label');
     const goal = document.createElement('select');
     for (const allowed of ALLOWED_GOALS[leg]) {
@@ -824,8 +883,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       model.editor.dirty = false;
       closeEditor({ force: true });
       renderAll();
+      document.dispatchEvent(new CustomEvent('strategy-settings-saved'));
       setStatus('Settings saved', 'success');
-      notify('Settings saved');
+      notify('Settings saved', 'success');
       setTimeout(() => {
         if (status().classList.contains('is-success')) status().hidden = true;
       }, 3000);
@@ -945,5 +1005,5 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     });
   }
 
-  return { initialize, load, confirmLeave, refresh };
+  return { initialize, load, confirmLeave, refresh, addTicker, removeTicker };
 }

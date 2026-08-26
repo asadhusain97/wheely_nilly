@@ -18,15 +18,26 @@ class FakeResponse:
 
 
 class FakeAlphaClient:
-    def __init__(self, options, quote):
+    def __init__(self, options):
         self.options = options
-        self.quote = quote
         self.calls = []
 
     async def get(self, _url, params):
         self.calls.append(params)
         await asyncio.sleep(0)
-        return FakeResponse(self.options if params["function"] == "REALTIME_OPTIONS" else self.quote)
+        return FakeResponse(self.options)
+
+
+class StubUnderlyingProvider:
+    name = "yfinance"
+
+    def __init__(self, price=101.25):
+        self.price = price
+        self.calls = []
+
+    async def fetch_underlying_price(self, symbol):
+        self.calls.append(symbol)
+        return self.price
 
 
 def option_record(expiration):
@@ -46,36 +57,92 @@ def option_record(expiration):
     }
 
 
-def test_alpha_vantage_fetches_realtime_chain_and_spot_concurrently():
+def test_alpha_vantage_fetches_only_options_while_yahoo_supplies_spot():
     expiration = datetime.now(UTC).date() + timedelta(days=21)
-    client = FakeAlphaClient(
-        {"data": [option_record(expiration)]},
-        {"Global Quote": {"05. price": "101.25"}},
-    )
-    provider = AlphaVantageProvider("alpha-key", client=client)
+    client = FakeAlphaClient({"data": [option_record(expiration)]})
+    underlying = StubUnderlyingProvider()
+    provider = AlphaVantageProvider("alpha-key", underlying, client=client)
 
     snapshot = asyncio.run(provider.fetch_chain("XYZ", 7, 45))
 
     assert snapshot.provider == "alphavantage"
     assert snapshot.unofficial is False
+    assert snapshot.underlying_provider == "yfinance"
+    assert snapshot.underlying_provider_unofficial is True
     assert snapshot.underlying_price == 101.25
     assert len(snapshot.quotes) == 1
     assert snapshot.quotes[0].delta == -0.28
-    assert {call["function"] for call in client.calls} == {"REALTIME_OPTIONS", "GLOBAL_QUOTE"}
-    assert next(call for call in client.calls if call["function"] == "REALTIME_OPTIONS")["require_greeks"] == "true"
-    assert next(call for call in client.calls if call["function"] == "GLOBAL_QUOTE")["entitlement"] == "realtime"
+    assert [call["function"] for call in client.calls] == ["REALTIME_OPTIONS"]
+    assert client.calls[0]["require_greeks"] == "true"
+    assert underlying.calls == ["XYZ"]
 
 
 def test_alpha_vantage_classifies_limits_without_using_sample_data():
     client = FakeAlphaClient(
         {"Note": "Thank you for using Alpha Vantage. Our standard API rate limit is 25 requests per day.", "data": [option_record(date.today() + timedelta(days=21))]},
-        {"Global Quote": {"05. price": "101.25"}},
     )
-    provider = AlphaVantageProvider("alpha-key", client=client)
+    provider = AlphaVantageProvider("alpha-key", StubUnderlyingProvider(), client=client)
 
     with pytest.raises(ProviderUnavailable) as raised:
         asyncio.run(provider.fetch_chain("XYZ", 7, 45))
     assert raised.value.code == "rate_limited"
+
+
+def test_alpha_vantage_search_verifies_us_instrument_identity():
+    client = FakeAlphaClient(
+        {"bestMatches": [
+            {"1. symbol": "AAPL", "2. name": "Apple Inc", "3. type": "Equity", "4. region": "United States", "8. currency": "USD"},
+            {"1. symbol": "VFIAX", "2. name": "Vanguard 500 Index Fund", "3. type": "Mutual Fund", "4. region": "United States", "8. currency": "USD"},
+            {"1. symbol": "VOD.LON", "2. name": "Vodafone", "3. type": "Equity", "4. region": "United Kingdom", "8. currency": "GBP"},
+            {"1. symbol": "USD", "2. name": "US Dollar", "3. type": "Currency", "4. region": "United States", "8. currency": "USD"},
+        ]},
+    )
+    provider = AlphaVantageProvider("alpha-key", StubUnderlyingProvider(), client=client)
+
+    result = asyncio.run(provider.search_instruments("Apple"))
+
+    assert result["provider"] == "alphavantage"
+    assert result["provider_unofficial"] is False
+    assert [item["symbol"] for item in result["matches"]] == ["AAPL", "VFIAX"]
+    assert result["matches"][1]["instrument_type"] == "Mutual Fund"
+    assert all(item["exchange"] is None for item in result["matches"])
+    assert client.calls[0]["function"] == "SYMBOL_SEARCH"
+
+
+def test_yfinance_search_limits_results_to_us_exchanges():
+    class FakeYahooClient:
+        def __init__(self):
+            self.calls = []
+
+        async def get(self, url, params):
+            self.calls.append((url, params))
+            return FakeResponse({"quotes": [
+                {"symbol": "AAPL", "longname": "Apple Inc.", "quoteType": "EQUITY", "exchange": "NMS", "exchDisp": "NASDAQ"},
+                {"symbol": "AAPL19.BK", "longname": "Apple Inc.", "quoteType": "EQUITY", "exchange": "SET", "exchDisp": "Thailand"},
+            ]})
+
+    from app.providers import YFinanceProvider
+    client = FakeYahooClient()
+    provider = YFinanceProvider(search_client=client)
+
+    result = asyncio.run(provider.search_instruments("AAPL", 8))
+
+    assert [item["symbol"] for item in result["matches"]] == ["AAPL"]
+    assert client.calls[0][0] == YFinanceProvider.search_url
+    assert client.calls[0][1]["q"] == "AAPL"
+
+
+def test_yfinance_search_rejects_malformed_quotes_without_leaking_type_error():
+    class FakeYahooClient:
+        async def get(self, _url, params):
+            return FakeResponse({"quotes": None})
+
+    from app.providers import YFinanceProvider
+    provider = YFinanceProvider(search_client=FakeYahooClient())
+
+    with pytest.raises(ProviderUnavailable) as raised:
+        asyncio.run(provider.search_instruments("AAPL"))
+    assert raised.value.code == "invalid_response"
 
 
 class StubProvider:
@@ -120,16 +187,22 @@ def test_provider_chain_rejects_unknown_configuration():
         build_provider_chain("alphavantage,unknown", "alpha-key")
 
 
+def test_default_chain_uses_alpha_options_first_and_shared_yahoo_underlying():
+    chain = build_provider_chain("alphavantage,yfinance", "alpha-key")
+
+    assert chain.provider_names == ["alphavantage", "yfinance"]
+    assert chain.providers[0].underlying_provider is chain.providers[1]
+
+
 def test_alpha_vantage_falls_back_when_no_contracts_survive_filtering():
     client = FakeAlphaClient(
         {"data": [option_record(datetime.now(UTC).date() + timedelta(days=90))]},
-        {"Global Quote": {"05. price": "101.25"}},
     )
     fallback = StubProvider("yfinance", result=ChainSnapshot(
         provider="yfinance", unofficial=True, underlying_price=100,
         fetched_at=datetime.now(UTC), quotes=[],
     ))
-    chain = FallbackProvider([AlphaVantageProvider("alpha-key", client=client), fallback])
+    chain = FallbackProvider([AlphaVantageProvider("alpha-key", StubUnderlyingProvider(), client=client), fallback])
 
     snapshot = asyncio.run(chain.fetch_chain("XYZ", 7, 45))
 

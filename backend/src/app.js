@@ -19,7 +19,7 @@ const frontendDirectory = path.resolve(
   '../../frontend',
 );
 
-export function createApp({ config, snaptrade, ingest, snapshots, derived, screener, notifications, strategySettings }) {
+export function createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings }) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -48,7 +48,7 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived, scree
   );
   app.use(express.json({ limit: '100kb' }));
 
-  if (screener) app.use('/api/v1/screens', createScreenerRouter({ screener, notifications, config }));
+  if (opportunityMonitoring) app.use('/api/v1/screens', createScreenerRouter({ monitoring: opportunityMonitoring }));
   if (notifications) app.use('/api/v1/notifications', createNotificationsRouter({ notifications }));
   if (strategySettings) app.use('/api/v1/strategy-settings', createStrategySettingsRouter({ strategySettings }));
 

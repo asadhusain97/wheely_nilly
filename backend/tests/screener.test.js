@@ -4,13 +4,44 @@ import { describe, it } from 'node:test';
 import { createScreenerService } from '../src/services/screener.js';
 
 const config = { screener: { url: 'http://screener:8000', timeoutMs: 1000 } };
-const valid = { schema_version: 1, calculation_version: 'screener-1.0.0', provider: 'fixture', quote_timestamp: '2026-08-23T12:00:00Z', cache: { hit: false, age_seconds: 0, stale: false }, degraded: true, warning: 'alphavantage rate limit was reached; using yfinance fallback', assumptions: {}, exclusions: {}, candidates: [] };
+const valid = { schema_version: 1, calculation_version: 'screener-2.0.0', provider: 'fixture', provider_unofficial: false,
+  underlying_provider: 'yfinance', underlying_provider_unofficial: true, quote_timestamp: '2026-08-23T12:00:00Z',
+  cache: { hit: false, age_seconds: 0, stale: false }, degraded: true, warning: 'alphavantage rate limit was reached; using yfinance fallback', assumptions: {}, exclusions: {}, candidates: [] };
+const candidate = { contract_symbol: 'AAPL260918C00200000', option_type: 'call', expiration: '2026-09-18', dte: 24, strike: 200,
+  underlying_price: 195, bid: 2, ask: 2.1, executable_option_price_per_share: 2.05, gross_contract_credit: 205,
+  estimated_fees: .65, net_contract_credit: 204.35, period_return: .0104, annualized_return: .158, delta: .3,
+  theta_per_day: -.04, greek_source: 'provider', implied_volatility: .28, spread_percent: .0488, volume: 120,
+  open_interest: 900, quote_time: '2026-08-25T12:00:00Z', quote_age_seconds: 3, breakeven: 192.9565,
+  downside_buffer: -.0256, strike_distance: .0256, net_sale_price: 202.0435, net_purchase_price: null };
 
 describe('screener adapter', () => {
+  it('validates provider-backed instrument matches', async () => {
+    let requestedUrl;
+    const service = createScreenerService({ config, fetchImpl: async (url) => {
+      requestedUrl = url;
+      return new Response(JSON.stringify({ provider: 'yfinance', provider_unofficial: true, degraded: false, warning: null,
+        matches: [{ symbol: 'AAPL', name: 'Apple Inc.', instrument_type: 'Equity', exchange: 'NasdaqGS', currency: null }] }), { status: 200 });
+    } });
+    const result = await service.searchInstruments('Apple');
+    assert.equal(result.matches[0].name, 'Apple Inc.');
+    assert.match(requestedUrl, /\/v1\/instruments\?query=Apple$/);
+    await assert.rejects(service.searchInstruments('<script>'), /Invalid instrument search/);
+  });
+  it('rejects malformed instrument matches', async () => {
+    const service = createScreenerService({ config, fetchImpl: async () => new Response(JSON.stringify({ provider: 'fixture', matches: [{ symbol: 'FAKE!', name: '' }] }), { status: 200 }) });
+    await assert.rejects(service.searchInstruments('fake'), /invalid contract/);
+  });
+
+  it('explains how to recover when ticker search cannot reach the sidecar', async () => {
+    const service = createScreenerService({ config, fetchImpl: async () => { throw new TypeError('fetch failed'); } });
+    await assert.rejects(service.searchInstruments('AAPL'), /start Wheely Nilly with npm run app/);
+  });
   it('validates requests and responses', async () => {
-    const service = createScreenerService({ config, fetchImpl: async () => new Response(JSON.stringify(valid), { status: 200 }) });
+    const service = createScreenerService({ config, fetchImpl: async () => new Response(JSON.stringify({ ...valid, candidates: [candidate] }), { status: 200 }) });
     const result = await service.screen({ symbol: 'AAPL', leg: 'cash_secured_put' });
     assert.equal(result.provider, 'fixture');
+    assert.equal(result.underlying_provider, 'yfinance');
+    assert.equal(result.candidates[0].net_contract_credit, 204.35);
     assert.match(result.warning, /yfinance fallback/);
     await assert.rejects(service.screen({ symbol: '<bad>', leg: 'put' }), /Invalid screen request/);
   });

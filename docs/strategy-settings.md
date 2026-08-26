@@ -1,6 +1,6 @@
 # Strategy Settings v1
 
-Strategy settings establish the editable foundation for future opportunity monitoring. They do not run screens, create recommendations, send alerts, compare trades, or place orders. The current Home, Trades, and Screener behavior does not read these settings yet.
+Strategy settings provide the authoritative rules for on-demand opportunity monitoring. Radar resolves them on the backend for every eligible symbol and strategy leg. They do not run background scans, create open-contract recommendations, send alerts, compare trades, or place orders.
 
 Goal presets are editable starting points, not trading recommendations. Quotes and candidates must still be verified with a broker.
 
@@ -18,7 +18,7 @@ Missing preset and ticker fields inherit. Removing a ticker override therefore r
 
 Ticker playbooks contain both strategy legs. Each leg has its own enabled state, compatible goal, price guard, and partial rule overrides. An unconfigured ticker resolves to its complete global rules with `enabled: false`, `goal: null`, and no price guard.
 
-The Settings UI populates its ticker collection from wheel-trade history and successful Screener submissions; there is no separate manual-add control. Screener ticker history is stored locally in the browser under `wheely-nilly.screened-tickers.v1` and contains only the symbol, selected leg, starting goal, and last-used timestamp. Capsules are ordered by most recent screen or trade, show eight initially, and can be searched or expanded. Before a playbook is saved, its displayed starting goal is derived deterministically from the most recent leg: Income for a covered call or Acquire for a cash-secured put. Saving ticker settings implicitly enables monitoring for both legs, so the UI does not expose a separate enabled switch.
+The Settings UI populates its ticker collection from wheel-trade history, saved playbooks, and tickers added from Radar's circular plus action. Radar verifies the instrument through the configured market-data providers, asks only for CC or CSP and a compatible goal, then saves through this same document contract. CSP and Acquire are the initial selections. A newly created playbook enables only the selected leg; adding a leg to an existing playbook preserves its other settings. Its small recent-ticker hint is stored locally under `wheely-nilly.screened-tickers.v1` and contains only the symbol, selected leg, starting goal, and last-used timestamp. Removing a ticker from Radar deletes this hint and its saved playbook. A ticker with trade history remains visible in Settings because history is an independent source. Capsules are ordered by most recent activity, show eight initially, and can be searched or expanded. Saving a full ticker edit in Settings continues to enable both configured legs.
 
 ## Document shape
 

@@ -23,6 +23,12 @@ class ScreenRequest(BaseModel):
     risk_free_rate: float = Field(default=0.045, ge=-0.1, le=0.5)
     dividend_yield: float = Field(default=0, ge=0, le=0.5)
     max_quote_age_seconds: int = Field(default=900, ge=1, le=86400)
+    min_period_return: float = Field(default=0, ge=0, le=10)
+    min_net_sale_price: float | None = Field(default=None, ge=0)
+    max_net_purchase_price: float | None = Field(default=None, ge=0)
+    allow_itm_calls: bool = False
+    chain_min_dte: int | None = Field(default=None, ge=1, le=365)
+    chain_max_dte: int | None = Field(default=None, ge=1, le=730)
     limit: int = Field(default=20, ge=1, le=100)
 
     @model_validator(mode="after")
@@ -31,6 +37,14 @@ class ScreenRequest(BaseModel):
             raise ValueError("minimum bounds must not exceed maximum bounds")
         if self.target_delta_min is not None and self.target_delta_max is not None and self.target_delta_min > self.target_delta_max:
             raise ValueError("target_delta_min must not exceed target_delta_max")
+        if (self.chain_min_dte is None) != (self.chain_max_dte is None):
+            raise ValueError("chain DTE bounds must be supplied together")
+        if self.chain_min_dte is not None and (self.chain_min_dte > self.min_dte or self.chain_max_dte < self.max_dte):
+            raise ValueError("chain DTE bounds must contain the screening range")
+        if self.leg == "covered_call" and self.max_net_purchase_price is not None:
+            raise ValueError("max_net_purchase_price applies only to cash-secured puts")
+        if self.leg == "cash_secured_put" and (self.min_net_sale_price is not None or self.allow_itm_calls):
+            raise ValueError("covered-call controls do not apply to cash-secured puts")
         return self
 
 
@@ -53,6 +67,8 @@ class OptionQuote(BaseModel):
 class ChainSnapshot(BaseModel):
     provider: str
     unofficial: bool = False
+    underlying_provider: str | None = None
+    underlying_provider_unofficial: bool | None = None
     underlying_price: float = Field(gt=0)
     fetched_at: datetime
     quotes: list[OptionQuote]

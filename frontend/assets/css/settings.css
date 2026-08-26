@@ -490,6 +490,38 @@ details[open] > summary .disclosure-icon {
   text-align: center;
 }
 
+.settings-support {
+  margin: 22px 6px 0;
+  padding: 18px 0 4px;
+  border-top: 1px solid var(--settings-hairline);
+  color: var(--ash);
+  text-align: center;
+}
+
+.settings-support p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.settings-support a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  color: var(--mute);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration-color: rgba(109, 109, 101, .38);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.settings-support a:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
 /* Editor and glossary sheets */
 .settings-editor-backdrop,
 .glossary-backdrop {

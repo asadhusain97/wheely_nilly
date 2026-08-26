@@ -1,10 +1,11 @@
+import asyncio
 from datetime import UTC, date, datetime
 
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models import ChainSnapshot, OptionQuote, ScreenRequest
-from app.screener import estimated_greeks, screen
+from app.screener import ScreenerService, estimated_greeks, screen
 
 NOW = datetime(2026, 8, 23, 16, tzinfo=UTC)
 
@@ -19,7 +20,10 @@ def test_known_put_metrics_and_estimated_greeks():
     item = candidates[0]
     assert excluded == {}
     assert item["executable_premium"] == 2.05
+    assert item["gross_contract_credit"] == 205
     assert round(item["net_premium"], 2) == 204.35
+    assert round(item["net_contract_credit"], 2) == 204.35
+    assert round(item["net_purchase_price"], 4) == 92.9565
     assert round(item["period_return"], 6) == round(204.35 / 9295.65, 6)
     assert item["greek_source"] == "black_scholes_estimate"
     assert item["delta"] is not None and item["theta_per_day"] < 0
@@ -44,3 +48,98 @@ def test_health_reports_provider_priority():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
     assert response.json()["providers"] == "alphavantage,yfinance"
+
+
+def test_instrument_lookup_rejects_untrusted_query_characters_before_provider_call():
+    response = TestClient(app).get("/v1/instruments", params={"query": "<script>"})
+    assert response.status_code == 422
+
+
+def test_period_return_and_net_purchase_price_are_hard_gates_after_fees():
+    request = ScreenRequest(symbol="XYZ", leg="cash_secured_put", cash_available=10000,
+                            estimated_fee_per_contract=5, min_period_return=.022,
+                            max_net_purchase_price=92.95)
+    candidates, excluded = screen(snapshot(), request, NOW)
+    assert candidates == []
+    assert excluded == {"max_net_purchase_price": 1, "period_return": 1}
+
+
+def test_covered_call_uses_explicit_net_sale_guard_and_exit_can_consider_itm():
+    quote = OptionQuote(symbol="XYZ260918C00095000", option_type="call", expiration=date(2026, 9, 18),
+                        strike=95, bid=6, ask=6.10, volume=100, open_interest=500,
+                        implied_volatility=.3, delta=.65, theta=-.04, quote_time=NOW)
+    calls = ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=NOW, quotes=[quote])
+    ordinary, ordinary_excluded = screen(calls, ScreenRequest(
+        symbol="XYZ", leg="covered_call", covered_shares=100, adjusted_basis_per_share=80,
+        target_delta_max=.7,
+    ), NOW)
+    assert ordinary == []
+    assert ordinary_excluded == {"in_the_money": 1}
+
+    exit_candidates, _ = screen(calls, ScreenRequest(
+        symbol="XYZ", leg="covered_call", covered_shares=100, adjusted_basis_per_share=120,
+        target_delta_max=.7, allow_itm_calls=True, min_net_sale_price=101,
+    ), NOW)
+    assert round(exit_candidates[0]["net_sale_price"], 4) == 101.0435
+
+    rejected, excluded = screen(calls, ScreenRequest(
+        symbol="XYZ", leg="covered_call", covered_shares=100, target_delta_max=.7,
+        allow_itm_calls=True, min_net_sale_price=101.05,
+    ), NOW)
+    assert rejected == []
+    assert excluded == {"min_net_sale_price": 1}
+
+
+def test_ranking_is_deterministic_and_prefers_delta_then_dte_then_period_return():
+    quotes = [
+        OptionQuote(symbol="NO-DELTA", option_type="put", expiration=date(2026, 9, 18), strike=95, bid=2, ask=2.1,
+                    volume=10, open_interest=10, quote_time=NOW),
+        OptionQuote(symbol="FAR-DTE", option_type="put", expiration=date(2026, 9, 27), strike=95, bid=3, ask=3.1,
+                    volume=10, open_interest=10, implied_volatility=.3, delta=-.275, theta=-.02, quote_time=NOW),
+        OptionQuote(symbol="MID-DTE", option_type="put", expiration=date(2026, 9, 18), strike=95, bid=2, ask=2.1,
+                    volume=10, open_interest=10, implied_volatility=.3, delta=-.275, theta=-.02, quote_time=NOW),
+    ]
+    result, _ = screen(ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=NOW, quotes=quotes), ScreenRequest(
+        symbol="XYZ", leg="cash_secured_put", cash_available=10000, min_dte=20, max_dte=50,
+        target_delta_min=None, target_delta_max=None, max_spread_percent=.2,
+    ), NOW)
+    assert [item["contract_symbol"] for item in result] == ["FAR-DTE", "MID-DTE", "NO-DELTA"]
+
+
+def test_share_coverage_and_missing_greeks_are_explicit():
+    quote = OptionQuote(symbol="XYZ260918C00105000", option_type="call", expiration=date(2026, 9, 18), strike=105,
+                        bid=1, ask=1.1, volume=100, open_interest=500, quote_time=NOW)
+    calls = ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=NOW, quotes=[quote])
+    missing_shares, excluded = screen(calls, ScreenRequest(
+        symbol="XYZ", leg="covered_call", covered_shares=0, target_delta_min=None, target_delta_max=None,
+    ), NOW)
+    assert missing_shares == []
+    assert excluded == {"insufficient_shares": 1}
+    candidates, _ = screen(calls, ScreenRequest(
+        symbol="XYZ", leg="covered_call", covered_shares=100, target_delta_min=None, target_delta_max=None,
+    ), NOW)
+    assert candidates[0]["delta"] is None
+    assert candidates[0]["greek_source"] == "unavailable"
+
+
+def test_matching_chain_ranges_share_one_concurrent_provider_fetch():
+    class CountingProvider:
+        def __init__(self):
+            self.calls = 0
+
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            self.calls += 1
+            await asyncio.sleep(.01)
+            return ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=NOW, quotes=[])
+
+    async def run_both():
+        provider = CountingProvider()
+        service = ScreenerService(provider)
+        common = {"symbol": "XYZ", "cash_available": 10_000, "chain_min_dte": 7, "chain_max_dte": 45}
+        await asyncio.gather(
+            service.run(ScreenRequest(leg="cash_secured_put", min_dte=7, max_dte=21, **common)),
+            service.run(ScreenRequest(leg="covered_call", covered_shares=100, min_dte=22, max_dte=45, **common)),
+        )
+        return provider.calls
+
+    assert asyncio.run(run_both()) == 1

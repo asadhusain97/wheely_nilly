@@ -291,6 +291,10 @@ docker compose logs --since 30m backend
 
 Back up `.env` and `data/` separately using encryption. Stop the services before taking a filesystem-level backup once a database is introduced, or use the database's supported online backup mechanism. Test restoration on another host; an untested backup is not a recovery plan.
 
+### Bare-systemd deployment
+
+The checked-in units under `deploy/systemd/` run both services as the non-root `asadhusain97` account from `/home/asadhusain97/wheely_nilly`. They bind only to `127.0.0.1`, restart after failures, and restrict filesystem writes to `data/`. Install the exact Node path referenced by the backend unit, create `sidecar/.venv`, run `npm ci --omit=dev`, then copy the units to `/etc/systemd/system/` and enable both services.
+
 ## Configuration Reference
 
 | Variable | Phase | Default | Description |
@@ -323,6 +327,9 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 | `NTFY_TOKEN` | 4 | Empty | Optional ntfy access token |
 | `NTFY_DRY_RUN` | 4 | `true` | Records notifications without sending them |
 | `ALERTS_ENABLED` | 4 | `false` | Enables lifecycle and screener alert enqueueing |
+| `OPPORTUNITY_SCAN_CRON` | 4 | `*/15 10-15 * * 1-5` | Background Radar scan schedule; default is every 15 minutes from 10:00 through 15:45 US Eastern on weekdays |
+| `OPPORTUNITY_SCAN_TIMEZONE` | 4 | `America/New_York` | Timezone used only for the background Radar schedule |
+| `DASHBOARD_PUBLIC_URL` | 4 | Empty | Private HTTPS dashboard base URL used as the ntfy notification link |
 | `ALERT_EXPIRATION_DTE` | 4 | `7,3,1,0` | Comma-separated expiration reminder thresholds |
 | `ALERT_ASSIGNMENT_MAX_DTE` | 4 | `7` | Maximum DTE for assignment-risk estimates |
 | `ALERT_MIN_ANNUALIZED_RETURN` | 4 | `0.20` | Minimum screener annualized return (decimal) |
@@ -370,7 +377,7 @@ The Settings tab edits persistent global rules, goal presets, and ticker playboo
 
 ### Phase 4 notifications
 
-Create a private ntfy topic, subscribe your device, set `NTFY_TOPIC` and optionally `NTFY_TOKEN`, then leave `NTFY_DRY_RUN=true` while testing from the Alerts tab. When the audit looks correct, set `NTFY_DRY_RUN=false` and `ALERTS_ENABLED=true`. Notification state is atomically persisted at `data/notifications/state.json`; event fingerprints survive restarts, transient failures remain in the outbox, and authentication/validation failures are not retried indefinitely. Messages omit account IDs and portfolio totals.
+Create a private ntfy topic, subscribe your device, set `NTFY_TOPIC` and optionally `NTFY_TOKEN`, then leave `NTFY_DRY_RUN=true` while testing from the Alerts tab. When the audit looks correct, set `NTFY_DRY_RUN=false` and `ALERTS_ENABLED=true`. When alerts are enabled, the backend also scans Radar targets on `OPPORTUNITY_SCAN_CRON` in `OPPORTUNITY_SCAN_TIMEZONE` and alerts on the top passing candidate for each symbol and leg. Notification state is atomically persisted at `data/notifications/state.json`; event fingerprints survive restarts, transient failures remain in the outbox, and authentication/validation failures are not retried indefinitely. Messages omit account IDs and portfolio totals.
 
 Raw endpoints stay loopback-bound and must gain application authentication before any broader network exposure. Raw payloads are never logged; account numbers are masked in API responses.
 

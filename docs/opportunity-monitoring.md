@@ -1,6 +1,6 @@
 # Playbook-aware opportunity monitoring
 
-Phase 2 changes Radar from a browser-configured, one-symbol form into an on-demand workspace. It discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. Results remain in browser memory and disappear on reload. There are no background scans, push notifications, orders, open-contract recommendations, roll evaluations, or historical comparisons.
+Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. Browser results remain in memory and disappear on reload. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
 
 ## Target discovery
 

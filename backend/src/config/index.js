@@ -14,9 +14,10 @@ export function loadEnvFile(envPath = path.join(rootDirectory, '.env')) {
   dotenv.config({ path: envPath, quiet: true });
 }
 
-const boolFromEnv = z
+const boolFromEnv = (defaultValue) => z
   .enum(['true', 'false', '1', '0', 'yes', 'no'])
-  .transform((value) => ['true', '1', 'yes'].includes(value));
+  .optional()
+  .transform((value) => value === undefined ? defaultValue : ['true', '1', 'yes'].includes(value));
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('production'),
@@ -31,7 +32,7 @@ const envSchema = z.object({
   SNAPTRADE_USER_SECRET: z.string().default(''),
   SNAPTRADE_BROKERAGE_AUTHORIZATION_ID: z.string().default(''),
   SNAPTRADE_ACCOUNT_IDS: z.string().default(''),
-  INGEST_ENABLED: boolFromEnv.default('true'),
+  INGEST_ENABLED: boolFromEnv(true),
   INGEST_CRON: z.string().min(1).default('*/30 * * * *'),
   INGEST_ORDERS_DAYS: z.coerce.number().int().min(1).max(90).default(90),
   INGEST_STALE_AFTER_MINUTES: z.coerce.number().int().min(1).max(10080).default(60),
@@ -44,8 +45,11 @@ const envSchema = z.object({
   NTFY_TOPIC: z.string().default(''),
   NTFY_TOKEN: z.string().default(''),
   NTFY_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(5000),
-  NTFY_DRY_RUN: boolFromEnv.default('true'),
-  ALERTS_ENABLED: boolFromEnv.default('false'),
+  NTFY_DRY_RUN: boolFromEnv(true),
+  ALERTS_ENABLED: boolFromEnv(false),
+  OPPORTUNITY_SCAN_CRON: z.string().min(1).default('*/15 10-15 * * 1-5'),
+  OPPORTUNITY_SCAN_TIMEZONE: z.string().min(1).default('America/New_York'),
+  DASHBOARD_PUBLIC_URL: z.union([z.string().url(), z.literal('')]).default(''),
   ALERT_COOLDOWN_MINUTES: z.coerce.number().int().min(1).max(10080).default(240),
   ALERT_DAILY_CAP: z.coerce.number().int().min(1).max(100).default(5),
   ALERT_EXPIRATION_DTE: z.string().default('7,3,1,0'),
@@ -73,6 +77,9 @@ export function loadConfig(env = process.env) {
 
   if (!cron.validate(raw.INGEST_CRON)) {
     throw configError(['INGEST_CRON: is not a valid cron expression']);
+  }
+  if (!cron.validate(raw.OPPORTUNITY_SCAN_CRON)) {
+    throw configError(['OPPORTUNITY_SCAN_CRON: is not a valid cron expression']);
   }
 
   const hasUserId = raw.SNAPTRADE_USER_ID.length > 0;
@@ -121,7 +128,9 @@ export function loadConfig(env = process.env) {
       cooldownMs: raw.ALERT_COOLDOWN_MINUTES * 60_000, dailyCap: raw.ALERT_DAILY_CAP,
       expirationDte: raw.ALERT_EXPIRATION_DTE.split(',').map(Number).filter((value) => Number.isInteger(value) && value >= 0),
       assignmentMaxDte: raw.ALERT_ASSIGNMENT_MAX_DTE, assignmentMinMoneyness: raw.ALERT_ASSIGNMENT_MIN_MONEYNESS,
-      screenerRule: { minAnnualizedReturn: raw.ALERT_MIN_ANNUALIZED_RETURN, maxDelta: 0.35, maxSpreadPercent: 0.15, maxQuoteAgeSeconds: 900, dashboardUrl: '/#screener' },
+      screenerCron: raw.OPPORTUNITY_SCAN_CRON, screenerTimezone: raw.OPPORTUNITY_SCAN_TIMEZONE,
+      screenerRule: { minAnnualizedReturn: raw.ALERT_MIN_ANNUALIZED_RETURN, maxDelta: 0.35, maxSpreadPercent: 0.15, maxQuoteAgeSeconds: 900,
+        dashboardUrl: raw.DASHBOARD_PUBLIC_URL ? `${raw.DASHBOARD_PUBLIC_URL.replace(/\/$/, '')}/#screener` : null },
     },
   };
 }

@@ -1,0 +1,19 @@
+---
+description: Keep the live piefive deployment aligned with committed application code
+alwaysApply: true
+---
+
+# Piefive deployment
+
+A commit that changes `backend/`, `frontend/`, `sidecar/`, `docker/`, `deploy/`, `compose.yaml`, or `.env.example` requires a piefive deployment check before handoff.
+
+After such a commit:
+
+1. Run the relevant test suites. Deploy only a green commit.
+2. Tell the user that piefive needs the committed update.
+3. When Tailscale SSH is available and the user has not opted out, sync the application to `/home/asadhusain97/wheely_nilly` while preserving the remote `.env`, `data/`, `backend/node_modules/`, and `sidecar/.venv/`.
+4. Refresh dependencies when their manifests or lockfiles changed.
+5. Install changed units from `deploy/systemd/`, reload systemd, and restart only the Wheely Nilly services.
+6. Verify both systemd services, loopback health endpoints, and `https://piefive.tail4dcc39.ts.net:8443/`. Confirm that `finalyst-operator.service` remains active.
+
+If deployment cannot run, end the handoff with the exact blocker and the reminder that the committed code is not yet live on piefive. The Tailscale URL stays unchanged across deployments.

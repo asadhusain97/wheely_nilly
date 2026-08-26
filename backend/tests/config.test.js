@@ -18,6 +18,11 @@ describe('loadConfig', () => {
     assert.equal(config.port, 3000);
     assert.equal(config.timezone, 'UTC');
     assert.equal(config.ingest.cron, '*/30 * * * *');
+    assert.equal(config.ingest.enabled, false);
+    assert.equal(config.notifications.enabled, false);
+    assert.equal(config.notifications.dryRun, true);
+    assert.equal(config.notifications.screenerCron, '*/15 10-15 * * 1-5');
+    assert.equal(config.notifications.screenerTimezone, 'America/New_York');
     assert.equal(config.ingest.activitiesDays, undefined);
     assert.equal(config.retry.attempts, 3);
     assert.deepEqual(config.snaptrade.accountIds, [
@@ -53,6 +58,13 @@ describe('loadConfig', () => {
     assert.throws(
       () => loadConfig({ ...baseEnv, INGEST_CRON: 'not-a-cron' }),
       /INGEST_CRON/,
+    );
+  });
+
+  it('rejects an invalid opportunity scan cron expression', () => {
+    assert.throws(
+      () => loadConfig({ ...baseEnv, OPPORTUNITY_SCAN_CRON: 'not-a-cron' }),
+      /OPPORTUNITY_SCAN_CRON/,
     );
   });
 

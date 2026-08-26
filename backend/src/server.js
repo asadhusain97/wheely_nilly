@@ -34,7 +34,7 @@ const screener = createScreenerService({ config });
 const notifications = createNotificationService({ config });
 const strategySettings = createStrategySettingsService({ dataDir: config.dataDir });
 const opportunityMonitoring = createOpportunityMonitoringService({ derived, strategySettings, screener });
-const scheduler = createScheduler({ config, ingest, notifications, derived });
+const scheduler = createScheduler({ config, ingest, notifications, derived, monitoring: opportunityMonitoring });
 const app = createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings });
 
 const server = app.listen(config.port, config.host, () => {

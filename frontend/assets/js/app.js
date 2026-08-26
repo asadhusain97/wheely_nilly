@@ -674,7 +674,6 @@ function tickerCard(ticker) {
     tickerKpi('Return', percent(ticker.returnRate)),
     tickerKpi('Annualized', percent(ticker.annualizedReturnRate)),
     tickerKpi('Collateral', money(ticker.capitalInvolved, { digits: 0 })),
-    tickerKpi('Contracts', quantity(ticker.openContracts)),
   );
   summary.append(topline, kpis);
   const warnings = [];

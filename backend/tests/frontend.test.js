@@ -139,7 +139,7 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /\.monitor-target-body\[hidden\]/);
     assert.doesNotMatch(screenerCss, /\.monitor-target-disclosure/);
     assert.match(screenerCss, /\.candidate-open-label \{[^}]*min-width: 56px[^}]*grid-column: 1\/-1[^}]*grid-row: 3/);
-    assert.match(screenerCss, /\.candidate-open-label::after \{[^}]*width: 6px[^}]*height: 6px[^}]*transform: rotate\(45deg\)/);
+    assert.match(screenerCss, /\.candidate-open-label::after \{[^}]*width: 4px[^}]*height: 4px[^}]*border-right: 1\.25px solid currentColor[^}]*transform: rotate\(45deg\)/);
     assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-open-label::after \{ transform: rotate\(225deg\); \}/);
     assert.doesNotMatch(screenerCss, /content: "⌄"/);
     assert.doesNotMatch(screenerCss, /\.scan-all-button/);
@@ -295,7 +295,9 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /trade\.stockPrice/);
     assert.match(js, /ticker\.stockPrice/);
     assert.match(css, /\.stock-price-tag\{/);
-    assert.match(css, /\.ticker-kpis\{[^}]*grid-template-columns:repeat\(4,1fr\)/);
+    assert.match(css, /\.ticker-kpis\{[^}]*grid-template-columns:repeat\(3,1fr\)/);
+    assert.match(css, /\.ticker-kpis dd\{[^}]*font-size:12px[^}]*font-weight:500/);
+    assert.doesNotMatch(js, /tickerKpi\('Contracts'/);
     assert.doesNotMatch(html, /id="cycles-body"/);
   });
 });

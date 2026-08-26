@@ -85,8 +85,8 @@
 .monitor-metric { min-width: 0; padding: 9px 10px; background: rgba(249, 249, 246, .64); }
 .monitor-metric dt { color: var(--mute); font-size: 8px; }
 .monitor-metric dd { margin: 4px 0 0; overflow: hidden; font-size: 12px; font-weight: 760; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
-.candidate-open-label { min-width: 56px; display: inline-flex; grid-column: 1/-1; grid-row: 3; align-items: center; justify-content: flex-end; justify-self: end; gap: 6px; color: var(--mute); font-size: 9px; font-weight: 720; line-height: 1; }
-.candidate-open-label::after { width: 6px; height: 6px; display: block; flex: 0 0 auto; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; content: ""; transform: rotate(45deg); transform-origin: center; transition: transform .16s ease; }
+.candidate-open-label { min-width: 56px; display: inline-flex; grid-column: 1/-1; grid-row: 3; align-items: center; justify-content: flex-end; justify-self: end; gap: 5px; color: var(--mute); font-size: 9px; font-weight: 720; line-height: 1; }
+.candidate-open-label::after { width: 4px; height: 4px; display: block; flex: 0 0 auto; border-right: 1.25px solid currentColor; border-bottom: 1.25px solid currentColor; content: ""; transform: rotate(45deg); transform-origin: center; transition: transform .16s ease; }
 .candidate-card[open] .candidate-open-label::after { transform: rotate(225deg); }
 .candidate-detail { padding: 13px; border-top: 1px solid var(--monitor-hairline); background: rgba(247, 247, 243, .46); }
 .candidate-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--monitor-hairline); border-radius: 13px; background: var(--monitor-hairline); }

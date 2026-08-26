@@ -27,6 +27,12 @@ export function candidateHeadline(candidate) {
   return `${money(candidate.net_contract_credit)} net credit`;
 }
 
+export function candidateReturnCaption(candidate) {
+  const days = Number(candidate.dte);
+  const term = Number.isFinite(days) ? `${days}-day ` : '';
+  return `Estimated ${term}return on capital: ${percent(candidate.period_return)}`;
+}
+
 function metric(label, value, note = '') {
   const item = node('div', 'monitor-metric');
   item.append(node('dt', '', label), node('dd', '', value));
@@ -118,7 +124,7 @@ function candidateCard(candidate, result, rank) {
   identity.append(node('span', 'candidate-rank', String(rank)), node('div', '', undefined));
   identity.lastChild.append(node('strong', '', `${result.symbol} ${money(candidate.strike)}`), node('small', '', `${candidate.expiration} · ${candidate.dte} DTE`));
   const primary = node('div', 'candidate-primary');
-  primary.append(node('strong', '', candidateHeadline(candidate)), node('small', '', `${percent(candidate.period_return)} for this contract term`));
+  primary.append(node('strong', '', candidateHeadline(candidate)), node('small', '', candidateReturnCaption(candidate)));
   const compact = node('dl', 'candidate-compact');
   compact.append(
     metric('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta))),

@@ -3,6 +3,7 @@ import { it } from 'node:test';
 
 import {
   candidateHeadline,
+  candidateReturnCaption,
   exactInstrumentIdentity,
   exclusionSummary,
   goalsForLeg,
@@ -17,6 +18,10 @@ it('shows contract-level net credit instead of the per-share option price', () =
   const headline = candidateHeadline({ net_contract_credit: 204.35, executable_option_price_per_share: 2.05 });
   assert.match(headline, /\$204\.35 net credit/);
   assert.doesNotMatch(headline, /\$2\.05/);
+});
+
+it('explains the candidate period return as a term-specific return on capital', () => {
+  assert.equal(candidateReturnCaption({ period_return: .0313, dte: 23 }), 'Estimated 23-day return on capital: 3.13%');
 });
 
 it('defaults the compact add flow to CSP-compatible goals', () => {

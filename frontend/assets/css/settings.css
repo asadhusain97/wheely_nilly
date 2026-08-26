@@ -805,6 +805,13 @@ details[open] > summary .disclosure-icon {
   line-height: 1.35;
 }
 
+.editor-rule-label {
+  color: var(--body);
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
 .editor-rule-copy small {
   color: var(--ash);
   font-size: 10px;

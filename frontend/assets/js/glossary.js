@@ -1,3 +1,17 @@
+const LONG_PRESS_DURATION_MS = 550;
+const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
+
+export function createGlossaryTerm(label, term = label, className = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = ['glossary-term', className].filter(Boolean).join(' ');
+  button.dataset.glossaryTerm = term;
+  button.textContent = label;
+  button.title = `Press and hold for the ${label} definition`;
+  button.setAttribute('aria-label', `${label}. Open definition in glossary`);
+  return button;
+}
+
 export function initializeGlossary() {
   const trigger = document.querySelector('#open-glossary');
   const overlay = document.querySelector('#glossary-dialog');
@@ -16,6 +30,10 @@ export function initializeGlossary() {
   let lastFocused = null;
   let closeTimer = null;
   let drag = null;
+  let termPress = null;
+  let suppressClickFor = null;
+  let suspendedDialog = null;
+  let glossaryWasInert = false;
 
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const setBackgroundInert = (value) => {
@@ -42,13 +60,20 @@ export function initializeGlossary() {
 
   function finishClose() {
     clearTimeout(closeTimer);
+    suppressClickFor = null;
     overlay.hidden = true;
-    overlay.classList.remove('is-dragging');
+    overlay.classList.remove('is-dragging', 'is-above-modal');
     sheet.style.transform = '';
     overlay.querySelector('.glossary-backdrop').style.opacity = '';
-    document.body.classList.remove('has-modal');
-    setBackgroundInert(false);
+    document.body.classList.toggle('has-modal', Boolean(suspendedDialog));
+    setBackgroundInert(Boolean(suspendedDialog));
+    if (suspendedDialog) {
+      overlay.inert = glossaryWasInert;
+      suspendedDialog.inert = false;
+    }
     if (lastFocused?.isConnected) lastFocused.focus();
+    suspendedDialog = null;
+    glossaryWasInert = false;
   }
 
   function closeGlossary({ fromDrag = false } = {}) {
@@ -61,11 +86,18 @@ export function initializeGlossary() {
     else closeTimer = setTimeout(finishClose, 260);
   }
 
-  function openGlossary() {
+  function openGlossary(term = '', source = document.activeElement) {
     clearTimeout(closeTimer);
-    lastFocused = document.activeElement;
+    lastFocused = source;
+    suspendedDialog = source?.closest?.('#settings-editor-dialog') ?? null;
+    glossaryWasInert = overlay.inert;
+    if (suspendedDialog) {
+      suspendedDialog.inert = true;
+      overlay.inert = false;
+      overlay.classList.add('is-above-modal');
+    }
     body.scrollTop = 0;
-    search.value = '';
+    search.value = term;
     filterGlossary();
     overlay.hidden = false;
     trigger.setAttribute('aria-expanded', 'true');
@@ -75,6 +107,69 @@ export function initializeGlossary() {
       overlay.classList.add('is-open');
       sheet.focus();
     });
+  }
+
+  function glossaryTermFromEvent(event) {
+    const target = event.target.closest?.('[data-glossary-term]');
+    return target?.dataset.glossaryTerm ? target : null;
+  }
+
+  function cancelTermPress() {
+    if (!termPress) return;
+    clearTimeout(termPress.timer);
+    termPress.target.classList.remove('is-pressing');
+    if (termPress.target.hasPointerCapture?.(termPress.pointerId)) {
+      termPress.target.releasePointerCapture(termPress.pointerId);
+    }
+    termPress = null;
+  }
+
+  function startTermPress(event) {
+    const target = glossaryTermFromEvent(event);
+    if (!target || event.button !== 0 || event.isPrimary === false) return;
+    cancelTermPress();
+    const press = {
+      target,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      opened: false,
+      timer: null,
+    };
+    press.timer = setTimeout(() => {
+      if (termPress !== press) return;
+      suppressClickFor = target;
+      press.opened = true;
+      target.classList.remove('is-pressing');
+      openGlossary(target.dataset.glossaryTerm, target);
+    }, LONG_PRESS_DURATION_MS);
+    termPress = press;
+    target.classList.add('is-pressing');
+    target.setPointerCapture?.(event.pointerId);
+  }
+
+  function moveTermPress(event) {
+    if (!termPress || event.pointerId !== termPress.pointerId) return;
+    if (termPress.opened) return;
+    const distance = Math.hypot(event.clientX - termPress.startX, event.clientY - termPress.startY);
+    if (distance > LONG_PRESS_MOVE_TOLERANCE_PX) cancelTermPress();
+  }
+
+  function endTermPress(event) {
+    if (!termPress || event.pointerId !== termPress.pointerId) return;
+    if (termPress.opened) event.preventDefault();
+    cancelTermPress();
+  }
+
+  function handleTermClick(event) {
+    const target = glossaryTermFromEvent(event);
+    if (!target) return;
+    event.preventDefault();
+    if (suppressClickFor === target) {
+      suppressClickFor = null;
+      return;
+    }
+    if (event.detail === 0) openGlossary(target.dataset.glossaryTerm, target);
   }
 
   function keepFocusInside(event) {
@@ -124,7 +219,7 @@ export function initializeGlossary() {
     overlay.querySelector('.glossary-backdrop').style.opacity = '';
   }
 
-  trigger.addEventListener('click', openGlossary);
+  trigger.addEventListener('click', () => openGlossary('', trigger));
   search.addEventListener('input', filterGlossary);
   for (const button of overlay.querySelectorAll('[data-glossary-close]')) {
     button.addEventListener('click', closeGlossary);
@@ -137,4 +232,12 @@ export function initializeGlossary() {
   dragZone.addEventListener('pointermove', moveDrag);
   dragZone.addEventListener('pointerup', endDrag);
   dragZone.addEventListener('pointercancel', endDrag);
+  document.addEventListener('pointerdown', startTermPress);
+  document.addEventListener('pointermove', moveTermPress);
+  document.addEventListener('pointerup', endTermPress);
+  document.addEventListener('pointercancel', endTermPress);
+  document.addEventListener('click', handleTermClick);
+  document.addEventListener('contextmenu', (event) => {
+    if (glossaryTermFromEvent(event)) event.preventDefault();
+  });
 }

@@ -74,11 +74,11 @@
           </div>
           <dl class="efficiency-grid">
             <div>
-              <dt>Capital velocity</dt>
+              <dt id="capital-velocity-label">Capital velocity</dt>
               <dd id="capital-velocity">—</dd><small>Per $1k / 30 days</small>
             </div>
             <div>
-              <dt>Premium capture</dt>
+              <dt id="premium-capture-label">Premium capture</dt>
               <dd id="premium-capture">—</dd><small>Credit retained</small>
             </div>
             <div>
@@ -438,12 +438,23 @@
                 <dd class="glossary-formula">Minimum delta ≤ |option delta| ≤ maximum delta</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Liquidity rules <span>Spread · OI · Volume</span></dt>
-                <dd>The spread measures the gap between buyers and sellers; a smaller gap usually means a more usable
-                  quote. Open interest counts contracts still open, while volume counts contracts traded today.</dd>
+                <dt>Maximum spread <span>Liquidity rule</span></dt>
+                <dd>The largest allowed gap between the bid and ask, measured against their midpoint. A smaller gap
+                  usually means a more usable quote.</dd>
                 <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
                 <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100</dd>
-                <dd class="glossary-formula">Passes when spread ≤ maximum, OI ≥ minimum, and volume ≥ minimum</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum open interest <span>Liquidity rule</span></dt>
+                <dd>The fewest open contracts an option must have to pass. Open interest counts contracts that remain
+                  open across the market.</dd>
+                <dd class="glossary-formula">Passes when open interest ≥ minimum</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum volume <span>Liquidity rule</span></dt>
+                <dd>The fewest contracts that must have traded during the current session. It filters out options
+                  with too little recent trading activity.</dd>
+                <dd class="glossary-formula">Passes when today's volume ≥ minimum</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Maximum quote age <span>Freshness</span></dt>
@@ -452,7 +463,7 @@
                 <dd class="glossary-formula">Quote age = current time − quote timestamp</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Minimum period return <span>One option period</span></dt>
+                <dt>Minimum return <span>One option period</span></dt>
                 <dd>The smallest estimated return accepted over that option's own DTE. It is not an annualized rate.
                   Net premium is the estimated option credit after the estimated fee.</dd>
                 <dd class="glossary-formula">Covered call = net premium ÷ current value of 100 shares</dd>
@@ -552,7 +563,7 @@
                   matched contract quantity.</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Closing cash flow</dt>
+                <dt>Closing cash flow <span>Close cost</span></dt>
                 <dd>The net cash from closing a contract. A buy-to-close cost is negative; expiration and assignment
                   contribute zero closing option cash in booked option profit.</dd>
               </div>
@@ -595,12 +606,23 @@
                 <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
               </div>
               <div class="glossary-entry">
+                <dt>Bid-ask spread <span>Quote width</span></dt>
+                <dd>The percentage gap between the lowest displayed seller price and highest displayed buyer price.
+                  Radar measures that gap against their midpoint.</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Open interest / volume <span>Liquidity activity</span></dt>
+                <dd>Open interest counts option contracts that remain open across the market. Volume counts contracts
+                  traded during the current session.</dd>
+              </div>
+              <div class="glossary-entry">
                 <dt>Net contract credit</dt>
                 <dd>The estimated cash received for one standard 100-share contract after the estimated fee.</dd>
                 <dd class="glossary-formula">Net contract credit = executable option price × 100 − estimated fee</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Period return <span>Contract term</span></dt>
+                <dt>Return on capital <span>Period return · Contract term</span></dt>
                 <dd>The candidate's estimated net credit divided by its return collateral for this option period.</dd>
                 <dd class="glossary-formula">Covered call = net contract credit ÷ current value of 100 shares</dd>
                 <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>

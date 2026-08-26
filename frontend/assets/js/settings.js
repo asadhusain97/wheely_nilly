@@ -1,3 +1,5 @@
+import { createGlossaryTerm } from './glossary.js';
+
 const RULE_FIELDS = [
   { key: 'minDte', label: 'Minimum DTE', short: 'Min DTE', step: 1, min: 1, max: 365 },
   { key: 'maxDte', label: 'Maximum DTE', short: 'Max DTE', step: 1, min: 1, max: 730 },
@@ -15,6 +17,19 @@ const RULE_FIELDS = [
 const FIELD_BY_KEY = Object.fromEntries(RULE_FIELDS.map((field) => [field.key, field]));
 const CORE_FIELDS = RULE_FIELDS.slice(0, 5);
 const ADVANCED_FIELDS = RULE_FIELDS.slice(5);
+const GLOSSARY_TERM_BY_RULE_KEY = {
+  minDte: 'DTE',
+  maxDte: 'DTE',
+  targetDeltaMin: 'Delta',
+  targetDeltaMax: 'Delta',
+  minPeriodReturn: 'Minimum return',
+  minMoneyness: 'Moneyness',
+  maxMoneyness: 'Moneyness',
+  maxSpreadPercent: 'Maximum spread',
+  minOpenInterest: 'Minimum open interest',
+  minVolume: 'Minimum volume',
+  maxQuoteAgeSeconds: 'Maximum quote age',
+};
 const LEG_LABELS = {
   coveredCall: 'Covered call',
   cashSecuredPut: 'Cash-secured put',
@@ -331,9 +346,15 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     return token;
   }
 
-  function rangeSummary(label, rules, first, second, specificKeys, source, suffix = '') {
+  function summaryLabel(label, glossaryTerms) {
+    return glossaryTerms
+      ? createGlossaryTerm(label, label, 'settings-rule-label')
+      : element('span', 'settings-rule-label', label);
+  }
+
+  function rangeSummary(label, rules, first, second, specificKeys, source, suffix = '', glossaryTerms = false) {
     const row = element('div', 'settings-rule-row');
-    row.append(element('span', 'settings-rule-label', label));
+    row.append(summaryLabel(label, glossaryTerms));
     const value = element('div', 'settings-rule-value');
     const separator = element('span', 'rule-separator', '–');
     if (!specificKeys.has(first) && !specificKeys.has(second)) separator.classList.add('is-inherited');
@@ -347,21 +368,21 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     return row;
   }
 
-  function singleSummary(label, rules, key, specificKeys, source) {
+  function singleSummary(label, rules, key, specificKeys, source, glossaryTerms = false) {
     const row = element('div', 'settings-rule-row');
-    row.append(element('span', 'settings-rule-label', label));
+    row.append(summaryLabel(label, glossaryTerms));
     const value = element('div', 'settings-rule-value');
     value.append(valueToken(key, rules[key], specificKeys.has(key), source));
     row.append(value);
     return row;
   }
 
-  function ruleSummary(rules, specificKeys, source) {
+  function ruleSummary(rules, specificKeys, source, { glossaryTerms = false } = {}) {
     const list = element('div', 'settings-rule-list');
     list.append(
-      rangeSummary('DTE', rules, 'minDte', 'maxDte', specificKeys, source, 'days'),
-      rangeSummary('Delta', rules, 'targetDeltaMin', 'targetDeltaMax', specificKeys, source),
-      singleSummary('Minimum return', rules, 'minPeriodReturn', specificKeys, source),
+      rangeSummary('DTE', rules, 'minDte', 'maxDte', specificKeys, source, 'days', glossaryTerms),
+      rangeSummary('Delta', rules, 'targetDeltaMin', 'targetDeltaMax', specificKeys, source, '', glossaryTerms),
+      singleSummary('Minimum return', rules, 'minPeriodReturn', specificKeys, source, glossaryTerms),
     );
     const advanced = element('details', 'settings-rule-advanced');
     const advancedSummary = element('summary');
@@ -369,11 +390,11 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     advanced.append(advancedSummary);
     const advancedList = element('div', 'settings-rule-list');
     advancedList.append(
-      rangeSummary('Moneyness', rules, 'minMoneyness', 'maxMoneyness', specificKeys, source),
-      singleSummary('Maximum spread', rules, 'maxSpreadPercent', specificKeys, source),
-      singleSummary('Minimum open interest', rules, 'minOpenInterest', specificKeys, source),
-      singleSummary('Minimum volume', rules, 'minVolume', specificKeys, source),
-      singleSummary('Maximum quote age', rules, 'maxQuoteAgeSeconds', specificKeys, source),
+      rangeSummary('Moneyness', rules, 'minMoneyness', 'maxMoneyness', specificKeys, source, '', glossaryTerms),
+      singleSummary('Maximum spread', rules, 'maxSpreadPercent', specificKeys, source, glossaryTerms),
+      singleSummary('Minimum open interest', rules, 'minOpenInterest', specificKeys, source, glossaryTerms),
+      singleSummary('Minimum volume', rules, 'minVolume', specificKeys, source, glossaryTerms),
+      singleSummary('Maximum quote age', rules, 'maxQuoteAgeSeconds', specificKeys, source, glossaryTerms),
     );
     advanced.append(advancedList);
     list.append(advanced);
@@ -399,6 +420,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       model.settings.globalRules[model.globalLeg],
       new Set(RULE_FIELDS.map(({ key }) => key)),
       LEG_LABELS[model.globalLeg],
+      { glossaryTerms: true },
     ));
     document.querySelector('#edit-global-settings').setAttribute('aria-label', `Edit ${LEG_LABELS[model.globalLeg]} default settings`);
   }
@@ -427,7 +449,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     goalName.dataset.goal = model.preset;
     copy.append(goalName, element('small', '', GOAL_COPY[model.preset]));
     context.append(copy, element('span', 'applies-chip', preset.applicableLegs.map((leg) => LEG_SHORT_LABELS[leg]).join(' + ')));
-    view.append(context, ruleSummary(effective, new Set(Object.keys(preset.rules)), 'Defaults'));
+    view.append(context, ruleSummary(effective, new Set(Object.keys(preset.rules)), 'Defaults', { glossaryTerms: true }));
     document.querySelector('#edit-goal-settings').setAttribute('aria-label', `Edit ${GOAL_LABELS[model.preset]} goal`);
   }
 
@@ -607,16 +629,27 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     if (message) existing.focus();
   }
 
-  function ruleField(field, rules, { partial = false, inherited = {}, inheritLabels = {} } = {}) {
+  function ruleField(field, rules, {
+    partial = false,
+    inherited = {},
+    inheritLabels = {},
+    glossaryTerms = false,
+  } = {}) {
     const overridden = Object.hasOwn(rules, field.key);
     const id = `strategy-rule-${inputSequence += 1}`;
     const row = element('div', `editor-rule-row${partial && !overridden ? ' is-inherited' : ''}`);
     const copy = element('div', 'editor-rule-copy');
-    const label = element('label', '', field.label);
+    const label = element('label', glossaryTerms ? 'sr-only' : '', field.label);
     label.htmlFor = id;
     const helper = element('small', '', partial && !overridden ? `From ${inheritLabels[field.key] ?? 'the layer above'}` : '');
     helper.hidden = !partial || overridden;
-    copy.append(label, helper);
+    if (glossaryTerms) {
+      copy.append(
+        createGlossaryTerm(field.label, GLOSSARY_TERM_BY_RULE_KEY[field.key] ?? field.label, 'editor-rule-label'),
+        label,
+        helper,
+      );
+    } else copy.append(label, helper);
 
     const controls = element('div', 'editor-rule-controls');
     const inputWrap = element('div', 'rule-input');
@@ -713,6 +746,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       partial: true,
       inherited,
       inheritLabels: Object.fromEntries(RULE_FIELDS.map(({ key }) => [key, 'Defaults'])),
+      glossaryTerms: true,
     }));
   }
 
@@ -721,9 +755,14 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const row = element('div', 'editor-rule-row ticker-price-guard');
     const id = `price-guard-${symbol}-${leg}`;
     const copy = element('div', 'editor-rule-copy');
-    const label = element('label', '', leg === 'coveredCall' ? 'Minimum net sale price' : 'Max. net purchase price');
+    const labelText = leg === 'coveredCall' ? 'Minimum net sale price' : 'Max. net purchase price';
+    const label = element('label', 'sr-only', labelText);
     label.htmlFor = id;
-    copy.append(label, element('small', '', 'Optional'));
+    copy.append(
+      createGlossaryTerm(labelText, 'Net price guard', 'editor-rule-label'),
+      label,
+      element('small', '', 'Optional'),
+    );
     const controls = element('div', 'editor-rule-controls');
     const wrap = element('div', 'rule-input');
     wrap.append(element('span', 'currency-prefix', '$'));
@@ -772,7 +811,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const legSettings = playbook[leg];
     const goalField = document.createElement('fieldset');
     goalField.className = 'ticker-goal-field';
-    goalField.append(element('legend', '', 'Goal'));
+    const goalLegend = document.createElement('legend');
+    goalLegend.append(createGlossaryTerm('Goal', 'Goal profiles', 'ticker-goal-label'));
+    goalField.append(goalLegend);
     const goalTabs = element('div', 'goal-picker ticker-goal-picker');
     goalTabs.setAttribute('role', 'tablist');
     goalTabs.setAttribute('aria-label', `${symbol} goal`);
@@ -798,7 +839,12 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       Object.hasOwn(preset, key) ? GOAL_LABELS[legSettings.goal] : 'Defaults',
     ]));
     const count = Object.keys(legSettings.overrides).length;
-    const tickerRules = ruleEditor(legSettings.overrides, { partial: true, inherited, inheritLabels });
+    const tickerRules = ruleEditor(legSettings.overrides, {
+      partial: true,
+      inherited,
+      inheritLabels,
+      glossaryTerms: true,
+    });
     tickerRules.id = 'ticker-rules-editor';
     tickerRules.querySelector('.editor-rule-list').prepend(priceGuard(symbol, leg, legSettings));
     panel.append(
@@ -992,7 +1038,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       button.addEventListener('click', () => closeEditor());
     }
     document.addEventListener('keydown', (event) => {
-      if (!model.editor) return;
+      if (!model.editor || overlay().inert) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         closeEditor();

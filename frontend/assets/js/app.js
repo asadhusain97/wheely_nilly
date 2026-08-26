@@ -1,4 +1,4 @@
-import { initializeGlossary } from './glossary.js';
+import { createGlossaryTerm, initializeGlossary } from './glossary.js';
 import { createScreenerController } from './screener.js';
 import { createStrategySettingsController } from './settings.js';
 
@@ -48,6 +48,28 @@ function el(tag, className, content) {
   if (className) node.className = className;
   if (content !== undefined) node.textContent = content;
   return node;
+}
+
+function tradesGlossaryLabel(label, term) {
+  return createGlossaryTerm(label, term, 'trades-glossary-label');
+}
+
+function appendLabeledAmount(container, value, label, term) {
+  if (value == null) {
+    container.append(tradesGlossaryLabel(label, term), document.createTextNode(' unavailable'));
+    return;
+  }
+  container.append(document.createTextNode(`${value} `), tradesGlossaryLabel(label.toLocaleLowerCase(), term));
+}
+
+function initializeHomeGlossaryTerms() {
+  for (const [selector, term] of [
+    ['#capital-velocity-label', 'Capital velocity'],
+    ['#premium-capture-label', 'Premium capture'],
+  ]) {
+    const metricName = $(selector);
+    metricName.replaceChildren(createGlossaryTerm(metricName.textContent.trim(), term, 'home-glossary-label'));
+  }
 }
 
 function stack(primary, secondary, className = 'cell-stack') {
@@ -166,6 +188,7 @@ const screenerController = createScreenerController({
   openSettings: () => showScreen('more'),
 });
 screenerController.initialize();
+initializeHomeGlossaryTerms();
 initializeGlossary();
 
 function setFreshness(value) {
@@ -560,9 +583,11 @@ function renderMonthlyPerformance(tickers) {
   });
 }
 
-function tickerKpi(name, value, detail) {
+function tickerKpi(name, value, term, detail) {
   const item = el('div');
-  item.append(el('dt', '', name), el('dd', '', value));
+  const metricName = el('dt');
+  metricName.append(tradesGlossaryLabel(name, term));
+  item.append(metricName, el('dd', '', value));
   if (detail) item.append(el('small', '', detail));
   return item;
 }
@@ -575,9 +600,8 @@ function tickerOpenTradeRow(trade) {
     stack(`${money(trade.strike)} strike`, `${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
   );
   const value = stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'ticker-contract-value');
-  const note = el('small', 'ticker-contract-note', trade.openingCredit == null
-    ? 'Opening credit unavailable'
-    : `${money(trade.openingCredit)} opening credit`);
+  const note = el('small', 'ticker-contract-note');
+  appendLabeledAmount(note, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
   if (trade.needsReview) note.append(' · Check data');
   row.append(identity, value, note);
   return row;
@@ -602,15 +626,21 @@ function tickerPastTradeRow(trade) {
   const lifecycle = el('p', 'history-lifecycle', `${shortDate(trade.openedAt)} → ${shortDate(trade.closedAt)} · ${trade.daysHeld ?? '—'} day${trade.daysHeld === 1 ? '' : 's'} · ${closeActionText(trade.closeAction)}`);
   const metrics = el('dl', 'history-metrics');
   metrics.append(
-    tickerKpi('Booked P&L', money(trade.profit, { sign: true })),
-    tickerKpi('Return', percent(trade.returnRate)),
-    tickerKpi('Annualized', percent(trade.annualizedReturnRate)),
+    tickerKpi('Booked P&L', money(trade.profit, { sign: true }), 'Booked profit'),
+    tickerKpi('Return', percent(trade.returnRate), 'Return on collateral'),
+    tickerKpi('Annualized', percent(trade.annualizedReturnRate), 'Annualized return'),
   );
   const closeCash = Number(trade.closingCashFlow);
-  const closeDetail = trade.closingCashFlow == null
-    ? 'Closing cash unavailable'
-    : closeCash < 0 ? `${money(Math.abs(closeCash))} close cost` : `${money(closeCash)} closing cash`;
-  const cashFlow = el('small', 'history-cashflow', `${money(trade.openingCredit)} opening credit · ${closeDetail}`);
+  const cashFlow = el('small', 'history-cashflow');
+  appendLabeledAmount(cashFlow, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
+  cashFlow.append(document.createTextNode(' · '));
+  if (trade.closingCashFlow == null) {
+    cashFlow.append(document.createTextNode('Closing cash unavailable'));
+  } else if (closeCash < 0) {
+    cashFlow.append(document.createTextNode(`${money(Math.abs(closeCash))} `), tradesGlossaryLabel('close cost', 'Closing cash flow'));
+  } else {
+    cashFlow.append(document.createTextNode(`${money(closeCash)} closing cash`));
+  }
   if (trade.needsReview) cashFlow.append(' · Return needs review');
   content.append(top, lifecycle, metrics, cashFlow);
   item.append(content);
@@ -662,8 +692,10 @@ function tickerCard(ticker) {
     nameCopy,
   );
   const result = el('div', 'ticker-result');
+  const resultLabel = el('small');
+  resultLabel.append(tradesGlossaryLabel('Booked option P&L', 'Booked profit'));
   result.append(
-    el('small', '', 'Booked option P&L'),
+    resultLabel,
     el('strong', Number(ticker.bookedProfit) < 0 ? 'negative' : 'positive', money(ticker.bookedProfit, { sign: true })),
     el('span', 'ticker-chevron', '⌄'),
   );
@@ -671,9 +703,9 @@ function tickerCard(ticker) {
 
   const kpis = el('dl', 'ticker-kpis');
   kpis.append(
-    tickerKpi('Return', percent(ticker.returnRate)),
-    tickerKpi('Annualized', percent(ticker.annualizedReturnRate)),
-    tickerKpi('Collateral', money(ticker.capitalInvolved, { digits: 0 })),
+    tickerKpi('Return', percent(ticker.returnRate), 'Return on collateral'),
+    tickerKpi('Annualized', percent(ticker.annualizedReturnRate), 'Annualized return'),
+    tickerKpi('Collateral', money(ticker.capitalInvolved, { digits: 0 }), 'Collateral'),
   );
   summary.append(topline, kpis);
   const warnings = [];
@@ -772,7 +804,8 @@ function renderOpenTrades(dashboard) {
       stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'trade-number'),
     );
     const footer = el('div', 'trade-footer');
-    const credit = el('small', '', trade.openingCredit == null ? 'Opening credit unavailable' : `${money(trade.openingCredit)} opening credit`);
+    const credit = el('small');
+    appendLabeledAmount(credit, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
     if (trade.needsReview) credit.append(' · Check data');
     const rollButton = el('button', 'roll-button', 'Find roll');
     rollButton.type = 'button';

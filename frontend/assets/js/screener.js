@@ -1,3 +1,5 @@
+import { createGlossaryTerm } from './glossary.js';
+
 const LEG_LABELS = { coveredCall: 'Covered call', cashSecuredPut: 'Cash-secured put' };
 const GOAL_LABELS = { protect: 'Protect', income: 'Income', exit: 'Exit', acquire: 'Acquire' };
 
@@ -33,9 +35,15 @@ export function candidateReturnCaption(candidate) {
   return `Estimated ${term}return on capital: ${percent(candidate.period_return)}`;
 }
 
-function metric(label, value, note = '') {
+function glossaryLabel(label, term) {
+  return createGlossaryTerm(label, term, 'radar-glossary-label');
+}
+
+function metric(label, value, term, note = '') {
   const item = node('div', 'monitor-metric');
-  item.append(node('dt', '', label), node('dd', '', value));
+  const metricName = node('dt');
+  metricName.append(glossaryLabel(label, term));
+  item.append(metricName, node('dd', '', value));
   if (note) item.append(node('small', '', note));
   return item;
 }
@@ -85,9 +93,20 @@ export async function hydrateTargetIdentities(targets, request, getTickerIdentit
   return identities;
 }
 
-function rulesText(rules) {
-  const delta = rules.targetDeltaMin == null && rules.targetDeltaMax == null ? 'any delta' : `${rules.targetDeltaMin ?? 0}–${rules.targetDeltaMax ?? 1} |Δ|`;
-  return `${rules.minDte}–${rules.maxDte} DTE · ${delta} · ≥ ${percent(rules.minPeriodReturn)} term return`;
+function rulesSummary(rules) {
+  const anyDelta = rules.targetDeltaMin == null && rules.targetDeltaMax == null;
+  const summary = node('span', 'monitor-rule-terms');
+  summary.append(
+    document.createTextNode(`${rules.minDte}–${rules.maxDte} `),
+    glossaryLabel('DTE', 'DTE range'),
+    document.createTextNode(' · '),
+    document.createTextNode(anyDelta ? 'any ' : `${rules.targetDeltaMin ?? 0}–${rules.targetDeltaMax ?? 1} `),
+    glossaryLabel(anyDelta ? 'delta' : '|Δ|', 'Target delta range'),
+    document.createTextNode(' · '),
+    document.createTextNode(`≥ ${percent(rules.minPeriodReturn)} `),
+    glossaryLabel('term return', 'Minimum return'),
+  );
+  return summary;
 }
 
 function priceGuardText(effective) {
@@ -109,9 +128,11 @@ function trashIcon() {
   return svg;
 }
 
-function detailRow(label, value, qualifier = '') {
+function detailRow(label, value, term, qualifier = '') {
   const row = node('div', 'candidate-detail-row');
-  row.append(node('dt', '', label), node('dd', '', value));
+  const metricName = node('dt');
+  metricName.append(glossaryLabel(label, term));
+  row.append(metricName, node('dd', '', value));
   if (qualifier) row.append(node('small', '', qualifier));
   return row;
 }
@@ -124,27 +145,39 @@ function candidateCard(candidate, result, rank) {
   identity.append(node('span', 'candidate-rank', String(rank)), node('div', '', undefined));
   identity.lastChild.append(node('strong', '', `${result.symbol} ${money(candidate.strike)}`), node('small', '', `${candidate.expiration} · ${candidate.dte} DTE`));
   const primary = node('div', 'candidate-primary');
-  primary.append(node('strong', '', candidateHeadline(candidate)), node('small', '', candidateReturnCaption(candidate)));
+  const credit = node('strong');
+  credit.append(
+    document.createTextNode(`${money(candidate.net_contract_credit)} `),
+    glossaryLabel('net credit', 'Net contract credit'),
+  );
+  const candidateReturn = node('small');
+  const days = Number(candidate.dte);
+  candidateReturn.append(
+    document.createTextNode(`Estimated ${Number.isFinite(days) ? `${days}-day ` : ''}`),
+    glossaryLabel('return on capital', 'Return on capital'),
+    document.createTextNode(`: ${percent(candidate.period_return)}`),
+  );
+  primary.append(credit, candidateReturn);
   const compact = node('dl', 'candidate-compact');
   compact.append(
-    metric('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta))),
-    metric(candidate.option_type === 'call' ? 'Net sale price' : 'Net purchase price', money(candidate.net_sale_price ?? candidate.net_purchase_price)),
+    metric('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta)), 'Delta'),
+    metric(candidate.option_type === 'call' ? 'Net sale price' : 'Net purchase price', money(candidate.net_sale_price ?? candidate.net_purchase_price), 'Net sale / purchase price'),
   );
   summary.append(identity, primary, compact, node('span', 'candidate-open-label', 'Details'));
 
   const detail = node('div', 'candidate-detail');
   const quote = node('dl', 'candidate-detail-grid');
   quote.append(
-    detailRow('Underlying price', money(candidate.underlying_price), providerName(result.provider)),
-    detailRow('Executable option price', `${money(candidate.executable_option_price_per_share)} per share`, `Bid ${money(candidate.bid)} · Ask ${money(candidate.ask)}`),
-    detailRow('Spread', percent(candidate.spread_percent)),
-    detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`),
-    detailRow('Implied volatility', percent(candidate.implied_volatility), 'Provider-derived'),
-    detailRow('Theta per day', number(candidate.theta_per_day, 4), candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
-    detailRow('Breakeven', money(candidate.breakeven)),
-    detailRow('Strike distance', percent(Math.abs(candidate.strike_distance))),
-    detailRow('Annualized return', percent(candidate.annualized_return), 'Secondary metric'),
-    detailRow('Estimated fees', money(candidate.estimated_fees), 'Estimate'),
+    detailRow('Underlying price', money(candidate.underlying_price), 'Underlying price', providerName(result.provider)),
+    detailRow('Executable option price', `${money(candidate.executable_option_price_per_share)} per share`, 'Executable option price', `Bid ${money(candidate.bid)} · Ask ${money(candidate.ask)}`),
+    detailRow('Spread', percent(candidate.spread_percent), 'Bid-ask spread'),
+    detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`, 'Open interest / volume'),
+    detailRow('Implied volatility', percent(candidate.implied_volatility), 'Implied volatility', 'Provider-derived'),
+    detailRow('Theta per day', number(candidate.theta_per_day, 4), 'Theta per day', candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
+    detailRow('Breakeven', money(candidate.breakeven), 'Breakeven'),
+    detailRow('Strike distance', percent(Math.abs(candidate.strike_distance)), 'Strike distance'),
+    detailRow('Annualized return', percent(candidate.annualized_return), 'Annualized return', 'Secondary metric'),
+    detailRow('Estimated fees', money(candidate.estimated_fees), 'Estimated fee', 'Estimate'),
   );
   detail.append(quote);
   card.append(summary, detail);
@@ -267,7 +300,7 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       const ruleSummary = node('small', 'monitor-leg-rule');
       const goal = node('span', 'goal-inline goal-tone', GOAL_LABELS[targetLeg.goal] ?? 'Defaults');
       if (targetLeg.goal) goal.dataset.goal = targetLeg.goal;
-      ruleSummary.append(goal, document.createTextNode(` · ${rulesText(targetLeg.effectiveSettings.rules)}`));
+      ruleSummary.append(goal, document.createTextNode(' · '), rulesSummary(targetLeg.effectiveSettings.rules));
       copy.append(node('strong', '', LEG_LABELS[targetLeg.leg]), ruleSummary, node('small', 'price-guard-copy', priceGuardText(targetLeg.effectiveSettings)));
       const scan = node('button', 'scan-target-button', state.loading.has(key(target.symbol, targetLeg.leg)) ? 'Scanning…' : 'Scan');
       scan.type = 'button';

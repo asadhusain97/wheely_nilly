@@ -286,6 +286,10 @@ Back up `.env` and `data/` separately using encryption. Stop the services before
 
 The checked-in units under `deploy/systemd/` run both services as the non-root `asadhusain97` account from `/home/asadhusain97/wheely_nilly`. They bind only to `127.0.0.1`, restart after failures, and restrict filesystem writes to `data/`. Install the exact Node path referenced by the backend unit, create `sidecar/.venv`, run `npm ci --omit=dev`, then copy the units to `/etc/systemd/system/` and enable both services.
 
+#### Updating piefive
+
+After tests pass, ask the user to run `tailscale login` if SSH needs authentication. Sync the latest committed application files to `/home/asadhusain97/wheely_nilly` without replacing `.env`, `data/`, `backend/node_modules/`, or `sidecar/.venv/`. Refresh dependencies or systemd units only when their source files changed, then restart `wheely-nilly-screener.service` and `wheely-nilly-backend.service`. Verify both loopback health endpoints, `https://piefive.tail4dcc39.ts.net:8443/`, and that `finalyst-operator.service` remains active.
+
 ## Configuration Reference
 
 | Variable | Phase | Default | Description |

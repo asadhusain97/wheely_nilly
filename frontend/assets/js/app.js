@@ -195,6 +195,28 @@ screenerController.initialize();
 initializeHomeGlossaryTerms();
 initializeGlossary();
 
+function initializeTipCelebration() {
+  const link = $('#leave-a-tip');
+  const celebration = $('#tip-celebration');
+  let redirectPending = false;
+
+  link.addEventListener('click', (event) => {
+    const modifiedClick = event.altKey || event.ctrlKey || event.metaKey || event.shiftKey;
+    if (modifiedClick || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    event.preventDefault();
+    if (redirectPending) return;
+    redirectPending = true;
+
+    const image = $('#tip-celebration-image');
+    image.src = image.src;
+    celebration.hidden = false;
+    setTimeout(() => window.location.assign(link.href), 2000);
+  });
+}
+
+initializeTipCelebration();
+
 function setFreshness(value) {
   const updated = $('#last-updated');
   updated.replaceChildren(

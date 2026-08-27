@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { rootDirectory } from '../src/config/index.js';
@@ -229,8 +229,14 @@ describe('responsive dashboard shell', () => {
     assert.doesNotMatch(more, />\s*Edit\s*</);
     assert.match(more, /editable starting points, not trading recommendations/);
     assert.match(more, /class="settings-support"[^>]+aria-label="Support Wheely Nilly"/);
-    assert.match(more, /href="https:\/\/ko-fi\.com\/asadhusain"[^>]+target="_blank"[^>]+rel="noopener noreferrer">leave a tip/);
+    assert.match(more, /id="leave-a-tip"[^>]+href="https:\/\/ko-fi\.com\/asadhusain">leave a tip/);
     assert.doesNotMatch(more, /Buy Me a Chai|buymeachai|>Ko-fi</);
+    assert.match(html, /id="tip-celebration"[^>]+role="status"[^>]+aria-live="polite"[^>]+hidden/);
+    assert.match(html, /id="tip-celebration-image"[^>]+src="\/assets\/images\/happy-tip\.gif"/);
+    assert.ok(existsSync(path.join(rootDirectory, 'frontend/assets/images/happy-tip.gif')));
+    assert.match(js, /function initializeTipCelebration/);
+    assert.match(js, /setTimeout\(\(\) => window\.location\.assign\(link\.href\), 2000\)/);
+    assert.match(css, /\.tip-celebration\{/);
     for (const id of ['settings-editor-dialog', 'settings-editor-form', 'settings-reset-defaults', 'save-strategy-settings', 'settings-editor-drag-zone']) {
       assert.match(html, new RegExp(`id="${id}"`));
     }

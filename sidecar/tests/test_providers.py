@@ -64,6 +64,7 @@ def test_yfinance_search_rejects_malformed_quotes_without_leaking_type_error():
 
 def test_yfinance_chain_uses_yahoo_trade_time_and_preserves_missing_liquidity(monkeypatch):
     expiration = date.today() + timedelta(days=21)
+    price_time = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=15)
     trade_time = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=2)
     calls = pd.DataFrame([{
         "contractSymbol": "XYZ260918C00105000",
@@ -80,9 +81,9 @@ def test_yfinance_chain_uses_yahoo_trade_time_and_preserves_missing_liquidity(mo
     class FakeTicker:
         options = (expiration.isoformat(),)
 
-        def history(self, period):
-            assert period == "2d"
-            return pd.DataFrame({"Close": [100.0]})
+        def history(self, period, interval):
+            assert (period, interval) == ("5d", "1m")
+            return pd.DataFrame({"Close": [100.0]}, index=[pd.Timestamp(price_time)])
 
         def option_chain(self, requested_expiration):
             assert requested_expiration == expiration.isoformat()
@@ -95,6 +96,7 @@ def test_yfinance_chain_uses_yahoo_trade_time_and_preserves_missing_liquidity(mo
     assert snapshot.provider == "yfinance"
     assert snapshot.unofficial is True
     assert snapshot.underlying_price == 100
+    assert snapshot.underlying_quote_time == price_time
     assert snapshot.quotes[0].quote_time == trade_time
     assert snapshot.quotes[0].volume is None
     assert snapshot.quotes[0].open_interest is None
@@ -102,6 +104,7 @@ def test_yfinance_chain_uses_yahoo_trade_time_and_preserves_missing_liquidity(mo
 
 def test_yfinance_chain_preserves_missing_trade_time(monkeypatch):
     expiration = date.today() + timedelta(days=21)
+    price_time = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=15)
     calls = pd.DataFrame([{
         "contractSymbol": "XYZ260918C00105000",
         "strike": 105,
@@ -117,9 +120,9 @@ def test_yfinance_chain_preserves_missing_trade_time(monkeypatch):
     class FakeTicker:
         options = (expiration.isoformat(),)
 
-        def history(self, period):
-            assert period == "2d"
-            return pd.DataFrame({"Close": [100.0]})
+        def history(self, period, interval):
+            assert (period, interval) == ("5d", "1m")
+            return pd.DataFrame({"Close": [100.0]}, index=[pd.Timestamp(price_time)])
 
         def option_chain(self, _expiration):
             return SimpleNamespace(calls=calls, puts=pd.DataFrame())

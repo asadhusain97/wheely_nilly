@@ -29,7 +29,7 @@ const candidateSchema = z.object({
 }).passthrough();
 
 const responseSchema = z.object({ schema_version: z.literal(1), calculation_version: z.string(), provider: z.string(),
-  quote_timestamp: z.string().nullable(), cache: z.object({ hit: z.boolean(), age_seconds: z.number().nullable() }),
+  underlying_price: z.number().positive(), quote_timestamp: z.string().nullable(), cache: z.object({ hit: z.boolean(), age_seconds: z.number().nullable() }),
   assumptions: z.record(z.string(), z.unknown()), exclusions: z.record(z.string(), z.number()),
   provider_unofficial: z.boolean(), candidates: z.array(candidateSchema),
 }).passthrough();

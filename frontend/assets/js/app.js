@@ -22,12 +22,13 @@ const state = {
 };
 
 const $ = (selector) => document.querySelector(selector);
-const money = (value, { sign = false, digits = 2 } = {}) => value == null
+const money = (value, { sign = false, maximumFractionDigits = 0 } = {}) => value == null
   ? '—'
   : new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'USD', signDisplay: sign ? 'exceptZero' : 'auto',
-    minimumFractionDigits: digits, maximumFractionDigits: digits,
+    minimumFractionDigits: 0, maximumFractionDigits,
   }).format(Number(value));
+const marketPrice = (value) => money(value, { maximumFractionDigits: 2 });
 const percent = (value, { sign = true } = {}) => value == null
   ? '—'
   : new Intl.NumberFormat('en-US', { style: 'percent', signDisplay: sign ? 'exceptZero' : 'auto', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
@@ -64,6 +65,8 @@ function appendLabeledAmount(container, value, label, term) {
 
 function initializeHomeGlossaryTerms() {
   for (const [selector, term] of [
+    ['#open-csps-label', 'Open CSPs / open CCs'],
+    ['#open-ccs-label', 'Open CSPs / open CCs'],
     ['#capital-velocity-label', 'Capital velocity'],
     ['#premium-capture-label', 'Premium capture'],
   ]) {
@@ -81,10 +84,10 @@ function stack(primary, secondary, className = 'cell-stack') {
 
 function stockPriceTag(value) {
   const available = value !== null && value !== undefined;
-  const price = money(value);
+  const price = marketPrice(value);
   const tag = el('span', `stock-price-tag${available ? '' : ' is-unavailable'}`, price);
   tag.setAttribute('aria-label', available ? `Latest stock price ${price}` : 'Latest stock price unavailable');
-  tag.title = available ? 'Latest brokerage stock price' : 'Latest stock price unavailable';
+  tag.title = available ? 'Latest stock price' : 'Latest stock price unavailable';
   return tag;
 }
 
@@ -176,6 +179,7 @@ strategySettingsController.initialize();
 const screenerController = createScreenerController({
   request: json,
   notify: toast,
+  stockPriceTag,
   rememberTicker: rememberScreenedTicker,
   getTickerIdentity: (symbol) => state.screenedTickers.find((ticker) => ticker.symbol === symbol),
   addTicker: (symbol, leg, goal) => strategySettingsController.addTicker(symbol, leg, goal),
@@ -597,7 +601,7 @@ function tickerOpenTradeRow(trade) {
   const identity = el('div', 'ticker-contract-identity');
   identity.append(
     el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
-    stack(`${money(trade.strike)} strike`, `${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
+    stack(`${marketPrice(trade.strike)} strike`, `${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
   );
   const value = stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'ticker-contract-value');
   const note = el('small', 'ticker-contract-note');
@@ -619,7 +623,7 @@ function tickerPastTradeRow(trade) {
   const identity = el('div', 'history-identity');
   identity.append(
     el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
-    el('strong', '', `${money(trade.strike)} strike`),
+    el('strong', '', `${marketPrice(trade.strike)} strike`),
   );
   top.append(identity, el('time', '', shortDate(trade.closedAt)));
 
@@ -705,7 +709,7 @@ function tickerCard(ticker) {
   kpis.append(
     tickerKpi('Return', percent(ticker.returnRate), 'Return on collateral'),
     tickerKpi('Annualized', percent(ticker.annualizedReturnRate), 'Annualized return'),
-    tickerKpi('Collateral', money(ticker.capitalInvolved, { digits: 0 }), 'Collateral'),
+    tickerKpi('Collateral', money(ticker.capitalInvolved), 'Collateral'),
   );
   summary.append(topline, kpis);
   const warnings = [];
@@ -800,7 +804,7 @@ function renderOpenTrades(dashboard) {
 
     const contract = el('div', 'trade-contract');
     contract.append(
-      stack(`${money(trade.strike)} strike`, `${shortDate(trade.expiration)} expiry`),
+      stack(`${marketPrice(trade.strike)} strike`, `${shortDate(trade.expiration)} expiry`),
       stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'trade-number'),
     );
     const footer = el('div', 'trade-footer');
@@ -897,18 +901,20 @@ $('#refresh-button').addEventListener('click', async () => {
   button.disabled = true;
   button.classList.add('is-refreshing');
   button.setAttribute('aria-busy', 'true');
-  button.setAttribute('aria-label', 'Refreshing portfolio data');
+  button.setAttribute('aria-label', 'Refreshing prices and scanning Radar');
   try {
     const report = await json('/api/v1/snaptrade/refresh', { method: 'POST' });
     await loadDashboard();
-    toast(report.ok ? 'Portfolio refreshed.' : 'Refresh completed with some errors.', report.ok ? 'success' : 'error');
+    const scan = await screenerController.scanAll();
+    const errors = scan.results.filter((result) => result.status === 'error').length + (report.ok ? 0 : 1);
+    toast(errors ? `Refresh completed with ${errors} error${errors === 1 ? '' : 's'}.` : 'Prices refreshed and Radar scanned.', errors ? 'error' : 'success');
   } catch (error) {
     toast(error.message, 'error');
   } finally {
     button.disabled = false;
     button.classList.remove('is-refreshing');
     button.removeAttribute('aria-busy');
-    button.setAttribute('aria-label', 'Refresh portfolio data');
+    button.setAttribute('aria-label', 'Refresh prices and scan Radar');
   }
 });
 

@@ -66,5 +66,6 @@ class ChainSnapshot(BaseModel):
     provider: str
     unofficial: bool = False
     underlying_price: float = Field(gt=0)
+    underlying_quote_time: datetime | None = None
     fetched_at: datetime
     quotes: list[OptionQuote]

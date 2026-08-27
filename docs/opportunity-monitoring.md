@@ -1,6 +1,6 @@
 # Playbook-aware opportunity monitoring
 
-Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. Browser results remain in memory and disappear on reload. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
+Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. The browser keeps the latest completed result for each ticker and strategy leg across reloads, then replaces it on the next scan. Results for targets that are no longer eligible are removed. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
 
 ## Target discovery
 
@@ -12,11 +12,11 @@ The backend builds one deduplicated record per symbol from:
 
 An owned symbol and a saved playbook merge into one target. Covered-call scans always receive the actual uncovered-share count from the dashboard projection; a tracked ticker without uncovered shares cannot pass share coverage. CSP scans receive current USD cash from that same projection, and each contract must fit the existing `strike × 100` cash-collateral convention.
 
-The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user then chooses CC or CSP (CSP is the default) and a compatible goal. Adding writes the playbook immediately through the Phase 1 `PUT /api/v1/strategy-settings` document contract, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
+The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user chooses a goal first. Keep Shares and Plan Exit infer CC, Plan Entry infers CSP, and Earn Income reveals a CC/CSP choice. Plan Entry is selected initially. Adding writes the playbook immediately through the Phase 1 `PUT /api/v1/strategy-settings` document contract, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
 
 ## Effective rules and trust boundary
 
-For every symbol and leg, Node loads Phase 1 settings and applies global → selected goal preset → ticker override resolution. Browser requests identify only `symbol` and `leg`; browser-supplied thresholds are rejected. The resolved camelCase fields are translated to the sidecar's validated snake_case fields.
+For every symbol and leg, Node loads Phase 1 settings and applies selected goal profile → ticker override resolution. Browser requests identify only `symbol` and `leg`; browser-supplied thresholds are rejected. The resolved camelCase fields are translated to the sidecar's validated snake_case fields.
 
 Each successful result includes the complete effective settings, per-field `sourceMap`, grouped source summary, applicable rules, price guard, provider identity, unofficial-data flag, quote timestamp, cache state, assumptions, and named exclusion counts.
 
@@ -32,7 +32,7 @@ covered-call net sale price = strike + net credit per share
 CSP net purchase price = strike − net credit per share
 ```
 
-`minNetSalePriceMinor` rejects a covered call when its net sale price is too low. `maxNetPurchasePriceMinor` rejects a CSP when its net purchase price is too high. Both use premium after estimated fees. Broker cost basis remains visible for context but is not an implicit minimum sale price. Without a configured guard, calls retain the safe out-of-the-money default. An Exit covered-call playbook may consider an ITM call only when it has an explicit minimum net sale guard, which the candidate must still pass.
+`minNetSalePriceMinor` rejects a covered call when its net sale price is too low. `maxNetPurchasePriceMinor` rejects a CSP when its net purchase price is too high. Both use premium after estimated fees. Broker cost basis remains visible for context but is not an implicit minimum sale price. Without a configured guard, calls retain the safe out-of-the-money default. A Plan Exit covered-call playbook may consider an ITM call only when it has an explicit minimum net sale guard, which the candidate must still pass.
 
 `minPeriodReturn` is a hard gate after fees. Covered-call period return uses current value of 100 shares. CSP period return uses strike collateral less net contract credit. Annualized return is secondary and is not the primary opportunity label.
 
@@ -70,7 +70,8 @@ Yahoo Finance supplies instrument search, the underlying stock price, and option
 | Annualized return | Simple period return × 365 ÷ DTE; shown only in expanded details. |
 | Delta and theta/day | Black–Scholes estimates when Yahoo supplies usable IV, otherwise explicitly unavailable. `greekSource` identifies which. |
 | Spread percent | `(ask − bid) ÷ midpoint`. |
-| Quote time and age | Yahoo `lastTradeDate` and calculated elapsed seconds. A missing trade date is stale. Cache age is reported separately. |
+| Underlying price and displayed time | Latest Yahoo one-minute close and that bar's timestamp in Eastern Time, labeled `ET`. The displayed time is market-data time, not scan time. |
+| Option quote time and age | Yahoo option `lastTradeDate`, aged against the latest underlying market-data timestamp. The closing data clock remains fixed until Yahoo publishes the next session's bar. A missing trade date is stale. Cache age is reported separately. |
 | Breakeven | Put: net purchase price. Call: broker cost basis when available (otherwise current underlying price) less net credit per share. The basis is informational and is never a sale-price gate. |
 | Downside buffer | `(underlying − strike) ÷ underlying`. |
 | Strike distance | `(strike − underlying) ÷ underlying`. |

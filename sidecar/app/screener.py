@@ -7,7 +7,7 @@ from scipy.stats import norm
 
 from .models import ChainSnapshot, ScreenRequest
 
-CALCULATION_VERSION = "screener-2.1.0"
+CALCULATION_VERSION = "screener-2.2.0"
 
 
 def estimated_greeks(kind, spot, strike, years, volatility, rate, dividend):
@@ -24,6 +24,7 @@ def estimated_greeks(kind, spot, strike, years, volatility, rate, dividend):
 
 def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
     now = now or datetime.now(UTC)
+    quote_reference_time = snapshot.underlying_quote_time.astimezone(UTC) if snapshot.underlying_quote_time else now
     wanted = "put" if request.leg == "cash_secured_put" else "call"
     candidates, exclusions = [], {}
     for quote in snapshot.quotes:
@@ -32,7 +33,7 @@ def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
         reasons = []
         dte = (quote.expiration - now.date()).days
         moneyness = quote.strike / snapshot.underlying_price
-        age = math.inf if quote.quote_time is None else max(0, (now - quote.quote_time.astimezone(UTC)).total_seconds())
+        age = math.inf if quote.quote_time is None else max(0, (quote_reference_time - quote.quote_time.astimezone(UTC)).total_seconds())
         if not request.min_dte <= dte <= request.max_dte: reasons.append("dte")
         if not request.min_moneyness <= moneyness <= request.max_moneyness: reasons.append("moneyness")
         if wanted == "put" and quote.strike > snapshot.underlying_price: reasons.append("in_the_money")
@@ -134,9 +135,9 @@ class ScreenerService:
             self.cache[cache_key] = snapshot
             cache_age = max(0, (now - snapshot.fetched_at).total_seconds())
         candidates, exclusions = screen(snapshot, request, now)
-        quote_timestamp = max((quote.quote_time for quote in snapshot.quotes if quote.quote_time is not None), default=None)
         return {"schema_version": 1, "calculation_version": CALCULATION_VERSION, "symbol": request.symbol, "leg": request.leg,
-            "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "quote_timestamp": quote_timestamp,
+            "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "underlying_price": snapshot.underlying_price,
+            "quote_timestamp": snapshot.underlying_quote_time,
             "cache": {"hit": cache_hit, "age_seconds": cache_age},
             "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "fees": "estimated fee is subtracted from gross contract credit", "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net contract credit", "call_breakeven": "broker cost basis when available, otherwise current underlying price, less net credit per share; never used as a sale-price gate", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
             "candidates": candidates, "exclusions": exclusions, "duration_ms": round((time.monotonic() - started) * 1000, 2)}

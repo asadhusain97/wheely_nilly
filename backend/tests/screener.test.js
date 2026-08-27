@@ -5,7 +5,7 @@ import { createScreenerService } from '../src/services/screener.js';
 
 const config = { screener: { url: 'http://screener:8000', timeoutMs: 1000 } };
 const valid = { schema_version: 1, calculation_version: 'screener-2.0.0', provider: 'fixture', provider_unofficial: false,
-  quote_timestamp: '2026-08-23T12:00:00Z', cache: { hit: false, age_seconds: 0 }, assumptions: {}, exclusions: {}, candidates: [] };
+  underlying_price: 195, quote_timestamp: '2026-08-23T12:00:00Z', cache: { hit: false, age_seconds: 0 }, assumptions: {}, exclusions: {}, candidates: [] };
 const candidate = { contract_symbol: 'AAPL260918C00200000', option_type: 'call', expiration: '2026-09-18', dte: 24, strike: 200,
   underlying_price: 195, bid: 2, ask: 2.1, executable_option_price_per_share: 2.05, gross_contract_credit: 205,
   estimated_fees: .65, net_contract_credit: 204.35, period_return: .0104, annualized_return: .158, delta: .3,
@@ -39,6 +39,7 @@ describe('screener adapter', () => {
     const service = createScreenerService({ config, fetchImpl: async () => new Response(JSON.stringify({ ...valid, candidates: [candidate] }), { status: 200 }) });
     const result = await service.screen({ symbol: 'AAPL', leg: 'cash_secured_put' });
     assert.equal(result.provider, 'fixture');
+    assert.equal(result.underlying_price, 195);
     assert.equal(result.candidates[0].net_contract_credit, 204.35);
     await assert.rejects(service.screen({ symbol: '<bad>', leg: 'put' }), /Invalid screen request/);
   });

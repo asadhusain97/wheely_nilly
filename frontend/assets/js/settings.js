@@ -39,22 +39,28 @@ const LEG_SHORT_LABELS = {
   cashSecuredPut: 'CSP',
 };
 const GOAL_LABELS = {
-  protect: 'Protect',
-  income: 'Income',
-  exit: 'Exit',
-  acquire: 'Acquire',
+  protect: 'Keep Shares',
+  income: 'Earn Income',
+  exit: 'Plan Exit',
+  acquire: 'Plan Entry',
 };
 const GOAL_COPY = {
-  protect: 'More distance for shares you want to protect.',
+  protect: 'More room for shares you want to keep.',
   income: 'Balance premium with room for the stock to move.',
-  exit: 'A closer path when selling shares is the goal.',
-  acquire: 'Shape puts around a preferred entry.',
+  exit: 'Favor calls that could sell shares near your target.',
+  acquire: 'Shape puts around your planned entry.',
 };
 const ALLOWED_GOALS = {
   coveredCall: ['protect', 'income', 'exit'],
   cashSecuredPut: ['income', 'acquire'],
 };
-const BUILT_IN_GLOBAL = {
+const GOAL_LEGS = {
+  protect: ['coveredCall'],
+  income: ['coveredCall', 'cashSecuredPut'],
+  exit: ['coveredCall'],
+  acquire: ['cashSecuredPut'],
+};
+const SYSTEM_RULES = {
   minDte: 7,
   maxDte: 45,
   minMoneyness: 0.8,
@@ -67,11 +73,15 @@ const BUILT_IN_GLOBAL = {
   maxQuoteAgeSeconds: 900,
   minPeriodReturn: 0,
 };
-const BUILT_IN_GOALS = {
-  protect: { minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 },
-  income: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 },
-  exit: { minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 },
-  acquire: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 },
+const recommendedRules = (rules) => ({ ...SYSTEM_RULES, ...rules });
+const BUILT_IN_GOAL_PROFILES = {
+  protect: { coveredCall: recommendedRules({ minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 }) },
+  income: {
+    coveredCall: recommendedRules({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+    cashSecuredPut: recommendedRules({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+  },
+  exit: { coveredCall: recommendedRules({ minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 }) },
+  acquire: { cashSecuredPut: recommendedRules({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }) },
 };
 
 const element = (tag, className, text) => {
@@ -151,8 +161,8 @@ function constrainNumericInput(input, { allowDecimal = true } = {}) {
 
 function defaultPlaybook() {
   return {
-    coveredCall: { enabled: true, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-    cashSecuredPut: { enabled: true, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+    coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
+    cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
   };
 }
 
@@ -161,8 +171,6 @@ export function settingsWithTicker(settings, symbol, leg, goal) {
   const draft = deepCopy(settings);
   if (!draft.tickerPlaybooks[symbol]) {
     draft.tickerPlaybooks[symbol] = defaultPlaybook();
-    draft.tickerPlaybooks[symbol].coveredCall.enabled = false;
-    draft.tickerPlaybooks[symbol].cashSecuredPut.enabled = false;
   }
   draft.tickerPlaybooks[symbol][leg].enabled = true;
   draft.tickerPlaybooks[symbol][leg].goal = goal;
@@ -177,8 +185,8 @@ export function settingsWithoutTicker(settings, symbol) {
 
 function mergedRules(settings, symbol, leg) {
   const ticker = settings.tickerPlaybooks[symbol]?.[leg];
-  const preset = ticker ? settings.goalPresets[ticker.goal].rules : {};
-  return { ...settings.globalRules[leg], ...preset, ...(ticker?.overrides ?? {}) };
+  const goalRules = ticker ? settings.goalProfiles[ticker.goal][leg] : SYSTEM_RULES;
+  return { ...goalRules, ...(ticker?.overrides ?? {}) };
 }
 
 function rulesError(rules, scope) {
@@ -202,13 +210,9 @@ function rulesError(rules, scope) {
 }
 
 function validateDraft(settings) {
-  for (const leg of Object.keys(LEG_LABELS)) {
-    const error = rulesError(settings.globalRules[leg], `${LEG_LABELS[leg]} defaults`);
-    if (error) throw new Error(error);
-  }
-  for (const [goal, preset] of Object.entries(settings.goalPresets)) {
-    for (const leg of preset.applicableLegs) {
-      const error = rulesError({ ...settings.globalRules[leg], ...preset.rules }, `${GOAL_LABELS[goal]} goal`);
+  for (const [goal, profiles] of Object.entries(settings.goalProfiles)) {
+    for (const [leg, rules] of Object.entries(profiles)) {
+      const error = rulesError(rules, `${GOAL_LABELS[goal]} ${LEG_SHORT_LABELS[leg]}`);
       if (error) throw new Error(error);
     }
   }
@@ -259,10 +263,14 @@ export function normalizeTrackedTickers(items = []) {
   return tickers;
 }
 
-export function resolveTickerGoal(playbook, tracked) {
+export function resolveTickerLeg(playbook, tracked) {
   const preferredLeg = tracked?.preferredLeg ?? (playbook.coveredCall.enabled ? 'coveredCall' : 'cashSecuredPut');
   const firstEnabled = ['coveredCall', 'cashSecuredPut'].find((leg) => playbook[leg].enabled);
-  const leg = playbook[preferredLeg].enabled ? preferredLeg : (firstEnabled ?? preferredLeg);
+  return playbook[preferredLeg].enabled ? preferredLeg : (firstEnabled ?? preferredLeg);
+}
+
+export function resolveTickerGoal(playbook, tracked) {
+  const leg = resolveTickerLeg(playbook, tracked);
   return playbook[leg].enabled ? playbook[leg].goal : (tracked?.goal ?? playbook[leg].goal);
 }
 
@@ -280,8 +288,8 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     persistence: null,
     loaded: false,
     loading: false,
-    globalLeg: 'coveredCall',
     preset: 'protect',
+    goalLeg: 'coveredCall',
     tickerQuery: '',
     tickersExpanded: false,
     editor: null,
@@ -401,30 +409,6 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     return list;
   }
 
-  function renderGlobal() {
-    renderTabs(
-      document.querySelector('#global-leg-tabs'),
-      Object.entries(LEG_SHORT_LABELS),
-      model.globalLeg,
-      (leg) => {
-        model.globalLeg = leg;
-        renderGlobal();
-      },
-      'global-leg',
-      'global-rules-view',
-    );
-    const view = document.querySelector('#global-rules-view');
-    view.setAttribute('aria-labelledby', `global-leg-${model.globalLeg}-tab`);
-    view.replaceChildren();
-    view.append(ruleSummary(
-      model.settings.globalRules[model.globalLeg],
-      new Set(RULE_FIELDS.map(({ key }) => key)),
-      LEG_LABELS[model.globalLeg],
-      { glossaryTerms: true },
-    ));
-    document.querySelector('#edit-global-settings').setAttribute('aria-label', `Edit ${LEG_LABELS[model.globalLeg]} default settings`);
-  }
-
   function renderGoal() {
     renderTabs(
       document.querySelector('#goal-preset-tabs'),
@@ -432,14 +416,16 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       model.preset,
       (goal) => {
         model.preset = goal;
+        model.goalLeg = GOAL_LEGS[goal].includes(model.goalLeg) ? model.goalLeg : GOAL_LEGS[goal][0];
         renderGoal();
       },
       'goal',
       'goal-rules-view',
     );
-    const preset = model.settings.goalPresets[model.preset];
-    const inherited = model.settings.globalRules[preset.applicableLegs[0]];
-    const effective = { ...inherited, ...preset.rules };
+    const legs = GOAL_LEGS[model.preset];
+    const leg = legs.includes(model.goalLeg) ? model.goalLeg : legs[0];
+    model.goalLeg = leg;
+    const rules = model.settings.goalProfiles[model.preset][leg];
     const view = document.querySelector('#goal-rules-view');
     view.setAttribute('aria-labelledby', `goal-${model.preset}-tab`);
     view.replaceChildren();
@@ -448,9 +434,26 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const goalName = element('strong', 'goal-tone', GOAL_LABELS[model.preset]);
     goalName.dataset.goal = model.preset;
     copy.append(goalName, element('small', '', GOAL_COPY[model.preset]));
-    context.append(copy, element('span', 'applies-chip', preset.applicableLegs.map((leg) => LEG_SHORT_LABELS[leg]).join(' + ')));
-    view.append(context, ruleSummary(effective, new Set(Object.keys(preset.rules)), 'Defaults', { glossaryTerms: true }));
-    document.querySelector('#edit-goal-settings').setAttribute('aria-label', `Edit ${GOAL_LABELS[model.preset]} goal`);
+    const strategyControl = element('span', 'applies-chip', LEG_SHORT_LABELS[leg]);
+    if (model.preset === 'income') {
+      strategyControl.className = 'layer-tabs strategy-tabs goal-inline-strategy-tabs';
+      strategyControl.setAttribute('role', 'tablist');
+      strategyControl.setAttribute('aria-label', 'Earn Income strategy');
+      renderTabs(
+        strategyControl,
+        Object.entries(LEG_SHORT_LABELS),
+        leg,
+        (nextLeg) => {
+          model.goalLeg = nextLeg;
+          renderGoal();
+        },
+        'goal-leg',
+        'goal-rules-view',
+      );
+    }
+    context.append(copy, strategyControl);
+    view.append(context, ruleSummary(rules, new Set(RULE_FIELDS.map(({ key }) => key)), GOAL_LABELS[model.preset], { glossaryTerms: true }));
+    document.querySelector('#edit-goal-settings').setAttribute('aria-label', `Edit ${GOAL_LABELS[model.preset]} ${LEG_LABELS[leg]} settings`);
   }
 
   function trackedTickers() {
@@ -515,7 +518,6 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
 
   function renderAll() {
     if (!model.settings) return;
-    renderGlobal();
     renderGoal();
     renderTickers();
   }
@@ -547,16 +549,13 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     });
   }
 
-  function openGlobalEditor() {
-    openEditor({ kind: 'global', leg: model.globalLeg });
-  }
-
   function openGoalEditor() {
-    openEditor({ kind: 'goal', goal: model.preset });
+    openEditor({ kind: 'goal', goal: model.preset, leg: model.goalLeg });
   }
 
   function openTickerEditor(symbol) {
-    openEditor({ kind: 'ticker', symbol, leg: trackedTickers().get(symbol)?.preferredLeg ?? 'coveredCall' });
+    const playbook = model.settings.tickerPlaybooks[symbol] ?? seededPlaybook(symbol);
+    openEditor({ kind: 'ticker', symbol, leg: resolveTickerLeg(playbook, trackedTickers().get(symbol)) });
   }
 
   async function addTicker(symbol, leg, goal) {
@@ -722,32 +721,28 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     return intro;
   }
 
-  function renderGlobalEditor(body) {
-    const { leg, draft } = model.editor;
-    body.append(
-      editorIntro(leg, 'The complete baseline for this strategy.'),
-      ruleEditor(draft.globalRules[leg]),
-    );
-  }
-
   function renderGoalEditor(body) {
-    const { goal, draft } = model.editor;
-    const preset = draft.goalPresets[goal];
-    const inherited = draft.globalRules[preset.applicableLegs[0]];
+    const { goal, leg, draft } = model.editor;
     const intro = element('div', 'goal-editor-intro');
     const goalName = element('strong', 'goal-tone', GOAL_LABELS[goal]);
     goalName.dataset.goal = goal;
     intro.append(
-      element('span', 'applies-chip', preset.applicableLegs.map((leg) => LEG_SHORT_LABELS[leg]).join(' + ')),
+      element('span', 'applies-chip', LEG_SHORT_LABELS[leg]),
       goalName,
-      element('small', '', 'Light values continue to use Defaults.'),
+      element('small', '', GOAL_COPY[goal]),
     );
-    body.append(intro, ruleEditor(preset.rules, {
-      partial: true,
-      inherited,
-      inheritLabels: Object.fromEntries(RULE_FIELDS.map(({ key }) => [key, 'Defaults'])),
-      glossaryTerms: true,
-    }));
+    body.append(intro);
+    if (goal === 'income') {
+      const tabs = element('div', 'layer-tabs strategy-tabs sheet-tabs goal-editor-strategy');
+      tabs.setAttribute('role', 'tablist');
+      tabs.setAttribute('aria-label', 'Earn Income strategy');
+      renderTabs(tabs, Object.entries(LEG_SHORT_LABELS), leg, (nextLeg) => {
+        model.editor.leg = nextLeg;
+        renderEditor();
+      }, 'goal-editor-leg', 'settings-editor-body');
+      body.append(tabs);
+    }
+    body.append(ruleEditor(draft.goalProfiles[goal][leg], { glossaryTerms: true }));
   }
 
   function priceGuard(symbol, leg, legSettings) {
@@ -790,23 +785,14 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const { symbol, leg, draft } = model.editor;
     if (model.editor.removed) {
       const removed = element('div', 'settings-empty');
-      removed.append(element('strong', '', `${symbol} settings will be removed`), element('p', '', 'Its Defaults and Goal values remain available.'));
+      removed.append(element('strong', '', `${symbol} settings will be removed`), element('p', '', 'Your goal profiles will stay available.'));
       body.append(removed);
       return;
     }
     const playbook = draft.tickerPlaybooks[symbol];
-    const tabs = element('div', 'layer-tabs sheet-tabs');
-    tabs.setAttribute('role', 'tablist');
-    tabs.setAttribute('aria-label', `${symbol} strategy`);
-    renderTabs(tabs, Object.entries(LEG_SHORT_LABELS), leg, (nextLeg) => {
-      model.editor.leg = nextLeg;
-      renderEditor();
-    }, 'ticker-leg', 'ticker-leg-panel');
     const panel = element('div', 'ticker-leg-panel');
     panel.id = 'ticker-leg-panel';
-    panel.setAttribute('role', 'tabpanel');
-    panel.setAttribute('aria-labelledby', `ticker-leg-${leg}-tab`);
-    body.append(tabs, panel);
+    body.append(panel);
 
     const legSettings = playbook[leg];
     const goalField = document.createElement('fieldset');
@@ -819,10 +805,12 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     goalTabs.setAttribute('aria-label', `${symbol} goal`);
     renderTabs(
       goalTabs,
-      ALLOWED_GOALS[leg].map((goal) => [goal, GOAL_LABELS[goal]]),
+      Object.entries(GOAL_LABELS),
       legSettings.goal,
       (nextGoal) => {
-        legSettings.goal = nextGoal;
+        const nextLeg = GOAL_LEGS[nextGoal].includes(leg) ? leg : GOAL_LEGS[nextGoal][0];
+        model.editor.leg = nextLeg;
+        playbook[nextLeg].goal = nextGoal;
         markEditorDirty();
         renderEditor();
       },
@@ -832,12 +820,29 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     goalField.append(goalTabs);
     panel.append(goalField);
 
-    const preset = draft.goalPresets[legSettings.goal].rules;
-    const inherited = { ...draft.globalRules[leg], ...preset };
-    const inheritLabels = Object.fromEntries(RULE_FIELDS.map(({ key }) => [
-      key,
-      Object.hasOwn(preset, key) ? GOAL_LABELS[legSettings.goal] : 'Defaults',
-    ]));
+    if (legSettings.goal === 'income') {
+      const strategyField = element('div', 'ticker-strategy-field');
+      const strategyLabel = element('span', 'ticker-strategy-label', 'Strategy');
+      strategyLabel.id = 'ticker-strategy-label';
+      const strategyTabs = element('div', 'layer-tabs strategy-tabs sheet-tabs ticker-inline-strategy-tabs');
+      strategyTabs.setAttribute('role', 'tablist');
+      strategyTabs.setAttribute('aria-labelledby', strategyLabel.id);
+      renderTabs(strategyTabs, Object.entries(LEG_SHORT_LABELS), leg, (nextLeg) => {
+        model.editor.leg = nextLeg;
+        playbook[nextLeg].goal = 'income';
+        markEditorDirty();
+        renderEditor();
+      }, 'ticker-leg', 'ticker-rules-editor');
+      strategyField.append(strategyLabel, strategyTabs);
+      panel.append(strategyField);
+    } else {
+      const strategyContext = element('div', 'ticker-fixed-strategy');
+      strategyContext.append(element('span', '', 'Strategy'), element('span', 'applies-chip', LEG_SHORT_LABELS[leg]));
+      panel.append(strategyContext);
+    }
+
+    const inherited = draft.goalProfiles[legSettings.goal][leg];
+    const inheritLabels = Object.fromEntries(RULE_FIELDS.map(({ key }) => [key, GOAL_LABELS[legSettings.goal]]));
     const count = Object.keys(legSettings.overrides).length;
     const tickerRules = ruleEditor(legSettings.overrides, {
       partial: true,
@@ -885,14 +890,11 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     error.hidden = true;
     body.append(error);
     const editor = model.editor;
-    if (editor.kind === 'global') {
-      setEditorHeader(`Edit ${LEG_SHORT_LABELS[editor.leg]} Defaults`, 'Changes become the baseline', `Reset ${LEG_SHORT_LABELS[editor.leg]}`, 'Save changes');
-      renderGlobalEditor(body);
-    } else if (editor.kind === 'goal') {
-      setEditorHeader(`Edit ${GOAL_LABELS[editor.goal]}`, 'Tune this starting profile', `Reset ${GOAL_LABELS[editor.goal]}`, 'Save changes');
+    if (editor.kind === 'goal') {
+      setEditorHeader(`Edit ${GOAL_LABELS[editor.goal]}`, `${LEG_LABELS[editor.leg]} goal settings`, 'Reset to recommended', 'Save changes');
       renderGoalEditor(body);
     } else if (editor.kind === 'ticker') {
-      setEditorHeader(editor.symbol, 'Ticker settings', `Reset ${LEG_SHORT_LABELS[editor.leg]}`, editor.removed ? 'Save removal' : 'Save changes', !editor.removed);
+      setEditorHeader(editor.symbol, 'Goal and ticker changes', 'Reset ticker changes', editor.removed ? 'Save removal' : 'Save changes', !editor.removed);
       renderTickerEditor(body);
     }
   }
@@ -900,9 +902,13 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
   function resetEditor() {
     const editor = model.editor;
     if (!editor) return;
-    if (editor.kind === 'global') editor.draft.globalRules[editor.leg] = deepCopy(BUILT_IN_GLOBAL);
-    if (editor.kind === 'goal') editor.draft.goalPresets[editor.goal].rules = deepCopy(BUILT_IN_GOALS[editor.goal]);
-    if (editor.kind === 'ticker') editor.draft.tickerPlaybooks[editor.symbol][editor.leg] = deepCopy(seededPlaybook(editor.symbol)[editor.leg]);
+    if (editor.kind === 'goal') editor.draft.goalProfiles[editor.goal][editor.leg] = deepCopy(BUILT_IN_GOAL_PROFILES[editor.goal][editor.leg]);
+    if (editor.kind === 'ticker') {
+      const legSettings = editor.draft.tickerPlaybooks[editor.symbol][editor.leg];
+      legSettings.overrides = {};
+      if (editor.leg === 'coveredCall') legSettings.minNetSalePriceMinor = null;
+      else legSettings.maxNetPurchasePriceMinor = null;
+    }
     markEditorDirty();
     renderEditor();
   }
@@ -911,7 +917,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     event.preventDefault();
     if (!model.editor) return;
     if (model.editor.kind === 'ticker' && !model.editor.removed) {
-      for (const settings of Object.values(model.editor.draft.tickerPlaybooks[model.editor.symbol])) settings.enabled = true;
+      model.editor.draft.tickerPlaybooks[model.editor.symbol][model.editor.leg].enabled = true;
     }
     try {
       validateDraft(model.editor.draft);
@@ -931,6 +937,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       });
       model.settings = deepCopy(result.settings);
       model.persistence = result.persistence;
+      if (model.editor.kind === 'goal') model.goalLeg = model.editor.leg;
       model.editor.dirty = false;
       closeEditor({ force: true });
       renderAll();
@@ -1025,7 +1032,6 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
   }
 
   function initialize() {
-    document.querySelector('#edit-global-settings').addEventListener('click', openGlobalEditor);
     document.querySelector('#edit-goal-settings').addEventListener('click', openGoalEditor);
     document.querySelector('#settings-editor-form').addEventListener('submit', saveEditor);
     document.querySelector('#settings-reset-defaults').addEventListener('click', resetEditor);

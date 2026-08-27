@@ -6,9 +6,12 @@ import {
   candidateReturnCaption,
   exactInstrumentIdentity,
   exclusionSummary,
-  goalsForLeg,
   hydrateTargetIdentities,
+  legForGoal,
+  loadStoredScanResults,
+  marketDateTime,
   providerName,
+  storeScanResults,
   targetIdentity,
 } from '../../frontend/assets/js/screener.js';
 import { settingsWithoutTicker, settingsWithTicker } from '../../frontend/assets/js/settings.js';
@@ -16,7 +19,7 @@ import { builtInStrategySettings } from '../src/services/strategy-settings.js';
 
 it('shows contract-level net credit instead of the per-share option price', () => {
   const headline = candidateHeadline({ net_contract_credit: 204.35, executable_option_price_per_share: 2.05 });
-  assert.match(headline, /\$204\.35 net credit/);
+  assert.equal(headline, '$204 net credit');
   assert.doesNotMatch(headline, /\$2\.05/);
 });
 
@@ -24,13 +27,18 @@ it('explains the candidate period return as a term-specific return on capital', 
   assert.equal(candidateReturnCaption({ period_return: .0313, dte: 23 }), 'Estimated 23-day return on capital: 3.13%');
 });
 
-it('defaults the compact add flow to CSP-compatible goals', () => {
-  assert.deepEqual(goalsForLeg('cashSecuredPut'), ['acquire', 'income']);
-  assert.deepEqual(goalsForLeg('coveredCall'), ['income', 'protect', 'exit']);
+it('infers strategy from the goal and asks only when Earn Income is ambiguous', () => {
+  assert.equal(legForGoal('protect'), 'coveredCall');
+  assert.equal(legForGoal('exit'), 'coveredCall');
+  assert.equal(legForGoal('acquire'), 'cashSecuredPut');
+  assert.equal(legForGoal('income'), 'cashSecuredPut');
+  assert.equal(legForGoal('income', 'coveredCall'), 'coveredCall');
+  assert.equal(legForGoal('income', 'invalid'), null);
 });
 
 it('uses plain scan metadata and summarizes no-match filters without counts', () => {
   assert.equal(providerName('yfinance'), 'Yahoo Finance');
+  assert.equal(marketDateTime('2026-08-26T19:59:00Z'), 'Aug 26, 3:59 PM ET');
   assert.deepEqual(exclusionSummary({ period_return: 18, delta_low: 8, delta_high: 7, spread: 4 }), [
     'term return', 'delta range', 'bid-ask spread',
   ]);
@@ -69,6 +77,27 @@ it('hydrates existing Radar targets with exact verified identities and caches th
   assert.deepEqual(identities.get('RKLB'), { name: 'Rocket Lab Corporation', instrumentType: 'Equity' });
   await hydrateTargetIdentities(targets, request, () => null, identities);
   assert.equal(calls.length, 2);
+});
+
+it('restores the latest completed Radar results and ignores transient entries', () => {
+  let saved = '';
+  const storage = {
+    getItem: () => saved,
+    setItem: (_key, value) => { saved = value; },
+  };
+  const result = {
+    status: 'success',
+    result: { symbol: 'AAPL', quote_timestamp: '2026-08-25T12:00:00Z', candidates: [] },
+  };
+  storeScanResults(new Map([
+    ['AAPL:coveredCall', result],
+    ['MSFT:cashSecuredPut', { status: 'loading' }],
+    ['invalid', result],
+  ]), storage);
+
+  assert.deepEqual([...loadStoredScanResults(storage)], [['AAPL:coveredCall', result]]);
+  saved = '{not valid JSON';
+  assert.deepEqual([...loadStoredScanResults(storage)], []);
 });
 
 it('adds the selected ticker playbook to the settings document', () => {

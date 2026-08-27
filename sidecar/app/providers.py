@@ -123,21 +123,23 @@ class YFinanceProvider:
         return matches[:limit]
 
     @staticmethod
-    def _price_from_ticker(ticker) -> float:
-        history = ticker.history(period="2d")
+    def _price_from_ticker(ticker) -> tuple[float, datetime]:
+        history = ticker.history(period="5d", interval="1m")
         if history.empty:
             raise ProviderUnavailable("yfinance", "no_underlying_quote")
-        price = _clean_float(history["Close"].dropna().iloc[-1])
-        if price is None or price <= 0:
+        closes = history["Close"].dropna()
+        price = _clean_float(closes.iloc[-1]) if not closes.empty else None
+        quote_time = _clean_datetime(closes.index[-1]) if not closes.empty else None
+        if price is None or price <= 0 or quote_time is None:
             raise ProviderUnavailable("yfinance", "no_underlying_quote")
-        return price
+        return price, quote_time
 
     @staticmethod
     def _fetch(symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
         import yfinance as yf
 
         ticker = yf.Ticker(symbol)
-        price = YFinanceProvider._price_from_ticker(ticker)
+        price, price_time = YFinanceProvider._price_from_ticker(ticker)
         now = datetime.now(UTC)
         quotes: list[OptionQuote] = []
         expirations = [
@@ -166,6 +168,7 @@ class YFinanceProvider:
             provider=YFinanceProvider.name,
             unofficial=True,
             underlying_price=price,
+            underlying_quote_time=price_time,
             fetched_at=now,
             quotes=quotes,
         )

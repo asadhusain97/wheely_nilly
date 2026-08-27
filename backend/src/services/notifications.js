@@ -7,6 +7,8 @@ import { stableStringify } from './snapshots.js';
 
 const STORE_VERSION = 1;
 const defaultState = () => ({ schemaVersion: STORE_VERSION, rules: { expiration: true, assignmentRisk: true, screener: true }, events: {}, outbox: [] });
+const wholeDollars = (value) => Number(value).toLocaleString('en-US', { maximumFractionDigits: 0 });
+const marketPrice = (value) => Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 export function notificationFingerprint(event) {
   return crypto.createHash('sha256').update(stableStringify({ type: event.type, key: event.key, state: event.state })).digest('hex');
@@ -66,7 +68,7 @@ export function screenerAlert(candidate, screen, config, history = [], now = Dat
   if (lastForContract && now - Date.parse(lastForContract.createdAt) < config.notifications.cooldownMs) return null;
   return { type: 'screener', key: candidate.contract_symbol, state: `${Math.round(candidate.annualized_return * 1000)}:${Math.round(candidate.executable_premium * 100)}`,
     title: `${screen.symbol} ${screen.leg === 'cash_secured_put' ? 'put' : 'call'} candidate`,
-    message: `${screen.symbol} ${candidate.expiration} $${candidate.strike}: est. $${candidate.executable_premium.toFixed(2)}, ${(candidate.annualized_return * 100).toFixed(1)}% annualized, Δ ${candidate.delta?.toFixed(2) ?? 'n/a'}, quote age ${Math.round(candidate.quote_age_seconds)}s. Informational estimate—verify with your broker.`,
+    message: `${screen.symbol} ${candidate.expiration} $${marketPrice(candidate.strike)}: est. $${wholeDollars(candidate.executable_premium)}, ${(candidate.annualized_return * 100).toFixed(1)}% annualized, Δ ${candidate.delta?.toFixed(2) ?? 'n/a'}, quote age ${Math.round(candidate.quote_age_seconds)}s. Informational estimate—verify with your broker.`,
     priority: 3, tags: ['chart_with_upwards_trend'], link: rule.dashboardUrl };
 }
 
@@ -78,7 +80,7 @@ export function lifecycleAlerts(model, config, now = Date.now()) {
       const dte = Math.ceil((Date.parse(`${contract.expiration}T20:00:00Z`) - now) / 86_400_000);
       if (config.notifications.expirationDte.includes(dte)) alerts.push({ type: 'expiration', key: contract.symbol, state: `${dte}d`,
         title: `${cycle.underlying} expires ${dte === 0 ? 'today' : `in ${dte} days`}`,
-        message: `${cycle.underlying} ${contract.optionType} $${(contract.strikeMinor / 100).toFixed(2)} expires ${contract.expiration}. Reconciled open position; verify with your broker.`, priority: dte <= 1 ? 4 : 3, tags: ['calendar'] });
+        message: `${cycle.underlying} ${contract.optionType} $${marketPrice(contract.strikeMinor / 100)} expires ${contract.expiration}. Reconciled open position; verify with your broker.`, priority: dte <= 1 ? 4 : 3, tags: ['calendar'] });
       const position = model.positions?.find((item) => item.symbol === cycle.underlying);
       const spot = Number(position?.price), strike = contract.strikeMinor / 100;
       const moneyness = contract.optionType === 'put' ? strike / spot : spot / strike;

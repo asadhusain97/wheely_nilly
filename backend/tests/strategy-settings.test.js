@@ -8,9 +8,30 @@ import {
   StrategySettingsValidationError,
   builtInStrategySettings,
   createStrategySettingsService,
+  migrateV1StrategySettings,
   normalizeStrategySettings,
   resolveEffectiveSettings,
 } from '../src/services/strategy-settings.js';
+
+const LEGACY_GLOBAL = {
+  minDte: 7, maxDte: 45, minMoneyness: 0.8, maxMoneyness: 1.2,
+  targetDeltaMin: null, targetDeltaMax: 0.35, maxSpreadPercent: 0.2,
+  minOpenInterest: 10, minVolume: 0, maxQuoteAgeSeconds: 900, minPeriodReturn: 0,
+};
+
+function legacySettings() {
+  return {
+    schemaVersion: 1,
+    globalRules: { coveredCall: { ...LEGACY_GLOBAL }, cashSecuredPut: { ...LEGACY_GLOBAL } },
+    goalPresets: {
+      protect: { applicableLegs: ['coveredCall'], rules: { minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 } },
+      income: { applicableLegs: ['coveredCall', 'cashSecuredPut'], rules: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 } },
+      exit: { applicableLegs: ['coveredCall'], rules: { minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 } },
+      acquire: { applicableLegs: ['cashSecuredPut'], rules: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 } },
+    },
+    tickerPlaybooks: {},
+  };
+}
 
 function addPlaybook(settings, symbol = 'VOOG') {
   settings.tickerPlaybooks[symbol] = {
@@ -42,7 +63,7 @@ describe('strategy settings model and persistence', () => {
   it('returns independent deterministic defaults when no saved file exists', async () => {
     const { service } = await temporaryService();
     const first = await service.load();
-    first.settings.globalRules.coveredCall.minDte = 99;
+    first.settings.goalProfiles.protect.coveredCall.minDte = 99;
     const second = await service.load();
     assert.deepEqual(second.settings, builtInStrategySettings());
     assert.equal(second.persistence.persisted, false);
@@ -70,7 +91,7 @@ describe('strategy settings model and persistence', () => {
     const failingFs = { ...fs, rename: async () => { throw new Error('rename failed'); } };
     const failing = createStrategySettingsService({ dataDir, fsImpl: failingFs });
     const changed = structuredClone(original);
-    changed.globalRules.coveredCall.minDte = 8;
+    changed.goalProfiles.protect.coveredCall.minDte = 31;
 
     await assert.rejects(failing.save(changed), /rename failed/);
     assert.deepEqual((await service.load()).settings, original);
@@ -80,11 +101,11 @@ describe('strategy settings model and persistence', () => {
   it('serializes concurrent replacements in invocation order', async () => {
     const { service } = await temporaryService();
     const first = builtInStrategySettings();
-    first.globalRules.coveredCall.minDte = 8;
+    first.goalProfiles.protect.coveredCall.minDte = 31;
     const second = builtInStrategySettings();
-    second.globalRules.coveredCall.minDte = 9;
+    second.goalProfiles.protect.coveredCall.minDte = 32;
     await Promise.all([service.save(first), service.save(second)]);
-    assert.equal((await service.load()).settings.globalRules.coveredCall.minDte, 9);
+    assert.equal((await service.load()).settings.goalProfiles.protect.coveredCall.minDte, 32);
   });
 
   it('rejects unknown fields, incompatible goals, unsafe money, and effective range inversions', () => {
@@ -105,13 +126,13 @@ describe('strategy settings model and persistence', () => {
     assert.throws(() => normalizeStrategySettings(inverted), /maxDte/);
 
     const invertedDelta = builtInStrategySettings();
-    invertedDelta.globalRules.coveredCall.targetDeltaMin = 0.6;
-    invertedDelta.globalRules.coveredCall.targetDeltaMax = 0.4;
+    invertedDelta.goalProfiles.protect.coveredCall.targetDeltaMin = 0.6;
+    invertedDelta.goalProfiles.protect.coveredCall.targetDeltaMax = 0.4;
     assert.throws(() => normalizeStrategySettings(invertedDelta), /targetDeltaMax/);
 
-    const inheritedMoneynessInversion = builtInStrategySettings();
-    inheritedMoneynessInversion.goalPresets.income.rules.minMoneyness = 1.3;
-    assert.throws(() => normalizeStrategySettings(inheritedMoneynessInversion), /maxMoneyness/);
+    const moneynessInversion = builtInStrategySettings();
+    moneynessInversion.goalProfiles.income.cashSecuredPut.minMoneyness = 1.3;
+    assert.throws(() => normalizeStrategySettings(moneynessInversion), /maxMoneyness/);
   });
 
   it('normalizes ticker keys and rejects malformed symbols', () => {
@@ -121,13 +142,42 @@ describe('strategy settings model and persistence', () => {
     const malformed = addPlaybook(builtInStrategySettings(), '<VOOG>');
     assert.throws(() => normalizeStrategySettings(malformed), /Invalid key|valid ticker/);
   });
+
+  it('migrates version 1 baselines into complete goal and strategy profiles', () => {
+    const legacy = legacySettings();
+    legacy.globalRules.coveredCall.minVolume = 25;
+    legacy.globalRules.cashSecuredPut.minVolume = 50;
+    legacy.goalPresets.income.rules.maxDte = 42;
+    const migrated = migrateV1StrategySettings(legacy);
+
+    assert.equal(migrated.schemaVersion, 2);
+    assert.equal(migrated.goalProfiles.income.coveredCall.minVolume, 25);
+    assert.equal(migrated.goalProfiles.income.cashSecuredPut.minVolume, 50);
+    assert.equal(migrated.goalProfiles.income.coveredCall.maxDte, 42);
+    assert.equal(migrated.goalProfiles.protect.coveredCall.minDte, 30);
+    assert.equal(migrated.globalRules, undefined);
+  });
+
+  it('loads a persisted version 1 document without changing its timestamp or ticker overrides', async () => {
+    const { service } = await temporaryService();
+    const legacy = addPlaybook(legacySettings());
+    legacy.globalRules.coveredCall.minVolume = 25;
+    const updatedAt = '2026-08-24T12:00:00.000Z';
+    await fs.mkdir(path.dirname(service.file), { recursive: true });
+    await fs.writeFile(service.file, JSON.stringify({ ...legacy, updatedAt }));
+
+    const loaded = await service.load();
+    assert.equal(loaded.settings.schemaVersion, 2);
+    assert.equal(loaded.settings.goalProfiles.income.coveredCall.minVolume, 25);
+    assert.equal(loaded.settings.tickerPlaybooks.VOOG.coveredCall.minNetSalePriceMinor, 12_345);
+    assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
+  });
 });
 
 describe('effective strategy settings resolution', () => {
-  it('resolves global → preset → ticker precedence with an accurate source map', () => {
+  it('resolves goal → ticker precedence with an accurate source map', () => {
     const settings = addPlaybook(builtInStrategySettings());
-    settings.globalRules.coveredCall.minDte = 10;
-    settings.goalPresets.income.rules.minDte = 20;
+    settings.goalProfiles.income.coveredCall.minDte = 20;
     settings.tickerPlaybooks.VOOG.coveredCall.overrides.minDte = 25;
     settings.tickerPlaybooks.VOOG.coveredCall.overrides.minVolume = 50;
 
@@ -137,8 +187,8 @@ describe('effective strategy settings resolution', () => {
     assert.equal(effective.rules.minMoneyness, 0.8);
     assert.equal(effective.rules.minVolume, 50);
     assert.equal(effective.sourceMap.minDte, 'tickerOverride');
-    assert.equal(effective.sourceMap.maxDte, 'preset');
-    assert.equal(effective.sourceMap.minMoneyness, 'global');
+    assert.equal(effective.sourceMap.maxDte, 'goal');
+    assert.equal(effective.sourceMap.minMoneyness, 'goal');
     assert.equal(effective.sourceMap.minVolume, 'tickerOverride');
     assert.equal(effective.goal, 'income');
     assert.deepEqual(effective.priceGuard, { field: 'minNetSalePriceMinor', valueMinor: 12_345 });
@@ -151,14 +201,14 @@ describe('effective strategy settings resolution', () => {
     delete settings.tickerPlaybooks.VOOG.coveredCall.overrides.minDte;
     const reset = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
     assert.equal(reset.rules.minDte, 21);
-    assert.equal(reset.sourceMap.minDte, 'preset');
+    assert.equal(reset.sourceMap.minDte, 'goal');
   });
 
-  it('uses global rules and a disabled state for an unconfigured ticker', () => {
+  it('uses system rules and a disabled state for an unconfigured ticker', () => {
     const effective = resolveEffectiveSettings(builtInStrategySettings(), { symbol: 'MSFT', leg: 'cashSecuredPut' });
     assert.equal(effective.enabled, false);
     assert.equal(effective.goal, null);
     assert.equal(effective.rules.minDte, 7);
-    assert.ok(Object.values(effective.sourceMap).every((source) => source === 'global'));
+    assert.ok(Object.values(effective.sourceMap).every((source) => source === 'system'));
   });
 });

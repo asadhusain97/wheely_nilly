@@ -26,17 +26,21 @@ function dashboardFixture() {
     opportunities: {
       cashAvailable: '12500.25',
       coveredCalls: [
-        { symbol: 'AAPL', name: 'Apple Inc.', instrumentType: 'Equity', shares: 250, availableLots: 2, brokerCostBasis: '175.00' },
+        { symbol: 'AAPL', name: 'Apple Inc.', instrumentType: 'Equity', shares: 250, availableLots: 2, price: '194.50', brokerCostBasis: '175.00' },
         { symbol: 'GOOG', shares: 100, availableLots: 1, brokerCostBasis: '150.00' },
       ],
     },
+    tickerPerformance: [
+      { symbol: 'AAPL', stockPrice: '195.12' },
+      { symbol: 'MSFT', stockPrice: '405.30' },
+    ],
   };
 }
 
 function screenResult() {
   return {
     schema_version: 1, calculation_version: 'screener-2.0.0', symbol: 'AAPL', leg: 'covered_call',
-    provider: 'fixture', provider_unofficial: false, quote_timestamp: '2026-08-25T12:00:00Z',
+    provider: 'fixture', provider_unofficial: false, underlying_price: 195.10, quote_timestamp: '2026-08-25T12:00:00Z',
     cache: { hit: false, age_seconds: 0 },
     assumptions: { executable_price: 'midpoint' }, exclusions: {}, candidates: [],
   };
@@ -52,6 +56,9 @@ describe('playbook-aware opportunity monitoring', () => {
     assert.equal(targets.filter(({ symbol }) => symbol === 'AAPL').length, 1);
     assert.equal(targets.find(({ symbol }) => symbol === 'AAPL').name, 'Apple Inc.');
     assert.equal(targets.find(({ symbol }) => symbol === 'AAPL').instrumentType, 'Equity');
+    assert.equal(targets.find(({ symbol }) => symbol === 'AAPL').stockPrice, '195.12');
+    assert.equal(targets.find(({ symbol }) => symbol === 'MSFT').stockPrice, '405.30');
+    assert.equal(targets.find(({ symbol }) => symbol === 'GOOG').stockPrice, null);
   });
 
   it('maps backend-resolved camelCase rules and net price guards to the sidecar', () => {
@@ -76,6 +83,7 @@ describe('playbook-aware opportunity monitoring', () => {
     assert.equal(calls[0].cash_available, 12500.25);
     assert.equal(calls[0].covered_shares, 200);
     assert.equal(result.effectiveSettings.sourceMap.minPeriodReturn, 'tickerOverride');
+    assert.equal((await service.targets()).targets.find(({ symbol }) => symbol === 'AAPL').stockPrice, 195.10);
     await assert.rejects(service.scan({ symbol: 'AAPL', leg: 'coveredCall', min_dte: 1 }), /Invalid scan target/);
   });
 
@@ -96,6 +104,7 @@ describe('playbook-aware opportunity monitoring', () => {
     const failed = scan.results.find(({ symbol }) => symbol === 'MSFT');
     assert.equal(failed.status, 'error');
     assert.equal('result' in failed, false);
+    assert.equal(scan.targets.find(({ symbol }) => symbol === 'GOOG').stockPrice, 195.10);
     const aapl = calls.filter(({ symbol }) => symbol === 'AAPL');
     assert.equal(aapl.length, 2);
     assert.deepEqual(aapl.map(({ chain_min_dte, chain_max_dte }) => [chain_min_dte, chain_max_dte]), [[7, 45], [7, 45]]);

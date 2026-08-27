@@ -24,7 +24,7 @@
         <div><strong>Wheely Nilly</strong></div>
       </div>
       <div class="app-actions"><time id="last-updated" aria-live="polite">Updated —</time><button class="refresh-button"
-          id="refresh-button" type="button" aria-label="Refresh portfolio data"><span
+          id="refresh-button" type="button" aria-label="Refresh prices and scan Radar"><span
             aria-hidden="true">↻</span></button></div>
     </header>
 
@@ -56,11 +56,11 @@
             <dd id="wheel-capital">—</dd><small id="wheel-capital-detail">Cash-secured puts + 100-share lots</small>
           </div>
           <div>
-            <dt>Open CSPs</dt>
+            <dt id="open-csps-label">Open CSPs</dt>
             <dd id="open-csps">—</dd><small id="csp-collateral">— secured</small>
           </div>
           <div>
-            <dt>Open CCs</dt>
+            <dt id="open-ccs-label">Open CCs</dt>
             <dd id="open-ccs">—</dd><small>Current short calls</small>
           </div>
         </dl>
@@ -225,27 +225,11 @@
         </div>
 
         <div class="settings-stack" id="strategy-settings-workspace" aria-label="Strategy settings hierarchy">
-          <section class="settings-layer" aria-labelledby="settings-global-title">
-            <header class="settings-layer-heading">
-              <div>
-                <h2 id="settings-global-title">Defaults</h2>
-                <small>Used when a goal or ticker does not set its own value.</small>
-              </div>
-              <button class="settings-edit" id="edit-global-settings" type="button" title="Edit default settings"
-                disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
-                </svg><span class="sr-only">Edit default settings</span></button>
-            </header>
-            <div class="layer-tabs strategy-tabs" id="global-leg-tabs" role="tablist"
-              aria-label="Default strategy"></div>
-            <div id="global-rules-view" role="tabpanel" aria-live="polite"></div>
-          </section>
-
           <section class="settings-layer" aria-labelledby="settings-goals-title">
             <header class="settings-layer-heading">
               <div>
                 <h2 id="settings-goals-title">Goals</h2>
-                <small>Starting profiles that adjust the Defaults layer.</small>
+                <small>Choose what Radar should optimize for, then tune its numbers.</small>
               </div>
               <button class="settings-edit" id="edit-goal-settings" type="button" title="Edit selected goal"
                 disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -255,8 +239,6 @@
             <div class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs" role="tablist"
               aria-label="Goal profile"></div>
             <div id="goal-rules-view" role="tabpanel" aria-live="polite"></div>
-            <p class="inheritance-key"><span class="inheritance-swatch" aria-hidden="true"></span>Lighter values come
-              from Defaults.</p>
           </section>
 
           <section class="settings-layer ticker-layer" aria-labelledby="settings-tickers-title">
@@ -308,7 +290,7 @@
         <form class="settings-editor-form" id="settings-editor-form" novalidate>
           <div class="settings-editor-body" id="settings-editor-body"></div>
           <footer class="settings-editor-actions">
-            <button class="settings-reset" id="settings-reset-defaults" type="button">Reset to default</button>
+            <button class="settings-reset" id="settings-reset-defaults" type="button">Reset to recommended</button>
             <button class="settings-save" id="save-strategy-settings" type="submit">Save changes</button>
           </footer>
         </form>
@@ -348,7 +330,11 @@
             </div>
             <p id="instrument-search-status" role="status" aria-live="polite">Type a symbol or company name.</p>
           </div>
-          <fieldset class="monitor-leg-picker">
+          <fieldset class="monitor-goal-picker">
+            <legend>Goal</legend>
+            <div class="goal-picker" id="monitor-goal-tabs"></div>
+          </fieldset>
+          <fieldset class="monitor-leg-picker" id="monitor-leg-picker" hidden>
             <legend>Strategy</legend>
             <div class="layer-tabs strategy-tabs" id="monitor-leg-tabs">
               <label class="strategy-option"><input type="radio" name="leg" value="cashSecuredPut"
@@ -356,10 +342,6 @@
               <label class="strategy-option"><input type="radio" name="leg"
                   value="coveredCall"><span>CC</span></label>
             </div>
-          </fieldset>
-          <fieldset class="monitor-goal-picker">
-            <legend>Goal</legend>
-            <div class="goal-picker" id="monitor-goal-tabs"></div>
           </fieldset>
           <p class="monitor-add-guidance">You can customize monitoring configs for this ticker from the Settings page.
           </p>
@@ -407,16 +389,15 @@
             <h3 id="glossary-settings-title">Strategy settings</h3>
             <dl class="glossary-list">
               <div class="glossary-entry">
-                <dt>Defaults, goals &amp; ticker changes <span>Settings layers</span></dt>
-                <dd>Defaults are the base rules. A goal changes only its filled-in values, and a ticker change applies
-                  only to that ticker and strategy. A lighter value is still coming from an earlier layer.</dd>
-                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value, otherwise Default
-                </dd>
+                <dt>Goals &amp; ticker changes <span>Settings layers</span></dt>
+                <dd>A goal supplies the full monitoring profile for its strategy. A ticker change replaces one value
+                  only for that ticker and strategy.</dd>
+                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Goal profiles <span>Protect · Income · Exit · Acquire</span></dt>
-                <dd>Editable starting points for different intentions. Protect and Exit apply to covered calls,
-                  Acquire applies to cash-secured puts, and Income can apply to either. The names organize rules; they
+                <dt>Goal profiles <span>Keep Shares · Earn Income · Plan Exit · Plan Entry</span></dt>
+                <dd>Editable starting points for different intentions. Keep Shares and Plan Exit apply to covered calls,
+                  Plan Entry applies to cash-secured puts, and Earn Income can apply to either. The names organize rules; they
                   are not trading recommendations.</dd>
               </div>
               <div class="glossary-entry">

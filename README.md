@@ -352,17 +352,17 @@ The checked-in units under `deploy/systemd/` run both services as the non-root `
 | `POST` | `/api/v1/notifications/flush` | Process due outbox entries |
 | `GET` | `/api/v1/strategy-settings` | Load saved monitoring rules or deterministic built-in defaults |
 | `PUT` | `/api/v1/strategy-settings` | Validate and atomically replace the complete strategy settings document |
-| `GET` | `/api/v1/strategy-settings/effective` | Resolve global → goal → ticker rules for a symbol and strategy leg |
+| `GET` | `/api/v1/strategy-settings/effective` | Resolve goal → ticker rules for a symbol and strategy leg |
 
 ### Radar opportunity finder
 
 Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Yahoo Finance supplies the underlying stock price, option chains, quote timestamps, and liquidity fields through `yfinance`. The 120-second cache limits duplicate Yahoo calls. An expired cache is never served when Yahoo is unavailable.
 
-Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless an Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are Black–Scholes estimates when Yahoo supplies usable implied volatility. Contract freshness uses Yahoo's `lastTradeDate`, not the local fetch time. Missing volume or open interest stays unavailable and fails only a configured positive minimum for that field. Yahoo data is unofficial and may be delayed or unavailable.
+Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless a Plan Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are Black–Scholes estimates when Yahoo supplies usable implied volatility. Contract freshness uses Yahoo's `lastTradeDate`, not the local fetch time. Missing volume or open interest stays unavailable and fails only a configured positive minimum for that field. Yahoo data is unofficial and may be delayed or unavailable.
 
 ### Opportunity-monitoring settings foundation
 
-The Settings tab edits persistent global rules, goal presets, and ticker playbooks. Radar resolves those settings on the backend for every request. See [Strategy Settings v1](docs/strategy-settings.md) for inheritance and [Playbook-aware opportunity monitoring](docs/opportunity-monitoring.md) for target discovery, calculations, ranking, metrics, and provider behavior.
+The Settings tab edits complete goal profiles and optional ticker changes. Radar resolves those settings on the backend for every request. See [Strategy Settings v2](docs/strategy-settings.md) for inheritance and migration details, and [Playbook-aware opportunity monitoring](docs/opportunity-monitoring.md) for target discovery, calculations, ranking, metrics, and provider behavior.
 
 ### Phase 4 notifications
 

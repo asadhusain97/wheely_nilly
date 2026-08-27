@@ -1,34 +1,32 @@
-# Strategy Settings v1
+# Strategy Settings v2
 
 Strategy settings provide the authoritative rules for on-demand opportunity monitoring. Radar resolves them on the backend for every eligible symbol and strategy leg. They do not run background scans, create open-contract recommendations, send alerts, compare trades, or place orders.
 
-Goal presets are editable starting points, not trading recommendations. Quotes and candidates must still be verified with a broker.
+Goal profiles are editable starting points, not trading recommendations. Quotes and candidates must still be verified with a broker.
 
 ## Inheritance
 
 Every effective rule is resolved in this order:
 
 ```text
-global rule for the leg
-→ selected goal preset
+selected goal and strategy profile
 → explicitly set ticker/leg override
 ```
 
-Missing preset and ticker fields inherit. Removing a ticker override therefore restores the selected preset value, or the global value when the preset does not set that field. The effective resolver reports `global`, `preset`, or `tickerOverride` for each rule in `sourceMap`.
+Goal profiles are complete rule sets. Removing a ticker override restores the selected goal value. The effective resolver reports `goal` or `tickerOverride` for configured tickers. Direct requests for an unconfigured ticker use the private system fallback and report `system`.
 
-Ticker playbooks contain both strategy legs. Each leg has its own enabled state, compatible goal, price guard, and partial rule overrides. An unconfigured ticker resolves to its complete global rules with `enabled: false`, `goal: null`, and no price guard.
+Ticker playbooks contain both strategy legs. Each leg has its own enabled state, compatible goal, price guard, and partial rule overrides. An unconfigured ticker resolves to the system fallback with `enabled: false`, `goal: null`, and no price guard.
 
-The Settings UI populates its ticker collection from wheel-trade history, saved playbooks, and tickers added from Radar's circular plus action. Radar verifies the instrument through Yahoo Finance, asks only for CC or CSP and a compatible goal, then saves through this same document contract. CSP and Acquire are the initial selections. A newly created playbook enables only the selected leg; adding a leg to an existing playbook preserves its other settings. Its small recent-ticker hint is stored locally under `wheely-nilly.screened-tickers.v1` and contains only the symbol, selected leg, starting goal, and last-used timestamp. Removing a ticker from Radar deletes this hint and its saved playbook. A ticker with trade history remains visible in Settings because history is an independent source. Capsules are ordered by most recent activity, show eight initially, and can be searched or expanded. Saving a full ticker edit in Settings continues to enable both configured legs.
+The Settings UI populates its ticker collection from wheel-trade history, saved playbooks, and tickers added from Radar's circular plus action. Radar verifies the instrument and asks for the goal first. Keep Shares and Plan Exit infer CC. Plan Entry infers CSP. Earn Income reveals the CC/CSP choice. Plan Entry is the initial goal. A newly created playbook enables only the selected leg; adding or editing a leg preserves the other leg's enabled state and settings. Its small recent-ticker hint is stored locally under `wheely-nilly.screened-tickers.v1` and contains only the symbol, selected leg, starting goal, and last-used timestamp. Removing a ticker from Radar deletes this hint and its saved playbook. A ticker with trade history remains visible in Settings because history is an independent source. Capsules are ordered by most recent activity, show eight initially, and can be searched or expanded.
 
 ## Document shape
 
-The editable document has `schemaVersion: 1` and three scopes:
+The editable document has `schemaVersion: 2` and two scopes:
 
-- `globalRules.coveredCall` and `globalRules.cashSecuredPut` are complete rule sets.
-- `goalPresets.protect`, `income`, `exit`, and `acquire` contain fixed leg applicability plus editable partial rules.
+- `goalProfiles.protect`, `income`, `exit`, and `acquire` contain complete rule sets keyed by compatible strategy leg. Earn Income has separate covered-call and cash-secured-put profiles.
 - `tickerPlaybooks` is keyed by normalized uppercase symbols. Every playbook contains `coveredCall` and `cashSecuredPut` settings.
 
-Covered calls allow the Protect, Income, and Exit goals and may set `minNetSalePriceMinor`. Cash-secured puts allow Income and Acquire and may set `maxNetPurchasePriceMinor`. Price guards are nullable, nonnegative, safe integers in cents. The Settings UI is the dollar boundary and parses at most two decimal places without floating-point accounting.
+Covered calls allow the Keep Shares, Earn Income, and Plan Exit goals and may set `minNetSalePriceMinor`. Cash-secured puts allow Earn Income and Plan Entry and may set `maxNetPurchasePriceMinor`. Price guards are nullable, nonnegative, safe integers in cents. The Settings UI is the dollar boundary and parses at most two decimal places without floating-point accounting.
 
 Each complete rule set resolves all of these fields:
 
@@ -43,22 +41,25 @@ Each complete rule set resolves all of these fields:
 | `maxQuoteAgeSeconds` | Maximum quote age |
 | `minPeriodReturn` | Minimum estimated period return as a decimal ratio |
 
-All objects reject unknown fields. Validation also rejects unsafe integers, malformed tickers, unsupported goal/leg pairs, out-of-range values, and effective DTE, moneyness, or delta inversions after inheritance.
+All objects reject unknown fields. Validation also rejects unsafe integers, malformed tickers, unsupported goal/leg pairs, out-of-range values, and effective DTE, moneyness, or delta inversions.
 
-## Built-in defaults
+## Recommended profiles
 
-Both global legs use the current screener baseline: 7–45 DTE, 0.80–1.20 moneyness, no minimum delta, 0.35 maximum delta, 0.20 maximum spread, 10 minimum open interest, 0 minimum volume, 900-second quote age, and 0 minimum period return.
+Every recommended profile starts with 0.80–1.20 moneyness, 0.20 maximum spread, 10 minimum open interest, 0 minimum volume, a 900-second quote age, and 0 minimum period return. The goal supplies DTE and delta values.
 
-The starter presets are:
+The recommended profiles are:
 
 | Preset | Applicable leg | DTE | Delta |
 | --- | --- | --- | --- |
-| Protect | Covered call | 30–60 | 0.10–0.20 |
-| Income | Covered call and cash-secured put | 21–45 | 0.20–0.35 |
-| Exit | Covered call | 7–30 | 0.35–0.70 |
-| Acquire | Cash-secured put | 21–45 | 0.20–0.35 |
+| Keep Shares | Covered call | 30–60 | 0.10–0.20 |
+| Earn Income | Covered call | 21–45 | 0.20–0.35 |
+| Earn Income | Cash-secured put | 21–45 | 0.20–0.35 |
+| Plan Exit | Covered call | 7–30 | 0.35–0.70 |
+| Plan Entry | Cash-secured put | 21–45 | 0.20–0.35 |
 
-If no saved file exists, the service returns a fresh deterministic copy of these defaults with `persistence.persisted: false`.
+If no saved file exists, the service returns a fresh deterministic copy of these profiles with `persistence.persisted: false`.
+
+The loader accepts persisted version 1 documents and migrates them in memory. It merges each strategy's saved global rules with every compatible goal preset, producing complete version 2 profiles while preserving ticker overrides and the saved timestamp. The next save writes version 2.
 
 ## Persistence
 
@@ -76,7 +77,7 @@ Returns:
 
 ```json
 {
-  "settings": { "schemaVersion": 1, "globalRules": {}, "goalPresets": {}, "tickerPlaybooks": {} },
+  "settings": { "schemaVersion": 2, "goalProfiles": {}, "tickerPlaybooks": {} },
   "persistence": { "persisted": false, "updatedAt": null }
 }
 ```

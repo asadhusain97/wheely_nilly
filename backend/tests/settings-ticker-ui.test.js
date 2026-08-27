@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   normalizeTrackedTickers,
   resolveTickerGoal,
+  resolveTickerLeg,
   visibleTickerEntries,
 } from '../../frontend/assets/js/settings.js';
 
@@ -32,6 +33,7 @@ describe('Settings ticker collection UI', () => {
     settings.coveredCall.enabled = true;
     settings.coveredCall.goal = 'protect';
     assert.equal(resolveTickerGoal(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'protect');
+    assert.equal(resolveTickerLeg(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'coveredCall');
   });
 
   it('sorts by recency, limits the default view to eight, and shows every search match', () => {

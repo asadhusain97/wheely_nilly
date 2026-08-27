@@ -63,7 +63,7 @@ describe('strategy settings API', () => {
     const { app } = await appFixture();
     const initial = await request(app).get('/api/v1/strategy-settings');
     assert.equal(initial.status, 200);
-    assert.equal(initial.body.settings.schemaVersion, 1);
+    assert.equal(initial.body.settings.schemaVersion, 2);
     assert.equal(initial.body.persistence.persisted, false);
 
     const saved = await request(app).put('/api/v1/strategy-settings').send(configuredSettings());
@@ -80,7 +80,7 @@ describe('strategy settings API', () => {
     assert.equal(response.body.symbol, 'VOOG');
     assert.equal(response.body.rules.minDte, 21);
     assert.equal(response.body.rules.maxDte, 40);
-    assert.equal(response.body.sourceMap.minDte, 'preset');
+    assert.equal(response.body.sourceMap.minDte, 'goal');
     assert.equal(response.body.sourceMap.maxDte, 'tickerOverride');
 
     for (const query of [
@@ -97,8 +97,8 @@ describe('strategy settings API', () => {
   it('rejects malformed complete replacements using the existing error envelope', async () => {
     const { app } = await appFixture();
     const invalid = configuredSettings();
-    invalid.globalRules.coveredCall.minDte = 90;
-    invalid.globalRules.coveredCall.maxDte = 45;
+    invalid.goalProfiles.protect.coveredCall.minDte = 90;
+    invalid.goalProfiles.protect.coveredCall.maxDte = 45;
     const response = await request(app).put('/api/v1/strategy-settings').send(invalid);
     assert.equal(response.status, 400);
     assert.equal(response.body.error.code, 'INVALID_STRATEGY_SETTINGS');

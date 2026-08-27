@@ -24,7 +24,7 @@ function sourceSummary(sourceMap) {
   return Object.entries(sourceMap).reduce((summary, [field, source]) => {
     summary[source].push(field);
     return summary;
-  }, { global: [], preset: [], tickerOverride: [] });
+  }, { system: [], goal: [], tickerOverride: [] });
 }
 
 export function toSidecarRequest(effective, portfolio, chainRange = null) {
@@ -47,13 +47,19 @@ export function toSidecarRequest(effective, portfolio, chainRange = null) {
 
 export function discoverOpportunityTargets(settings, dashboard) {
   const bySymbol = new Map();
+  const stockPriceBySymbol = new Map((dashboard.tickerPerformance ?? [])
+    .map((ticker) => [ticker.symbol, ticker.stockPrice]));
   const target = (symbol) => {
-    if (!bySymbol.has(symbol)) bySymbol.set(symbol, { symbol, owned: false, manuallyTracked: false, uncoveredLots: 0, legs: [] });
+    if (!bySymbol.has(symbol)) bySymbol.set(symbol, {
+      symbol, stockPrice: stockPriceBySymbol.get(symbol) ?? null,
+      owned: false, manuallyTracked: false, uncoveredLots: 0, legs: [],
+    });
     return bySymbol.get(symbol);
   };
   for (const holding of dashboard.opportunities?.coveredCalls ?? []) {
     Object.assign(target(holding.symbol), {
       owned: true, name: holding.name ?? null, instrumentType: holding.instrumentType ?? null,
+      stockPrice: stockPriceBySymbol.get(holding.symbol) ?? holding.price ?? null,
       uncoveredLots: Number(holding.availableLots),
       adjustedBasisPerShare: holding.brokerCostBasis == null ? null : Number(holding.brokerCostBasis),
     });
@@ -91,9 +97,17 @@ function decorateTarget(target, settings, dashboard) {
 }
 
 export function createOpportunityMonitoringService({ derived, strategySettings, screener, maxConcurrency = 3 }) {
+  const latestStockPrices = new Map();
+  const withLatestStockPrice = (target) => ({
+    ...target,
+    stockPrice: latestStockPrices.get(target.symbol) ?? target.stockPrice,
+  });
+
   async function context() {
     const [{ settings }, model] = await Promise.all([strategySettings.load(), derived.load()]);
-    const targets = discoverOpportunityTargets(settings, model.dashboard).map((item) => decorateTarget(item, settings, model.dashboard));
+    const targets = discoverOpportunityTargets(settings, model.dashboard)
+      .map((item) => decorateTarget(item, settings, model.dashboard))
+      .map(withLatestStockPrice);
     return { model, targets };
   }
 
@@ -113,6 +127,7 @@ export function createOpportunityMonitoringService({ derived, strategySettings, 
   async function runResolved(effective, target, dashboard, chainRange = null) {
     const sidecarRequest = toSidecarRequest(effective, portfolioFor(target, dashboard), chainRange);
     const result = await screener.screen(sidecarRequest);
+    if (result.underlying_price != null) latestStockPrices.set(target.symbol, result.underlying_price);
     return {
       ...result,
       effectiveSettings: { ...effective, sourceSummary: sourceSummary(effective.sourceMap) },
@@ -150,7 +165,10 @@ export function createOpportunityMonitoringService({ derived, strategySettings, 
       }
     }
     await Promise.all(Array.from({ length: Math.min(maxConcurrency, jobs.length) }, worker));
-    return { scannedAt: new Date().toISOString(), freshness: current.model.freshness, targets: current.targets, results };
+    return {
+      scannedAt: new Date().toISOString(), freshness: current.model.freshness,
+      targets: current.targets.map(withLatestStockPrice), results,
+    };
   }
 
   return { targets, instruments, scan, scanAll };

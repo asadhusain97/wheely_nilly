@@ -292,11 +292,25 @@
 }
 
 .goal-context {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .goal-context > div {
   gap: 5px;
+}
+
+.goal-inline-strategy-tabs {
+  width: 108px;
+  flex: 0 0 108px;
+  margin: 0;
+  padding: 3px;
+}
+
+.goal-inline-strategy-tabs > button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 10px;
 }
 
 .goal-context strong {
@@ -366,23 +380,6 @@ details[open] > summary .disclosure-icon {
 
 .settings-rule-advanced > .settings-rule-list {
   background: rgba(248, 248, 245, .42);
-}
-
-.inheritance-key {
-  gap: 8px;
-  margin: 0;
-  padding: 3px 18px 18px;
-  color: var(--ash);
-  font-size: 10px;
-  line-height: 1.4;
-}
-
-.inheritance-key .inheritance-swatch {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #aaa9a2;
 }
 
 .ticker-layer .settings-layer-heading {
@@ -940,6 +937,51 @@ details[open] > summary .disclosure-icon {
 
 .ticker-goal-picker {
   width: 100%;
+}
+
+.ticker-strategy-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  border: 0;
+  padding: 0;
+}
+
+.ticker-strategy-label,
+.ticker-fixed-strategy > span:first-child {
+  padding: 0;
+  color: var(--body);
+  font-size: 11px;
+  font-weight: 680;
+}
+
+.ticker-inline-strategy-tabs {
+  width: 108px;
+  justify-self: end;
+  margin: 0;
+  padding: 3px;
+}
+
+.ticker-inline-strategy-tabs > button {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.ticker-fixed-strategy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 12px;
+  padding: 0 2px;
+}
+
+.goal-editor-strategy {
+  width: 176px;
 }
 
 .ticker-price-guard .editor-rule-controls {

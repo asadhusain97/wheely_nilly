@@ -1,7 +1,51 @@
 import { createGlossaryTerm } from './glossary.js';
 
 const LEG_LABELS = { coveredCall: 'Covered call', cashSecuredPut: 'Cash-secured put' };
-const GOAL_LABELS = { protect: 'Protect', income: 'Income', exit: 'Exit', acquire: 'Acquire' };
+const GOAL_LABELS = {
+  protect: 'Keep Shares',
+  income: 'Earn Income',
+  exit: 'Plan Exit',
+  acquire: 'Plan Entry',
+};
+const GOAL_LEGS = {
+  protect: ['coveredCall'],
+  income: ['coveredCall', 'cashSecuredPut'],
+  exit: ['coveredCall'],
+  acquire: ['cashSecuredPut'],
+};
+const SCAN_RESULTS_KEY = 'wheely-nilly.radar-scan-results.v1';
+const SCAN_RESULT_KEY = /^[A-Z][A-Z0-9.-]{0,9}:(coveredCall|cashSecuredPut)$/;
+
+function browserStorage() {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function storableScanEntry(entry) {
+  return entry?.status === 'error' || (entry?.status === 'success' && Array.isArray(entry.result?.candidates));
+}
+
+export function loadStoredScanResults(storage = browserStorage()) {
+  try {
+    const saved = JSON.parse(storage?.getItem(SCAN_RESULTS_KEY) ?? '{}');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return new Map();
+    return new Map(Object.entries(saved).filter(([resultKey, entry]) => SCAN_RESULT_KEY.test(resultKey) && storableScanEntry(entry)));
+  } catch {
+    return new Map();
+  }
+}
+
+export function storeScanResults(results, storage = browserStorage()) {
+  try {
+    const saved = Object.fromEntries([...results].filter(([resultKey, entry]) => SCAN_RESULT_KEY.test(resultKey) && storableScanEntry(entry)));
+    storage?.setItem(SCAN_RESULTS_KEY, JSON.stringify(saved));
+  } catch {
+    // Keep the latest results for this session when browser storage is unavailable or full.
+  }
+}
 
 const node = (tag, className, text) => {
   const item = document.createElement(tag);
@@ -10,10 +54,15 @@ const node = (tag, className, text) => {
   return item;
 };
 
-const money = (value) => value == null ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+const money = (value, maximumFractionDigits = 0) => value == null ? '—' : new Intl.NumberFormat('en-US', {
+  style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits,
+}).format(value);
+const marketPrice = (value) => money(value, 2);
 const percent = (value) => value == null ? '—' : new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value);
 const number = (value, digits = 2) => value == null ? '—' : Number(value).toLocaleString('en-US', { maximumFractionDigits: digits });
-const dateTime = (value) => value ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value)) : '—';
+export const marketDateTime = (value) => value ? `${new Intl.DateTimeFormat('en-US', {
+  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
+}).format(new Date(value))} ET` : '—';
 const sentence = (value) => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const exchangeLabel = (instrument) => instrument.exchange && instrument.exchange !== 'United States' ? instrument.exchange : '';
 const EXCLUSION_LABELS = {
@@ -111,7 +160,7 @@ function rulesSummary(rules) {
 
 function priceGuardText(effective) {
   if (effective.priceGuard.valueMinor == null) return 'No net price guard';
-  const price = money(effective.priceGuard.valueMinor / 100);
+  const price = marketPrice(effective.priceGuard.valueMinor / 100);
   return effective.leg === 'coveredCall' ? `Net sale at least ${price}` : `Net purchase at most ${price}`;
 }
 
@@ -143,7 +192,7 @@ function candidateCard(candidate, result, rank) {
   const summary = document.createElement('summary');
   const identity = node('div', 'candidate-identity');
   identity.append(node('span', 'candidate-rank', String(rank)), node('div', '', undefined));
-  identity.lastChild.append(node('strong', '', `${result.symbol} ${money(candidate.strike)}`), node('small', '', `${candidate.expiration} · ${candidate.dte} DTE`));
+  identity.lastChild.append(node('strong', '', `${result.symbol} ${marketPrice(candidate.strike)}`), node('small', '', `${candidate.expiration} · ${candidate.dte} DTE`));
   const primary = node('div', 'candidate-primary');
   const credit = node('strong');
   credit.append(
@@ -161,20 +210,20 @@ function candidateCard(candidate, result, rank) {
   const compact = node('dl', 'candidate-compact');
   compact.append(
     metric('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta)), 'Delta'),
-    metric(candidate.option_type === 'call' ? 'Net sale price' : 'Net purchase price', money(candidate.net_sale_price ?? candidate.net_purchase_price), 'Net sale / purchase price'),
+    metric(candidate.option_type === 'call' ? 'Net sale price' : 'Net purchase price', marketPrice(candidate.net_sale_price ?? candidate.net_purchase_price), 'Net sale / purchase price'),
   );
   summary.append(identity, primary, compact, node('span', 'candidate-open-label', 'Details'));
 
   const detail = node('div', 'candidate-detail');
   const quote = node('dl', 'candidate-detail-grid');
   quote.append(
-    detailRow('Underlying price', money(candidate.underlying_price), 'Underlying price', providerName(result.provider)),
-    detailRow('Executable option price', `${money(candidate.executable_option_price_per_share)} per share`, 'Executable option price', `Bid ${money(candidate.bid)} · Ask ${money(candidate.ask)}`),
+    detailRow('Underlying price', marketPrice(candidate.underlying_price), 'Underlying price', providerName(result.provider)),
+    detailRow('Executable option price', `${marketPrice(candidate.executable_option_price_per_share)} per share`, 'Executable option price', `Bid ${marketPrice(candidate.bid)} · Ask ${marketPrice(candidate.ask)}`),
     detailRow('Spread', percent(candidate.spread_percent), 'Bid-ask spread'),
     detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`, 'Open interest / volume'),
     detailRow('Implied volatility', percent(candidate.implied_volatility), 'Implied volatility', 'Provider-derived'),
     detailRow('Theta per day', number(candidate.theta_per_day, 4), 'Theta per day', candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
-    detailRow('Breakeven', money(candidate.breakeven), 'Breakeven'),
+    detailRow('Breakeven', marketPrice(candidate.breakeven), 'Breakeven'),
     detailRow('Strike distance', percent(Math.abs(candidate.strike_distance)), 'Strike distance'),
     detailRow('Annualized return', percent(candidate.annualized_return), 'Annualized return', 'Secondary metric'),
     detailRow('Estimated fees', money(candidate.estimated_fees), 'Estimated fee', 'Estimate'),
@@ -202,7 +251,7 @@ function scanResultView(entry) {
   }
   const result = entry.result;
   const source = node('div', 'scan-source');
-  source.append(node('time', '', dateTime(result.quote_timestamp)), node('small', '', providerName(result.provider)));
+  source.append(node('time', '', marketDateTime(result.quote_timestamp)), node('small', '', providerName(result.provider)));
   if (result.quote_timestamp) source.firstChild.dateTime = result.quote_timestamp;
   container.append(source);
   if (!result.candidates.length) {
@@ -217,14 +266,45 @@ function scanResultView(entry) {
   return container;
 }
 
-export function goalsForLeg(leg) {
-  return leg === 'coveredCall' ? ['income', 'protect', 'exit'] : ['acquire', 'income'];
+export function legForGoal(goal, incomeLeg = 'cashSecuredPut') {
+  if (goal === 'income') return GOAL_LEGS.income.includes(incomeLeg) ? incomeLeg : null;
+  return GOAL_LEGS[goal]?.[0] ?? null;
 }
 
-export function createScreenerController({ request, notify, addTicker, removeTicker, rememberTicker, getTickerIdentity, openSettings }) {
-  const state = { targets: [], results: new Map(), loading: new Set(), loaded: false,
-    removing: new Set(), collapsed: new Set(), identities: new Map(), selectedInstrument: null, searchSequence: 0, searchTimer: null };
+export function createScreenerController({ request, notify, addTicker, removeTicker, rememberTicker, getTickerIdentity, openSettings, stockPriceTag, storage }) {
+  const resultStorage = storage === undefined ? browserStorage() : storage;
+  const state = { targets: [], results: loadStoredScanResults(resultStorage), loading: new Set(), loaded: false,
+    removing: new Set(), collapsed: new Set(), seenTargets: new Set(), identities: new Map(),
+    selectedInstrument: null, searchSequence: 0, searchTimer: null };
   const key = (symbol, leg) => `${symbol}:${leg}`;
+
+  function syncDefaultCollapsedTargets() {
+    const current = new Set(state.targets.map((target) => target.symbol));
+    for (const target of state.targets) {
+      if (!state.seenTargets.has(target.symbol)) {
+        state.seenTargets.add(target.symbol);
+        state.collapsed.add(target.symbol);
+      }
+    }
+    for (const symbol of state.seenTargets) {
+      if (!current.has(symbol)) {
+        state.seenTargets.delete(symbol);
+        state.collapsed.delete(symbol);
+      }
+    }
+  }
+
+  function pruneStoredResults() {
+    const eligible = new Set(state.targets.flatMap((target) => target.legs.map((leg) => key(target.symbol, leg.leg))));
+    let changed = false;
+    for (const resultKey of state.results.keys()) {
+      if (!eligible.has(resultKey)) {
+        state.results.delete(resultKey);
+        changed = true;
+      }
+    }
+    if (changed) storeScanResults(state.results, resultStorage);
+  }
 
   function targetCard(target) {
     const card = node('article', 'monitor-target');
@@ -242,7 +322,10 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     const identity = node('div', 'monitor-target-identity');
     identity.append(node('span', 'monitor-symbol-mark', target.symbol), node('div', 'monitor-target-copy'));
     if (instrumentName) identity.lastChild.append(node('strong', '', instrumentName));
-    if (instrumentType) identity.lastChild.append(node('small', 'monitor-instrument-type', instrumentType));
+    const meta = node('div', 'monitor-target-meta');
+    if (instrumentType) meta.append(node('small', 'monitor-instrument-type', instrumentType));
+    meta.append(stockPriceTag(target.stockPrice));
+    identity.lastChild.append(meta);
     const badges = node('span', 'target-badges');
     if (target.owned) badges.append(node('i', '', `${target.uncoveredLots} uncovered lot${target.uncoveredLots === 1 ? '' : 's'}`));
     if (badges.childElementCount) identity.lastChild.append(badges);
@@ -298,7 +381,7 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       const heading = node('div', 'monitor-leg-heading');
       const copy = node('div', 'monitor-leg-copy');
       const ruleSummary = node('small', 'monitor-leg-rule');
-      const goal = node('span', 'goal-inline goal-tone', GOAL_LABELS[targetLeg.goal] ?? 'Defaults');
+      const goal = node('span', 'goal-inline goal-tone', GOAL_LABELS[targetLeg.goal] ?? 'Goal profile');
       if (targetLeg.goal) goal.dataset.goal = targetLeg.goal;
       ruleSummary.append(goal, document.createTextNode(' · '), rulesSummary(targetLeg.effectiveSettings.rules));
       copy.append(node('strong', '', LEG_LABELS[targetLeg.leg]), ruleSummary, node('small', 'price-guard-copy', priceGuardText(targetLeg.effectiveSettings)));
@@ -334,6 +417,8 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     try {
       const result = await request('/api/v1/screens/targets');
       state.targets = result.targets;
+      syncDefaultCollapsedTargets();
+      pruneStoredResults();
       await hydrateTargetIdentities(state.targets, request, getTickerIdentity, state.identities);
       state.loaded = true;
       const notice = document.querySelector('#screener-meta');
@@ -349,6 +434,40 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     }
   }
 
+  async function scanAll() {
+    await loadTargets(true);
+    const scanKeys = state.targets.flatMap((target) => target.legs.map((leg) => key(target.symbol, leg.leg)));
+    for (const scanKey of scanKeys) {
+      state.loading.add(scanKey);
+      state.results.set(scanKey, { status: 'loading' });
+    }
+    render();
+    try {
+      const scan = await request('/api/v1/screens/scan-all', { method: 'POST' });
+      state.targets = scan.targets;
+      syncDefaultCollapsedTargets();
+      await hydrateTargetIdentities(state.targets, request, getTickerIdentity, state.identities);
+      for (const entry of scan.results) {
+        const target = state.targets.find((item) => item.symbol === entry.symbol);
+        if (entry.status === 'success' && target && entry.result.underlying_price != null) {
+          target.stockPrice = entry.result.underlying_price;
+        }
+        state.results.set(key(entry.symbol, entry.leg), entry.status === 'success'
+          ? { status: 'success', result: entry.result }
+          : { status: 'error', error: entry.error });
+      }
+      return scan;
+    } catch (error) {
+      for (const scanKey of scanKeys) state.results.set(scanKey, { status: 'error', error });
+      throw error;
+    } finally {
+      for (const scanKey of scanKeys) state.loading.delete(scanKey);
+      pruneStoredResults();
+      storeScanResults(state.results, resultStorage);
+      render();
+    }
+  }
+
   async function scanTarget(symbol, leg) {
     await loadTargets();
     const target = state.targets.find((item) => item.symbol === symbol && item.legs.some((itemLeg) => itemLeg.leg === leg));
@@ -358,11 +477,13 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     render();
     try {
       const result = await request('/api/v1/screens', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, leg }) });
+      if (result.underlying_price != null) target.stockPrice = result.underlying_price;
       state.results.set(key(symbol, leg), { status: 'success', result });
     } catch (error) {
       state.results.set(key(symbol, leg), { status: 'error', error });
     } finally {
       state.loading.delete(key(symbol, leg));
+      storeScanResults(state.results, resultStorage);
       render();
     }
   }
@@ -374,9 +495,11 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     try {
       await removeTicker(symbol);
       for (const resultKey of [...state.results.keys()]) if (resultKey.startsWith(`${symbol}:`)) state.results.delete(resultKey);
+      storeScanResults(state.results, resultStorage);
       state.targets = state.targets
         .filter((target) => target.symbol !== symbol || target.owned)
         .map((target) => target.symbol === symbol ? { ...target, manuallyTracked: false } : target);
+      syncDefaultCollapsedTargets();
     } catch (error) {
       notify(`Ticker was not removed: ${error.message}`, 'error');
     } finally {
@@ -386,20 +509,20 @@ export function createScreenerController({ request, notify, addTicker, removeTic
   }
 
   function renderGoals() {
-    const leg = document.querySelector('input[name="leg"]:checked').value;
     const tabs = document.querySelector('#monitor-goal-tabs');
     const previous = tabs.querySelector('input[name="goal"]:checked')?.value;
-    const goals = goalsForLeg(leg);
+    const goals = Object.keys(GOAL_LABELS);
     tabs.replaceChildren(...goals.map((goal, index) => {
       const label = node('label', 'monitor-goal-option');
       const input = document.createElement('input');
       input.type = 'radio'; input.name = 'goal'; input.value = goal;
-      input.checked = goals.includes(previous) ? goal === previous : index === 0;
+      input.checked = goals.includes(previous) ? goal === previous : goal === 'acquire';
       const copy = node('span', 'goal-chip', GOAL_LABELS[goal]);
       copy.dataset.goal = goal;
       label.append(input, copy);
       return label;
     }));
+    document.querySelector('#monitor-leg-picker').hidden = tabs.querySelector('input[name="goal"]:checked')?.value !== 'income';
   }
 
   function selectInstrument(instrument) {
@@ -507,7 +630,9 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     document.querySelector('#monitor-open-settings').addEventListener('click', openSettings);
     for (const close of document.querySelectorAll('[data-monitor-add-close]')) close.addEventListener('click', closeAdd);
     document.querySelector('#monitor-add-dialog').addEventListener('keydown', keepFocusInAddDialog);
-    document.querySelectorAll('input[name="leg"]').forEach((radio) => radio.addEventListener('change', renderGoals));
+    document.querySelector('#monitor-goal-tabs').addEventListener('change', (event) => {
+      if (event.target.name === 'goal') document.querySelector('#monitor-leg-picker').hidden = event.target.value !== 'income';
+    });
     document.querySelector('#screener-add-symbol').addEventListener('input', (event) => {
       state.selectedInstrument = null;
       document.querySelector('#monitor-add-submit').disabled = true;
@@ -529,11 +654,15 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       if (!state.selectedInstrument || state.selectedInstrument.symbol !== values.symbol.trim().toUpperCase()) {
         error.textContent = 'Select a verified instrument from the results.'; error.hidden = false; return;
       }
+      const leg = legForGoal(values.goal, values.leg);
+      if (!leg) {
+        error.textContent = 'Choose CC or CSP for Earn Income.'; error.hidden = false; return;
+      }
       const submit = document.querySelector('#monitor-add-submit');
       submit.disabled = true; submit.textContent = 'Adding…'; error.hidden = true;
       try {
-        await addTicker(state.selectedInstrument.symbol, values.leg, values.goal);
-        rememberTicker(state.selectedInstrument, values.leg === 'cashSecuredPut' ? 'cash_secured_put' : 'covered_call');
+        await addTicker(state.selectedInstrument.symbol, leg, values.goal);
+        rememberTicker(state.selectedInstrument, leg === 'cashSecuredPut' ? 'cash_secured_put' : 'covered_call');
         await loadTargets(true);
         closeAdd();
       } catch (addError) {
@@ -546,5 +675,5 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     loadTargets();
   }
 
-  return { initialize, loadTargets, scanTarget };
+  return { initialize, loadTargets, scanTarget, scanAll };
 }

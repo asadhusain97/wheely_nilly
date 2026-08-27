@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import { createNotificationService, lifecycleAlerts } from '../src/services/notifications.js';
+import { createNotificationService, lifecycleAlerts, screenerAlert } from '../src/services/notifications.js';
 
 async function service(overrides = {}) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wheely-ntfy-'));
@@ -43,4 +43,21 @@ describe('notification outbox', () => {
     assert.equal(alerts.filter((item) => item.type === 'expiration').length, 1);
     assert.match(alerts.find((item) => item.type === 'assignment-risk').message, /estimated.*not a confirmed assignment/i);
   });
+});
+
+it('uses whole dollars for totals while retaining strike and delta precision in alerts', () => {
+  const candidate = {
+    contract_symbol: 'XYZ260918P00095500', expiration: '2026-09-18', strike: 95.5,
+    executable_premium: 204.35, annualized_return: .158, delta: -.287,
+    spread_percent: .02, quote_age_seconds: 12,
+  };
+  const config = { notifications: { dailyCap: 5, cooldownMs: 0, screenerRule: {
+    minAnnualizedReturn: .1, maxDelta: .4, maxSpreadPercent: .05, maxQuoteAgeSeconds: 30, dashboardUrl: null,
+  } } };
+
+  const alert = screenerAlert(candidate, { symbol: 'XYZ', leg: 'cash_secured_put' }, config);
+
+  assert.match(alert.message, /\$95\.5: est\. \$204,/);
+  assert.match(alert.message, /Δ -0\.29/);
+  assert.doesNotMatch(alert.message, /\$204\.35/);
 });

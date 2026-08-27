@@ -5,6 +5,12 @@ import path from 'node:path';
 import { z } from 'zod';
 
 export const STRATEGY_LEGS = ['coveredCall', 'cashSecuredPut'];
+export const GOAL_LEGS = {
+  protect: ['coveredCall'],
+  income: ['coveredCall', 'cashSecuredPut'],
+  exit: ['coveredCall'],
+  acquire: ['cashSecuredPut'],
+};
 export const RULE_FIELDS = [
   'minDte',
   'maxDte',
@@ -69,19 +75,19 @@ export const completeRuleSetSchema = z.object(ruleShape).strict()
 export const partialRuleSetSchema = z.object(ruleShape).partial().strict()
   .superRefine((rules, context) => addRangeIssues(rules, context));
 
-const protectPresetSchema = z.object({
+const v1ProtectPresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall')]),
   rules: partialRuleSetSchema,
 }).strict();
-const incomePresetSchema = z.object({
+const v1IncomePresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall'), z.literal('cashSecuredPut')]),
   rules: partialRuleSetSchema,
 }).strict();
-const exitPresetSchema = z.object({
+const v1ExitPresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall')]),
   rules: partialRuleSetSchema,
 }).strict();
-const acquirePresetSchema = z.object({
+const v1AcquirePresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('cashSecuredPut')]),
   rules: partialRuleSetSchema,
 }).strict();
@@ -104,22 +110,24 @@ const tickerPlaybookSchema = z.object({
   cashSecuredPut: cashSecuredPutPlaybookSchema,
 }).strict();
 
-const editableDocumentShape = {
+const tickerPlaybooksSchema = z.record(tickerSymbolSchema, tickerPlaybookSchema);
+
+const v1EditableDocumentShape = {
   schemaVersion: z.literal(1),
   globalRules: z.object({
     coveredCall: completeRuleSetSchema,
     cashSecuredPut: completeRuleSetSchema,
   }).strict(),
   goalPresets: z.object({
-    protect: protectPresetSchema,
-    income: incomePresetSchema,
-    exit: exitPresetSchema,
-    acquire: acquirePresetSchema,
+    protect: v1ProtectPresetSchema,
+    income: v1IncomePresetSchema,
+    exit: v1ExitPresetSchema,
+    acquire: v1AcquirePresetSchema,
   }).strict(),
-  tickerPlaybooks: z.record(tickerSymbolSchema, tickerPlaybookSchema),
+  tickerPlaybooks: tickerPlaybooksSchema,
 };
 
-export const strategySettingsDocumentSchema = z.object(editableDocumentShape).strict()
+const v1DocumentSchema = z.object(v1EditableDocumentShape).strict()
   .superRefine((document, context) => {
     for (const [goal, preset] of Object.entries(document.goalPresets)) {
       for (const leg of preset.applicableLegs) {
@@ -151,14 +159,52 @@ export const strategySettingsDocumentSchema = z.object(editableDocumentShape).st
     }
   });
 
+const goalProfilesSchema = z.object({
+  protect: z.object({ coveredCall: completeRuleSetSchema }).strict(),
+  income: z.object({
+    coveredCall: completeRuleSetSchema,
+    cashSecuredPut: completeRuleSetSchema,
+  }).strict(),
+  exit: z.object({ coveredCall: completeRuleSetSchema }).strict(),
+  acquire: z.object({ cashSecuredPut: completeRuleSetSchema }).strict(),
+}).strict();
+
+const editableDocumentShape = {
+  schemaVersion: z.literal(2),
+  goalProfiles: goalProfilesSchema,
+  tickerPlaybooks: tickerPlaybooksSchema,
+};
+
+export const strategySettingsDocumentSchema = z.object(editableDocumentShape).strict()
+  .superRefine((document, context) => {
+    for (const [symbol, playbook] of Object.entries(document.tickerPlaybooks)) {
+      for (const leg of STRATEGY_LEGS) {
+        const legSettings = playbook[leg];
+        const goalRules = document.goalProfiles[legSettings.goal]?.[leg];
+        if (!goalRules) {
+          context.addIssue({
+            code: 'custom',
+            path: ['tickerPlaybooks', symbol, leg, 'goal'],
+            message: `${legSettings.goal} is not compatible with ${leg}`,
+          });
+          continue;
+        }
+        addRangeIssues(
+          { ...goalRules, ...legSettings.overrides },
+          context,
+          ['tickerPlaybooks', symbol, leg, 'overrides'],
+        );
+      }
+    }
+  });
+
 const persistedDocumentSchema = z.object({
   ...editableDocumentShape,
   updatedAt: z.string().datetime({ offset: true }),
 }).strict().superRefine((document, context) => {
   const editable = {
     schemaVersion: document.schemaVersion,
-    globalRules: document.globalRules,
-    goalPresets: document.goalPresets,
+    goalProfiles: document.goalProfiles,
     tickerPlaybooks: document.tickerPlaybooks,
   };
   const result = strategySettingsDocumentSchema.safeParse(editable);
@@ -167,7 +213,23 @@ const persistedDocumentSchema = z.object({
   }
 });
 
-const GLOBAL_RULE_DEFAULTS = {
+const persistedV1DocumentSchema = z.object({
+  ...v1EditableDocumentShape,
+  updatedAt: z.string().datetime({ offset: true }),
+}).strict().superRefine((document, context) => {
+  const editable = {
+    schemaVersion: document.schemaVersion,
+    globalRules: document.globalRules,
+    goalPresets: document.goalPresets,
+    tickerPlaybooks: document.tickerPlaybooks,
+  };
+  const result = v1DocumentSchema.safeParse(editable);
+  if (!result.success) {
+    for (const issue of result.error.issues) context.addIssue(issue);
+  }
+});
+
+const SYSTEM_RULE_DEFAULTS = {
   minDte: 7,
   maxDte: 45,
   minMoneyness: 0.8,
@@ -181,35 +243,40 @@ const GLOBAL_RULE_DEFAULTS = {
   minPeriodReturn: 0,
 };
 
+const completeProfile = (rules = {}) => ({ ...SYSTEM_RULE_DEFAULTS, ...rules });
+
 const BUILT_IN_SETTINGS = {
-  schemaVersion: 1,
-  globalRules: {
-    coveredCall: { ...GLOBAL_RULE_DEFAULTS },
-    cashSecuredPut: { ...GLOBAL_RULE_DEFAULTS },
-  },
-  goalPresets: {
-    protect: {
-      applicableLegs: ['coveredCall'],
-      rules: { minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 },
-    },
+  schemaVersion: 2,
+  goalProfiles: {
+    protect: { coveredCall: completeProfile({ minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 }) },
     income: {
-      applicableLegs: ['coveredCall', 'cashSecuredPut'],
-      rules: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 },
+      coveredCall: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+      cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
     },
-    exit: {
-      applicableLegs: ['coveredCall'],
-      rules: { minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 },
-    },
-    acquire: {
-      applicableLegs: ['cashSecuredPut'],
-      rules: { minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 },
-    },
+    exit: { coveredCall: completeProfile({ minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 }) },
+    acquire: { cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }) },
   },
   tickerPlaybooks: {},
 };
 
 export function builtInStrategySettings() {
   return structuredClone(BUILT_IN_SETTINGS);
+}
+
+export function migrateV1StrategySettings(input) {
+  const settings = v1DocumentSchema.parse(input);
+  const goalProfiles = {};
+  for (const [goal, preset] of Object.entries(settings.goalPresets)) {
+    goalProfiles[goal] = Object.fromEntries(preset.applicableLegs.map((leg) => [
+      leg,
+      { ...settings.globalRules[leg], ...preset.rules },
+    ]));
+  }
+  return {
+    schemaVersion: 2,
+    goalProfiles,
+    tickerPlaybooks: structuredClone(settings.tickerPlaybooks),
+  };
 }
 
 function issueMessage(error) {
@@ -245,16 +312,14 @@ export function resolveEffectiveSettings(input, { symbol, leg }) {
   const normalizedSymbol = parsedSymbol.data;
   const playbook = settings.tickerPlaybooks[normalizedSymbol];
   const legSettings = playbook?.[parsedLeg.data] ?? null;
-  const presetRules = legSettings
-    ? settings.goalPresets[legSettings.goal].rules
-    : {};
+  const goalRules = legSettings
+    ? settings.goalProfiles[legSettings.goal][parsedLeg.data]
+    : SYSTEM_RULE_DEFAULTS;
   const rules = {
-    ...settings.globalRules[parsedLeg.data],
-    ...presetRules,
+    ...goalRules,
     ...(legSettings?.overrides ?? {}),
   };
-  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, 'global']));
-  for (const field of Object.keys(presetRules)) sourceMap[field] = 'preset';
+  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, legSettings ? 'goal' : 'system']));
   for (const field of Object.keys(legSettings?.overrides ?? {})) sourceMap[field] = 'tickerOverride';
 
   const priceGuardField = parsedLeg.data === 'coveredCall'
@@ -286,8 +351,12 @@ export function createStrategySettingsService({
 
   async function load() {
     try {
-      const persisted = persistedDocumentSchema.parse(JSON.parse(await fsImpl.readFile(file, 'utf8')));
-      const { updatedAt, ...settings } = persisted;
+      const raw = JSON.parse(await fsImpl.readFile(file, 'utf8'));
+      const persisted = raw.schemaVersion === 1
+        ? persistedV1DocumentSchema.parse(raw)
+        : persistedDocumentSchema.parse(raw);
+      const { updatedAt, ...editable } = persisted;
+      const settings = editable.schemaVersion === 1 ? migrateV1StrategySettings(editable) : editable;
       return { settings, persistence: { persisted: true, updatedAt } };
     } catch (error) {
       if (error.code === 'ENOENT') {

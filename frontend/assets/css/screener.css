@@ -28,12 +28,14 @@
 .monitor-target::after { position: absolute; z-index: 0; top: -90px; right: -70px; width: 190px; height: 160px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, .84), rgba(255, 255, 255, 0) 68%); pointer-events: none; content: ""; }
 .monitor-target > * { position: relative; z-index: 1; }
 .monitor-target-header { min-height: 76px; display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px 8px 12px; }
-.monitor-target-toggle { min-width: 0; min-height: 60px; width: 100%; display: flex; align-items: center; flex: 1 1 auto; border: 0; border-radius: 17px; padding: 6px 8px 6px 4px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.monitor-target-toggle { min-width: 0; min-height: 60px; width: 100%; display: flex; align-items: center; gap: 10px; flex: 1 1 auto; border: 0; border-radius: 17px; padding: 6px 8px 6px 4px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
 .monitor-target-toggle:hover, .monitor-target-toggle:focus-visible { background: rgba(255, 255, 255, .5); }
-.monitor-target-identity { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.monitor-target-identity { min-width: 0; display: flex; align-items: center; gap: 11px; flex: 1 1 auto; }
 .monitor-symbol-mark { width: auto; min-width: 48px; height: 42px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid rgba(255, 255, 255, .82); border-radius: 14px; padding: 0 9px; background: rgba(255, 255, 255, .62); color: var(--red-deep); font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: clamp(8px, 2.6vw, 11px); font-weight: 840; letter-spacing: -.3px; white-space: nowrap; box-shadow: 0 4px 12px rgba(29, 29, 25, .05), inset 0 1px 0 #fff; }
 .monitor-target-copy { min-width: 0; display: grid; gap: 3px; }
 .monitor-target-copy > strong { overflow-wrap: anywhere; font-size: 16px; line-height: 1.15; letter-spacing: -.35px; }
+.monitor-target-meta { min-height: 20px; display: flex; align-items: center; gap: 7px; }
+.monitor-target-meta > .stock-price-tag { background: rgba(255, 255, 255, .62); }
 .monitor-instrument-type { color: var(--mute); font-size: 9px; font-weight: 680; line-height: 1.2; }
 .monitor-target-body[hidden] { display: none; }
 .target-badges { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -131,6 +133,7 @@
 .instrument-result span { overflow: hidden; font-size: 11px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .instrument-result small { color: var(--mute); font-size: 8px; }
 .monitor-leg-picker, .monitor-goal-picker { min-width: 0; display: grid; gap: 8px; margin: 0; border: 0; padding: 0; }
+.monitor-leg-picker[hidden] { display: none; }
 .monitor-leg-picker legend, .monitor-goal-picker legend { margin-bottom: 6px; padding: 0; }
 .monitor-leg-picker .layer-tabs { width: 100%; margin: 0; }
 .monitor-leg-picker input, .monitor-goal-option input { position: absolute; opacity: 0; pointer-events: none; }

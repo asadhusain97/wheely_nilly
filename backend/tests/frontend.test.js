@@ -29,6 +29,10 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /min-width:44px;min-height:44px/);
     assert.match(css, /backdrop-filter:blur\(var\(--glass-blur\)\) saturate\(var\(--glass-saturation\)\)/);
   });
+  it('prevents app text selection while preserving editable field behavior', () => {
+    assert.match(css, /\.app-shell\{[^}]*-webkit-user-select:none[^}]*user-select:none[^}]*-webkit-touch-callout:none/);
+    assert.match(css, /\.app-shell :is\(input,textarea,\[contenteditable="true"\]\)\{[^}]*-webkit-user-select:text[^}]*user-select:text[^}]*-webkit-touch-callout:default/);
+  });
   it('uses the Wheely Nilly brand and logo assets', () => {
     assert.match(html, /<title>Wheely Nilly<\/title>/);
     assert.match(html, /class="brand-mark" src="\/assets\/images\/logo\.png"/);
@@ -58,13 +62,28 @@ describe('responsive dashboard shell', () => {
   it('keeps efficiency ahead of opportunities and open trades', () => {
     assert.ok(html.indexOf('id="efficiency-title"') < html.indexOf('id="opportunities-title"'));
     assert.ok(html.indexOf('id="efficiency-title"') < html.indexOf('id="open-trades-title"'));
-    for (const [id, term] of [['capital-velocity-label', 'Capital velocity'], ['premium-capture-label', 'Premium capture']]) {
+    for (const [id, term] of [
+      ['open-csps-label', 'Open CSPs / open CCs'],
+      ['open-ccs-label', 'Open CSPs / open CCs'],
+      ['capital-velocity-label', 'Capital velocity'],
+      ['premium-capture-label', 'Premium capture'],
+    ]) {
       assert.match(html, new RegExp(`id="${id}"`));
       assert.match(js, new RegExp(`\\['#${id}', '${term}'\\]`));
     }
     assert.match(js, /function initializeHomeGlossaryTerms/);
     assert.match(js, /createGlossaryTerm\(metricName\.textContent\.trim\(\), term, 'home-glossary-label'\)/);
     assert.match(css, /\.home-glossary-label\{display:inline;vertical-align:baseline\}/);
+  });
+  it('rounds dollar totals to whole dollars while retaining market-price precision', () => {
+    assert.match(js, /const money = \(value, \{ sign = false, maximumFractionDigits = 0 \} = \{\}\)/);
+    assert.match(js, /const marketPrice = \(value\) => money\(value, \{ maximumFractionDigits: 2 \}\)/);
+    assert.match(js, /marketPrice\(trade\.strike\)/);
+    assert.match(js, /marketPrice\(value\)/);
+    assert.match(screenerJs, /const money = \(value, maximumFractionDigits = 0\)/);
+    assert.match(screenerJs, /const marketPrice = \(value\) => money\(value, 2\)/);
+    assert.match(screenerJs, /marketPrice\(candidate\.strike\)/);
+    assert.match(screenerJs, /money\(candidate\.net_contract_credit\)/);
   });
   it('keeps primary navigation to four clear destinations', () => {
     const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
@@ -90,7 +109,13 @@ describe('responsive dashboard shell', () => {
     for (const token of ['Fits ', 'candidate-fit', 'contract_symbol', 'Option type', 'Quote time', 'gross_contract_credit', 'downside_buffer', 'quote_age_seconds', 'Applied rules', 'candidate-rules', 'Calculation assumptions', 'candidate-assumptions', 'Why other contracts were filtered', 'candidate-exclusions', 'exclusionsText']) {
       assert.doesNotMatch(screenerJs, new RegExp(token));
     }
-    assert.doesNotMatch(screenerJs, /scanAll|scan-all/);
+    assert.match(screenerJs, /async function scanAll/);
+    assert.match(screenerJs, /\/api\/v1\/screens\/scan-all/);
+    assert.match(screenerJs, /target\.stockPrice = entry\.result\.underlying_price/);
+    assert.match(screenerJs, /target\.stockPrice = result\.underlying_price/);
+    assert.match(screenerJs, /return \{ initialize, loadTargets, scanTarget, scanAll \}/);
+    assert.match(js, /await screenerController\.scanAll\(\)/);
+    assert.match(html, /id="refresh-button"[^>]+aria-label="Refresh prices and scan Radar"/);
     assert.match(screenerJs, /state\.loading\.has/);
     assert.match(screenerJs, /\/api\/v1\/screens\/instruments\?query=/);
     assert.match(screenerJs, /Select a verified instrument from the results/);
@@ -103,7 +128,11 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /monitor-remove-button/);
     assert.match(screenerJs, /monitor-target-toggle/);
     assert.match(screenerJs, /state\.collapsed/);
+    assert.match(screenerJs, /seenTargets: new Set/);
+    assert.match(screenerJs, /if \(!state\.seenTargets\.has\(target\.symbol\)\)[\s\S]*?state\.collapsed\.add\(target\.symbol\)/);
     assert.match(screenerJs, /targetIdentity/);
+    assert.match(screenerJs, /stockPriceTag\(target\.stockPrice\)/);
+    assert.match(js, /createScreenerController\(\{[\s\S]*?stockPriceTag,/);
     assert.match(screenerJs, /createGlossaryTerm/);
     assert.match(screenerJs, /function glossaryLabel/);
     assert.match(screenerJs, /function rulesSummary/);
@@ -141,8 +170,12 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /@media \(max-width: 360px\)/);
     assert.match(screenerCss, /prefers-reduced-motion: reduce/);
     assert.match(screenerCss, /backdrop-filter: blur\(22px\) saturate\(165%\)/);
-    assert.match(html, /class="layer-tabs strategy-tabs" id="global-leg-tabs"/);
+    assert.doesNotMatch(html, /id="goal-leg-tabs"/);
+    assert.match(settingsJs, /className = 'layer-tabs strategy-tabs goal-inline-strategy-tabs'/);
     assert.match(html, /class="layer-tabs strategy-tabs" id="monitor-leg-tabs"/);
+    assert.ok(html.indexOf('id="monitor-goal-tabs"') < html.indexOf('id="monitor-leg-tabs"'));
+    assert.match(html, /id="monitor-leg-picker" hidden/);
+    assert.match(screenerJs, /legForGoal/);
     assert.match(settingsCss, /\.layer-tabs button,[\s\S]*?\.layer-tabs \.strategy-option > span/);
     assert.match(settingsCss, /\.layer-tabs button,\s*\.layer-tabs \.strategy-option > span\s*\{\s*min-height: 38px/);
     assert.match(settingsCss, /\.strategy-tabs > button,[\s\S]*?flex: 1 1 0/);
@@ -155,9 +188,14 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs"/);
     assert.match(html, /class="goal-picker" id="monitor-goal-tabs"/);
     assert.match(screenerCss, /\.monitor-leg-picker legend, \.monitor-goal-picker legend \{[^}]*margin-bottom: 6px/);
+    assert.match(screenerCss, /\.monitor-leg-picker\[hidden\] \{ display: none; \}/);
+    assert.match(settingsCss, /\.goal-inline-strategy-tabs\s*\{[^}]*width: 108px[^}]*flex: 0 0 108px[^}]*margin: 0/);
+    assert.match(settingsCss, /\.goal-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 10px/);
     assert.match(goalSelectorCss, /prefers-reduced-transparency: reduce/);
     assert.match(screenerCss, /\.monitor-remove-button\.is-confirming/);
     assert.match(screenerCss, /\.monitor-symbol-mark \{[^}]*width: auto[^}]*white-space: nowrap/);
+    assert.match(screenerJs, /const meta = node\('div', 'monitor-target-meta'\);[\s\S]*?meta\.append\(stockPriceTag\(target\.stockPrice\)\)/);
+    assert.match(screenerCss, /\.monitor-target-meta > \.stock-price-tag/);
     assert.match(screenerCss, /\.monitor-target-body\[hidden\]/);
     assert.doesNotMatch(screenerCss, /\.monitor-target-disclosure/);
     assert.match(screenerCss, /\.candidate-open-label \{[^}]*min-width: 56px[^}]*grid-column: 1\/-1[^}]*grid-row: 3/);
@@ -179,16 +217,15 @@ describe('responsive dashboard shell', () => {
     assert.match(more, /<h1 id="more-title">Strategy settings<\/h1>/);
     assert.match(more, /id="open-glossary"[^>]+aria-haspopup="dialog"[^>]+aria-controls="glossary-dialog"/);
     assert.doesNotMatch(more, /id="glossary-title"|class="glossary-group"/);
-    for (const id of ['strategy-settings-workspace', 'global-leg-tabs', 'goal-preset-tabs', 'settings-ticker-search', 'settings-ticker-count', 'ticker-playbook-list', 'settings-status']) {
+    for (const id of ['strategy-settings-workspace', 'goal-preset-tabs', 'settings-ticker-search', 'settings-ticker-count', 'ticker-playbook-list', 'settings-status']) {
       assert.match(more, new RegExp(`id="${id}"`));
     }
-    assert.ok(more.indexOf('settings-global-title') < more.indexOf('settings-goals-title'));
     assert.ok(more.indexOf('settings-goals-title') < more.indexOf('settings-tickers-title'));
     assert.doesNotMatch(more, /settings-lineage|settings-scopes|data-settings-scope/);
-    assert.match(more, /<h2 id="settings-global-title">Defaults<\/h2>/);
-    assert.match(more, /Lighter values come\s+from Defaults/);
+    assert.doesNotMatch(more, /settings-global-title|>Defaults<|Lighter values/);
+    assert.match(more, /Choose what Radar should optimize for/);
     assert.match(html, /href="\/assets\/css\/settings\.css"/);
-    assert.match(more, /class="settings-edit"[^>]+title="Edit default settings"[\s\S]*?<svg/);
+    assert.match(more, /class="settings-edit"[^>]+title="Edit selected goal"[\s\S]*?<svg/);
     assert.doesNotMatch(more, />\s*Edit\s*</);
     assert.match(more, /editable starting points, not trading recommendations/);
     assert.match(more, /class="settings-support"[^>]+aria-label="Support Wheely Nilly"/);
@@ -198,7 +235,7 @@ describe('responsive dashboard shell', () => {
       assert.match(html, new RegExp(`id="${id}"`));
     }
     assert.match(html, /class="settings-editor-sheet"[^>]+role="dialog"[^>]+aria-modal="true"/);
-    for (const token of ['Advanced rules', 'minNetSalePriceMinor', 'maxNetPurchasePriceMinor', 'Settings saved', 'window.confirm', '/api/v1/strategy-settings', 'getTrackedTickers', 'field-inherit-reset', 'BUILT_IN_GLOBAL', 'pointerdown']) {
+    for (const token of ['Advanced rules', 'minNetSalePriceMinor', 'maxNetPurchasePriceMinor', 'Settings saved', 'window.confirm', '/api/v1/strategy-settings', 'getTrackedTickers', 'field-inherit-reset', 'BUILT_IN_GOAL_PROFILES', 'pointerdown']) {
       assert.match(settingsJs, new RegExp(token));
     }
     assert.doesNotMatch(settingsJs, /override-toggle|data-settings-scope/);
@@ -209,7 +246,8 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /\['e', 'E', '\+', '-'\]\.includes\(event\.key\)/);
     assert.match(settingsJs, /input\.min = '0';[\s\S]*?input\.step = '0\.01'/);
     assert.doesNotMatch(settingsJs, /input\.type = 'text'/);
-    assert.match(settingsJs, /Object\.values\(model\.editor\.draft\.tickerPlaybooks\[model\.editor\.symbol\]\)[\s\S]*?settings\.enabled = true/);
+    assert.match(settingsJs, /tickerPlaybooks\[model\.editor\.symbol\]\[model\.editor\.leg\]\.enabled = true/);
+    assert.doesNotMatch(settingsJs, /Object\.values\(model\.editor\.draft\.tickerPlaybooks/);
     assert.match(settingsJs, /function resolveTickerGoal/);
     assert.match(settingsJs, /sorted\.slice\(0, 8\)/);
     assert.match(settingsJs, /b\.recency - a\.recency/);
@@ -225,9 +263,14 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.rule-value\.is-inherited\s*\{[^}]*color: #9a9a94/);
     assert.match(settingsCss, /\.ticker-leg-panel \.editor-rule-copy small\s*\{[^}]*color: rgba\(85, 85, 79, \.48\)[^}]*font-weight: 500/);
     assert.match(settingsJs, /goal-picker ticker-goal-picker/);
+    assert.match(settingsJs, /sheet-tabs ticker-inline-strategy-tabs/);
+    assert.match(settingsJs, /strategyTabs\.setAttribute\('aria-labelledby', strategyLabel\.id\)/);
     assert.match(settingsJs, /tickerRules\.querySelector\('\.editor-rule-list'\)\.prepend\(priceGuard/);
     assert.doesNotMatch(settingsJs, /document\.createElement\('select'\)/);
     assert.match(settingsCss, /\.ticker-price-guard \.editor-rule-controls\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 34px/);
+    assert.match(settingsCss, /\.ticker-strategy-field\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 108px[^}]*align-items: center/);
+    assert.match(settingsCss, /\.ticker-inline-strategy-tabs\s*\{[^}]*width: 108px[^}]*justify-self: end[^}]*margin: 0/);
+    assert.match(settingsCss, /\.ticker-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 10px/);
     assert.match(settingsCss, /\.rule-separator\s*\{[^}]*color: inherit/);
     assert.match(settingsCss, /\.settings-rule-advanced > summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 20px/);
     assert.match(settingsCss, /\.disclosure-icon\s*\{[^}]*justify-self: end/);
@@ -255,7 +298,7 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /createGlossaryTerm/);
     assert.match(settingsJs, /\{ glossaryTerms: true \}/);
     assert.match(settingsJs, /GLOSSARY_TERM_BY_RULE_KEY/);
-    assert.match(settingsJs, /ruleSummary\(effective,[\s\S]*?\{ glossaryTerms: true \}\)/);
+    assert.match(settingsJs, /ruleSummary\(rules,[\s\S]*?\{ glossaryTerms: true \}\)/);
     assert.match(settingsJs, /createGlossaryTerm\(labelText, 'Net price guard', 'editor-rule-label'\)/);
     assert.match(settingsJs, /createGlossaryTerm\('Goal', 'Goal profiles', 'ticker-goal-label'\)/);
     assert.match(settingsJs, /!model\.editor \|\| overlay\(\)\.inert/);

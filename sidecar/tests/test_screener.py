@@ -83,21 +83,56 @@ def test_old_or_missing_yahoo_trade_time_is_stale():
     assert missing_excluded == {"stale_quote": 1}
 
 
-def test_response_quote_timestamp_comes_from_the_option_trade():
-    trade_time = datetime.now(UTC) - timedelta(minutes=5)
+def test_closing_quotes_stay_fresh_until_the_next_market_data_bar():
+    market_close = datetime(2026, 8, 26, 20, tzinfo=UTC)
+    after_hours = market_close + timedelta(hours=7)
+    closing_quote = snapshot().quotes[0].model_copy(update={"quote_time": market_close - timedelta(minutes=10)})
+    chain = snapshot().model_copy(update={
+        "underlying_quote_time": market_close,
+        "quotes": [closing_quote],
+    })
+
+    candidates, excluded = screen(
+        chain,
+        ScreenRequest(symbol="XYZ", leg="cash_secured_put", cash_available=10_000),
+        after_hours,
+    )
+
+    assert excluded == {}
+    assert candidates[0]["quote_age_seconds"] == 600
+
+
+def test_response_quote_timestamp_comes_from_the_underlying_price_bar():
+    price_time = datetime.now(UTC) - timedelta(minutes=15)
+    option_trade_time = datetime.now(UTC) - timedelta(minutes=1)
 
     class StaticProvider:
         async def fetch_chain(self, _symbol, _min_dte, _max_dte):
             return snapshot().model_copy(update={
                 "fetched_at": datetime.now(UTC),
-                "quotes": [snapshot().quotes[0].model_copy(update={"quote_time": trade_time})],
+                "underlying_quote_time": price_time,
+                "quotes": [snapshot().quotes[0].model_copy(update={"quote_time": option_trade_time})],
             })
 
     result = asyncio.run(ScreenerService(StaticProvider()).run(ScreenRequest(
         symbol="XYZ", leg="cash_secured_put", cash_available=10_000,
     )))
 
-    assert result["quote_timestamp"] == trade_time
+    assert result["quote_timestamp"] == price_time
+    assert result["underlying_price"] == 100
+
+
+def test_response_keeps_underlying_price_when_no_contract_matches():
+    class EmptyProvider:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            return ChainSnapshot(provider="fixture", underlying_price=123.45, fetched_at=NOW, quotes=[])
+
+    result = asyncio.run(ScreenerService(EmptyProvider()).run(ScreenRequest(
+        symbol="XYZ", leg="cash_secured_put", cash_available=10_000,
+    )))
+
+    assert result["candidates"] == []
+    assert result["underlying_price"] == 123.45
 
 
 def test_expired_cache_is_not_used_when_yahoo_fails():

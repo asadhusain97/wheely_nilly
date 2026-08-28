@@ -11,6 +11,8 @@ const js = readFileSync(path.join(rootDirectory, 'frontend/assets/js/app.js'), '
 const glossaryJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/glossary.js'), 'utf8');
 const settingsJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/settings.js'), 'utf8');
 const screenerJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/screener.js'), 'utf8');
+const radarScoringJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/radar-scoring.js'), 'utf8');
+const radarScoringConfigJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/radar-scoring-config.js'), 'utf8');
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
 const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
 
@@ -83,8 +85,8 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /marketPrice\(value\)/);
     assert.match(screenerJs, /const money = \(value, maximumFractionDigits = 0\)/);
     assert.match(screenerJs, /const marketPrice = \(value\) => money\(value, 2\)/);
-    assert.match(screenerJs, /marketPrice\(candidate\.strike\)/);
-    assert.match(screenerJs, /money\(candidate\.net_contract_credit\)/);
+    assert.match(screenerJs, /marketPrice\(viewModel\.strike\)/);
+    assert.match(screenerJs, /money\(viewModel\.reward\.netCredit\)/);
   });
   it('turns binary Close guidance into a compact decision-first contract card', () => {
     for (const component of ['contractHeader', 'recommendationSummary', 'positionState', 'economicsSummary', 'premiumCaptureProgress', 'contractDetails']) {
@@ -172,10 +174,10 @@ describe('responsive dashboard shell', () => {
     assert.doesNotMatch(html, /selected-instrument|verified-mark|Add a valid instrument/);
     assert.doesNotMatch(html, /monitor-last-scan|monitor-freshness|monitor-target-count|Targets use current holdings|Edit playbook/);
     assert.doesNotMatch(html, /id="screener-form"|id="screener-body"/);
-    for (const token of ['net_contract_credit', 'period_return', 'theta_per_day', 'implied_volatility', 'breakeven', 'strike_distance', 'annualized_return', 'candidate.bid', 'candidate.ask']) {
-      assert.match(screenerJs, new RegExp(token.replace('.', '\\.')));
+    for (const token of ['net_contract_credit', 'period_return', 'theta_per_day', 'implied_volatility', 'annualized_return', 'candidate.bid', 'candidate.ask']) {
+      assert.match(`${screenerJs}\n${radarScoringJs}`, new RegExp(token.replace('.', '\\.')));
     }
-    for (const token of ['Fits ', 'candidate-fit', 'contract_symbol', 'Option type', 'Quote time', 'gross_contract_credit', 'downside_buffer', 'quote_age_seconds', 'Applied rules', 'candidate-rules', 'Calculation assumptions', 'candidate-assumptions', 'Why other contracts were filtered', 'candidate-exclusions', 'exclusionsText']) {
+    for (const token of ['Option type', 'Quote time', 'Applied rules', 'candidate-rules', 'Calculation assumptions', 'candidate-assumptions', 'Why other contracts were filtered', 'candidate-exclusions', 'exclusionsText']) {
       assert.doesNotMatch(screenerJs, new RegExp(token));
     }
     assert.match(screenerJs, /async function scanAll/);
@@ -206,29 +208,38 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /function glossaryLabel/);
     assert.match(screenerJs, /function rulesSummary/);
     const candidateCardSource = screenerJs.slice(screenerJs.indexOf('function candidateCard'), screenerJs.indexOf('function scanResultView'));
-    assert.doesNotMatch(candidateCardSource, /candidate-compact|\bmetric\(/);
-    assert.equal((candidateCardSource.match(/\bdetailRow\(/g) ?? []).length, 8);
-    const candidateDetailOrder = [
-      "detailRow('Approx. |delta|'", "detailRow('Theta per day'", "detailRow('Strike distance'",
-      "detailRow('Annualized return'", "detailRow('Open interest / volume'", "detailRow('Implied volatility'",
-      "detailRow('Executable option price'", "detailRow('Spread'",
+    const collapsedHierarchy = [
+      "node('div', 'candidate-header')", "node('div', 'candidate-reward')", "node('div', 'candidate-signals')",
+      '`candidate-fit is-${viewModel.strategyFit.label}`', "node('span', 'candidate-disclosure')",
     ];
-    for (let index = 1; index < candidateDetailOrder.length; index += 1) {
-      assert.ok(candidateCardSource.indexOf(candidateDetailOrder[index - 1]) < candidateCardSource.indexOf(candidateDetailOrder[index]));
+    for (let index = 1; index < collapsedHierarchy.length; index += 1) {
+      assert.ok(candidateCardSource.indexOf(collapsedHierarchy[index - 1]) < candidateCardSource.indexOf(collapsedHierarchy[index]));
     }
-    assert.match(candidateCardSource, /glossaryLabel\('net credit', 'Net contract credit'\)/);
-    assert.match(candidateCardSource, /glossaryLabel\('return on capital', 'Return on capital'\)/);
-    assert.doesNotMatch(candidateCardSource, /glossaryLabel\(candidate(?:Headline|ReturnCaption)/);
+    assert.match(candidateCardSource, /summary\.append\(header, reward, signals, fit, disclosure\)/);
+    assert.match(candidateCardSource, /whyTrade\(viewModel\.reasons\)/);
+    assert.ok(candidateCardSource.indexOf("detailSection('Execution'") < candidateCardSource.indexOf("detailSection('Additional detail'"));
+    for (const hiddenUntilExpanded of ['Theta per day', 'Annualized return', 'Implied volatility', 'Bid / ask', 'Spread', 'Market activity']) {
+      assert.ok(candidateCardSource.indexOf(hiddenUntilExpanded) > candidateCardSource.indexOf("const detail = node('div', 'candidate-detail')"));
+    }
+    for (const repeatedMetric of ['Net credit', 'Return on capital', 'Return / day', 'Strike', 'Underlying price', 'Strike distance', 'Approx. |delta|', 'DTE', 'Executable option price', 'Liquidity rating']) {
+      assert.doesNotMatch(candidateCardSource, new RegExp(`detailRow\\('${repeatedMetric.replace(/[|]/g, '\\$&')}'`));
+    }
+    assert.match(candidateCardSource, /detailRow\('Bid \/ ask'/);
+    assert.match(candidateCardSource, /detailRow\('Market activity'/);
+    assert.match(candidateCardSource, /glossaryLabel\('ROC', 'Return on capital'\)/);
     assert.match(screenerJs, /metricName\.append\(glossaryLabel\(label, term\)\);[\s\S]*?node\('dd', '', value\)/);
     assert.match(screenerJs, /document\.createTextNode\(`\$\{rules\.minDte\}–\$\{rules\.maxDte\} `\)[\s\S]*?glossaryLabel\('DTE', 'DTE range'\)/);
     assert.match(screenerJs, /document\.createTextNode\(`≥ \$\{percent\(rules\.minPeriodReturn\)\} `\)[\s\S]*?glossaryLabel\('term return', 'Minimum return'\)/);
-    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Implied volatility', 'Theta per day', 'Strike distance', 'Annualized return']) {
+    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Bid-ask spread', 'Open interest / volume', 'Implied volatility', 'Theta per day', 'Annualized return']) {
       assert.match(screenerJs, new RegExp(term.replace(/[|/]/g, '\\$&')));
     }
-    assert.match(candidateCardSource, /detailRow\('Approx\. \|delta\|'[^\n]+candidate\.delta[^\n]+Math\.abs\(candidate\.delta\)[^\n]+, 'Delta'\)/);
-    assert.doesNotMatch(candidateCardSource, /Breakeven|Net sale price|Net sale \/ breakeven price/);
-    assert.doesNotMatch(candidateCardSource, /Underlying price|Estimated fees|Secondary metric|Provider-derived|Black–Scholes estimate/);
-    assert.match(candidateCardSource, /Bid \$\{marketPrice\(candidate\.bid\)\} · Ask \$\{marketPrice\(candidate\.ask\)\}/);
+    assert.match(screenerJs, /prepareRadarCandidates\(result\)/);
+    for (const fn of ['calculateLiquidity', 'calculateReturnMetrics', 'calculateStrikeDistance', 'calculateDeltaFit', 'calculateDteFit', 'generateTradeReasons', 'generateTradeWarnings']) {
+      assert.match(radarScoringJs, new RegExp(`function ${fn}`));
+    }
+    for (const token of ['spread: 0.55', 'openInterest: 0.30', 'volume: 0.15', 'delta: 0.25', 'dte: 0.15', 'return: 0.25', 'strikeCushion: 0.15', 'liquidity: 0.20']) {
+      assert.match(radarScoringConfigJs, new RegExp(token.replace('.', '\\.')));
+    }
     assert.match(screenerJs, /hydrateTargetIdentities/);
     assert.match(screenerJs, /exactInstrumentIdentity/);
     assert.match(screenerJs, /instrumentType/);
@@ -279,10 +290,11 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /\.monitor-target-meta > \.stock-price-tag/);
     assert.match(screenerCss, /\.monitor-target-body\[hidden\]/);
     assert.doesNotMatch(screenerCss, /\.monitor-target-disclosure/);
-    assert.doesNotMatch(screenerCss, /\.candidate-compact|\.monitor-metric|\.candidate-open-label/);
-    assert.match(screenerCss, /\.candidate-disclosure \{[^}]*width: 24px[^}]*grid-column: 1\/-1[^}]*grid-row: 2[^}]*justify-self: center/);
-    assert.match(screenerCss, /\.candidate-disclosure::after \{[^}]*width: 3px[^}]*height: 3px[^}]*border-right: 1px solid currentColor[^}]*transform: rotate\(45deg\)/);
-    assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-disclosure::after \{ transform: rotate\(225deg\); \}/);
+    assert.match(screenerCss, /\.candidate-reward \{[^}]*grid-template-columns: 1fr 1fr/);
+    assert.match(screenerCss, /\.candidate-signals \{[^}]*grid-template-columns: \.7fr 1\.15fr 1\.35fr/);
+    assert.match(screenerCss, /\.candidate-disclosure > i \{[^}]*border-right: 1px solid currentColor[^}]*transform: rotate\(45deg\)/);
+    assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-disclosure > i \{ transform: rotate\(225deg\); \}/);
+    assert.match(screenerCss, /\.candidate-reason-list/);
     assert.doesNotMatch(screenerCss, /content: "⌄"/);
     assert.doesNotMatch(candidateCardSource, /'Details'/);
     assert.match(screenerJs, /`Breakeven at most \$\{price\}`/);

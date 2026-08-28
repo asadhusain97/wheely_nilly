@@ -1,4 +1,5 @@
 import { createGlossaryTerm } from './glossary.js';
+import { prepareRadarCandidates } from './radar-scoring.js';
 
 const LEG_LABELS = { coveredCall: 'Covered call', cashSecuredPut: 'Cash-secured put' };
 const GOAL_LABELS = {
@@ -66,6 +67,8 @@ const money = (value, maximumFractionDigits = 0) => value == null ? '—' : new 
 const marketPrice = (value) => money(value, 2);
 const percent = (value) => value == null ? '—' : new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 2 }).format(value);
 const number = (value, digits = 2) => value == null ? '—' : Number(value).toLocaleString('en-US', { maximumFractionDigits: digits });
+const percentagePoints = (value, digits = 2) => value == null ? '—' : `${Number(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+const compactDate = (value) => value ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`)) : '—';
 export const marketDateTime = (value) => value ? `${new Intl.DateTimeFormat('en-US', {
   month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York',
 }).format(new Date(value))} ET` : '—';
@@ -177,6 +180,7 @@ function trashIcon() {
 }
 
 function detailRow(label, value, term, note = '') {
+  if (value == null || value === '—') return null;
   const row = node('div', 'candidate-detail-row');
   const metricName = node('dt');
   metricName.append(glossaryLabel(label, term));
@@ -185,42 +189,95 @@ function detailRow(label, value, term, note = '') {
   return row;
 }
 
-function candidateCard(candidate, result, rank) {
+function detailSection(title, rows) {
+  const presentRows = rows.filter(Boolean);
+  if (!presentRows.length) return null;
+  const section = node('section', 'candidate-analysis-section');
+  section.append(node('h4', '', title));
+  const metrics = node('dl', 'candidate-detail-grid');
+  metrics.append(...presentRows);
+  section.append(metrics);
+  return section;
+}
+
+function whyTrade(reasons) {
+  const section = node('section', 'candidate-why');
+  section.append(node('p', 'candidate-analysis-eyebrow', 'Why this trade?'));
+  const list = node('ul', 'candidate-reason-list');
+  for (const reason of reasons) {
+    const item = node('li', `candidate-reason is-${reason.tone}`);
+    item.append(node('span', 'candidate-reason-mark'), node('div'));
+    item.lastChild.append(node('strong', '', reason.title), node('p', '', reason.message));
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function fitLabel(label) {
+  return `${sentence(label)} fit`;
+}
+
+function liquidityLabel(label) {
+  return label === 'unknown' ? 'Unknown liquidity' : `${sentence(label)} liquidity`;
+}
+
+function candidateCard(viewModel) {
+  const candidate = viewModel.rawMetrics;
   const card = document.createElement('details');
   card.className = 'candidate-card';
+  card.dataset.fit = viewModel.strategyFit.label;
   const summary = document.createElement('summary');
-  const identity = node('div', 'candidate-identity');
-  identity.append(node('span', 'candidate-rank', String(rank)), node('div', '', undefined));
-  identity.lastChild.append(node('strong', '', `${result.symbol} ${marketPrice(candidate.strike)}`), node('small', '', `${candidate.expiration} · ${candidate.dte} DTE`));
-  const primary = node('div', 'candidate-primary');
-  const credit = node('strong');
-  credit.append(
-    document.createTextNode(`${money(candidate.net_contract_credit)} `),
-    glossaryLabel('net credit', 'Net contract credit'),
+  const header = node('div', 'candidate-header');
+  header.append(node('span', 'candidate-match', `#${viewModel.rank} match`), node('div', 'candidate-contract'));
+  header.lastChild.append(
+    node('strong', '', `${viewModel.symbol} ${marketPrice(viewModel.strike)} ${sentence(viewModel.optionType)}`),
+    node('small', '', `${compactDate(viewModel.expiration)} · ${viewModel.dte} DTE`),
   );
-  const candidateReturn = node('small');
-  const days = Number(candidate.dte);
-  candidateReturn.append(
-    document.createTextNode(`Estimated ${Number.isFinite(days) ? `${days}-day ` : ''}`),
-    glossaryLabel('return on capital', 'Return on capital'),
-    document.createTextNode(`: ${percent(candidate.period_return)}`),
-  );
-  primary.append(credit, candidateReturn);
-  summary.append(identity, primary, node('span', 'candidate-disclosure'));
+
+  const reward = node('div', 'candidate-reward');
+  const credit = node('div', 'candidate-reward-metric');
+  credit.append(node('strong', '', money(viewModel.reward.netCredit)), glossaryLabel('Credit', 'Net contract credit'));
+  const roc = node('div', 'candidate-reward-metric is-roc');
+  roc.append(node('strong', '', percentagePoints(viewModel.reward.roc)), glossaryLabel('ROC', 'Return on capital'));
+  reward.append(credit, roc);
+
+  const signals = node('div', 'candidate-signals');
+  const delta = node('span', 'candidate-signal');
+  delta.append(node('strong', '', viewModel.risk.delta == null ? '—' : number(viewModel.risk.delta)), glossaryLabel('Δ', 'Delta'));
+  const cushion = node('span', 'candidate-signal');
+  cushion.append(node('strong', '', viewModel.risk.strikeDistanceLabel));
+  const execution = node('span', `candidate-signal candidate-liquidity is-${viewModel.execution.liquidityLabel}`);
+  execution.append(node('i'), node('strong', '', liquidityLabel(viewModel.execution.liquidityLabel)));
+  signals.append(delta, cushion, execution);
+
+  const fit = node('div', `candidate-fit is-${viewModel.strategyFit.label}`);
+  const fitHeading = node('div');
+  fitHeading.append(node('i'), node('strong', '', fitLabel(viewModel.strategyFit.label)));
+  fit.append(fitHeading, node('p', '', viewModel.strategyFit.summary));
+
+  const disclosure = node('span', 'candidate-disclosure');
+  disclosure.append(node('span', 'candidate-disclosure-label', 'View analysis'), node('i'));
+  summary.append(header, reward, signals, fit, disclosure);
 
   const detail = node('div', 'candidate-detail');
-  const quote = node('dl', 'candidate-detail-grid');
-  quote.append(
-    detailRow('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta)), 'Delta'),
-    detailRow('Theta per day', number(candidate.theta_per_day, 4), 'Theta per day'),
-    detailRow('Strike distance', percent(Math.abs(candidate.strike_distance)), 'Strike distance'),
-    detailRow('Annualized return', percent(candidate.annualized_return), 'Annualized return'),
-    detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`, 'Open interest / volume'),
-    detailRow('Implied volatility', percent(candidate.implied_volatility), 'Implied volatility'),
-    detailRow('Executable option price', `${marketPrice(candidate.executable_option_price_per_share)} per share`, 'Executable option price', `Bid ${marketPrice(candidate.bid)} · Ask ${marketPrice(candidate.ask)}`),
-    detailRow('Spread', percent(candidate.spread_percent), 'Bid-ask spread'),
-  );
-  detail.append(quote);
+  const sections = [
+    whyTrade(viewModel.reasons),
+    detailSection('Execution', [
+      detailRow('Bid / ask', candidate.bid == null || candidate.ask == null ? null : `${marketPrice(candidate.bid)} / ${marketPrice(candidate.ask)}`, 'Bid-ask prices'),
+      detailRow('Spread', viewModel.execution.factors.spread.value == null ? null : percentagePoints(viewModel.execution.factors.spread.value, 2), 'Bid-ask spread'),
+      detailRow('Market activity', candidate.open_interest == null || candidate.volume == null ? null : `${number(candidate.open_interest, 0)} OI · ${number(candidate.volume, 0)} volume`, 'Open interest / volume'),
+    ]),
+    detailSection('Additional detail', [
+      detailRow('Capital required', money(viewModel.reward.capitalRequired), 'Capital at risk'),
+      detailRow('Annualized return', percentagePoints(viewModel.reward.annualizedReturn, 1), 'Annualized return'),
+      detailRow('Implied volatility', candidate.implied_volatility == null ? null : percent(candidate.implied_volatility), 'Implied volatility'),
+      detailRow('Theta per day', candidate.theta_per_day == null ? null : number(candidate.theta_per_day, 4), 'Theta per day'),
+      detailRow('Gamma', candidate.gamma == null ? null : number(candidate.gamma, 4), 'Gamma'),
+      detailRow('Vega', candidate.vega == null ? null : number(candidate.vega, 4), 'Vega'),
+    ]),
+  ].filter(Boolean);
+  detail.append(...sections);
   card.append(summary, detail);
   return card;
 }
@@ -257,7 +314,7 @@ function scanResultView(entry) {
     container.append(noMatch);
     return container;
   }
-  result.candidates.forEach((candidate, index) => container.append(candidateCard(candidate, result, index + 1)));
+  prepareRadarCandidates(result).forEach((candidate) => container.append(candidateCard(candidate)));
   return container;
 }
 

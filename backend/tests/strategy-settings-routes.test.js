@@ -78,7 +78,7 @@ describe('strategy settings API', () => {
     const response = await request(app).get('/api/v1/strategy-settings/effective?symbol=voog&leg=coveredCall');
     assert.equal(response.status, 200);
     assert.equal(response.body.symbol, 'VOOG');
-    assert.equal(response.body.rules.minDte, 21);
+    assert.equal(response.body.rules.minDte, 14);
     assert.equal(response.body.rules.maxDte, 40);
     assert.equal(response.body.sourceMap.minDte, 'goal');
     assert.equal(response.body.sourceMap.maxDte, 'tickerOverride');

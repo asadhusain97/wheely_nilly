@@ -107,6 +107,6 @@ describe('playbook-aware opportunity monitoring', () => {
     assert.equal(scan.targets.find(({ symbol }) => symbol === 'GOOG').stockPrice, 195.10);
     const aapl = calls.filter(({ symbol }) => symbol === 'AAPL');
     assert.equal(aapl.length, 2);
-    assert.deepEqual(aapl.map(({ chain_min_dte, chain_max_dte }) => [chain_min_dte, chain_max_dte]), [[7, 45], [7, 45]]);
+    assert.deepEqual(aapl.map(({ chain_min_dte, chain_max_dte }) => [chain_min_dte, chain_max_dte]), [[7, 28], [7, 28]]);
   });
 });

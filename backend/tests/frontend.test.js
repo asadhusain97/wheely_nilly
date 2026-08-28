@@ -419,9 +419,15 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.glossary-search\s*\{[^}]*border-radius: 999px/);
     assert.match(settingsCss, /\.glossary-search:focus-within/);
     assert.match(settingsCss, /\.glossary-search input::\-webkit-search-cancel-button\s*\{[^}]*display: none/);
-    for (const term of ['Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Premium received', 'DTE', 'Delta', 'Open interest', 'Settings layers', 'Goal profiles', 'Moneyness', 'Target delta range', 'Maximum spread', 'Minimum open interest', 'Minimum volume', 'Minimum return', 'Net price guard', 'Candidate rank', 'Strike price', 'Underlying price', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Net contract credit', 'Return on capital', 'Period return', 'Net sale / breakeven price', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Estimated fee', 'Radar calculation inputs']) {
+    for (const term of ['Option contract', 'Covered call', 'Cash-secured put', 'Premium', 'ITM / ATM / OTM', 'Intrinsic &amp; extrinsic value', 'Exercise &amp; assignment', 'Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Premium received', 'DTE', 'Delta', 'Open interest', 'Settings layers', 'Goal profiles', 'Moneyness', 'Target delta range', 'Maximum spread', 'Minimum open interest', 'Minimum volume', 'Minimum return', 'Net price guard', 'Candidate rank', 'Strike price', 'Underlying price', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Net contract credit', 'Return on capital', 'Period return', 'Net sale / breakeven price', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Estimated fee', 'Radar calculation inputs']) {
       assert.match(glossary, new RegExp(term));
     }
+    assert.match(glossary, /class="glossary-example"/);
+    assert.match(glossary, /class="glossary-guide"/);
+    assert.match(glossary, /class="glossary-sources"/);
+    assert.match(glossary, /href="https:\/\/en\.wikipedia\.org\/wiki\//);
+    assert.match(glossary, /href="https:\/\/www\.theocc\.com\/company-information\/documents-and-archives\/options-disclosure-document"/);
+    assert.match(glossary, /target="_blank"[^>]+rel="noopener noreferrer"/);
     assert.equal((glossary.match(/<dt>Annualized/g) ?? []).length, 1);
     assert.match(glossary, /Dashboard: qualified booked profit × 365 ÷ Σ\(collateral × days held\)/);
     assert.match(glossary, /Radar: net premium ÷ return collateral × 365 ÷ DTE/);
@@ -429,6 +435,7 @@ describe('responsive dashboard shell', () => {
     assert.match(glossary, /Spread % = \(ask − bid\) ÷ midpoint × 100/);
     assert.match(glossary, /Cash-secured put = net premium ÷ \(strike × 100 − net premium\)/);
     assert.match(glossary, /Put breakeven price = strike − net premium per share/);
+    assert.match(glossary, /Strike distance % = \|strike − stock price\| ÷ stock price × 100%/);
     assert.doesNotMatch(more, /<table|CC holdings|Premium ledger|Alerts/);
     assert.doesNotMatch(js, /loadMore|loadAlerts|test-notification|\/api\/v1\/wheel\/(?:positions|premiums)/);
   });

@@ -68,8 +68,42 @@ describe('strategy settings model and persistence', () => {
     assert.deepEqual(second.settings, builtInStrategySettings());
     assert.equal(second.persistence.persisted, false);
     assert.equal(second.persistence.updatedAt, null);
-    assert.equal(second.settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 0.5);
+    assert.equal(second.settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 0.85);
     assert.equal('maxQuoteAgeSeconds' in second.settings.goalProfiles.acquire.cashSecuredPut, false);
+  });
+
+  it('gives every built-in goal a complete, distinct rule set', () => {
+    const profiles = builtInStrategySettings().goalProfiles;
+    assert.deepEqual(profiles.protect.coveredCall, {
+      minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
+      targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
+      minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
+      closeAtProfitCapture: 0.35,
+    });
+    assert.deepEqual(profiles.income.coveredCall, {
+      minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
+      targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
+      minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
+      closeAtProfitCapture: 0.50,
+    });
+    assert.deepEqual(profiles.income.cashSecuredPut, {
+      minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
+      targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
+      minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
+      closeAtProfitCapture: 0.50,
+    });
+    assert.deepEqual(profiles.exit.coveredCall, {
+      minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
+      targetDeltaMin: 0.45, targetDeltaMax: 0.65, maxSpreadPercent: 0.10,
+      minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.0025,
+      closeAtProfitCapture: 0.90,
+    });
+    assert.deepEqual(profiles.acquire.cashSecuredPut, {
+      minDte: 7, maxDte: 28, minMoneyness: 0.97, maxMoneyness: 1,
+      targetDeltaMin: 0.40, targetDeltaMax: 0.55, maxSpreadPercent: 0.10,
+      minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.005,
+      closeAtProfitCapture: 0.85,
+    });
   });
 
   it('atomically saves, reloads across service restarts, and restricts permissions', async () => {
@@ -197,6 +231,22 @@ describe('strategy settings model and persistence', () => {
     assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
   });
 
+  it('upgrades only saved profiles that still match the former built-ins', async () => {
+    const { service } = await temporaryService();
+    const former = migrateV1StrategySettings(legacySettings());
+    former.goalProfiles.protect.coveredCall.minVolume = 77;
+    const updatedAt = '2026-08-24T12:00:00.000Z';
+    await fs.mkdir(path.dirname(service.file), { recursive: true });
+    await fs.writeFile(service.file, JSON.stringify({ ...former, updatedAt }));
+
+    const loaded = await service.load();
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.minVolume, 77);
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.minDte, 30);
+    assert.equal(loaded.settings.goalProfiles.income.coveredCall.minDte, 14);
+    assert.equal(loaded.settings.goalProfiles.income.coveredCall.minMoneyness, 1);
+    assert.equal(loaded.settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 0.85);
+  });
+
   it('validates Close as greater than zero through one', () => {
     for (const value of [0, -0.1, 1.01]) {
       const settings = builtInStrategySettings();
@@ -218,8 +268,8 @@ describe('effective strategy settings resolution', () => {
 
     const effective = resolveEffectiveSettings(settings, { symbol: 'voog', leg: 'coveredCall' });
     assert.equal(effective.rules.minDte, 25);
-    assert.equal(effective.rules.maxDte, 45);
-    assert.equal(effective.rules.minMoneyness, 0.8);
+    assert.equal(effective.rules.maxDte, 35);
+    assert.equal(effective.rules.minMoneyness, 1);
     assert.equal(effective.rules.minVolume, 50);
     assert.equal(effective.sourceMap.minDte, 'tickerOverride');
     assert.equal(effective.sourceMap.maxDte, 'goal');
@@ -236,7 +286,7 @@ describe('effective strategy settings resolution', () => {
     assert.equal(resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' }).rules.minDte, 28);
     delete settings.tickerPlaybooks.VOOG.coveredCall.overrides.minDte;
     const reset = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
-    assert.equal(reset.rules.minDte, 21);
+    assert.equal(reset.rules.minDte, 14);
     assert.equal(reset.sourceMap.minDte, 'goal');
   });
 

@@ -82,14 +82,14 @@ describe('Radar fit, return, and explanations', () => {
     assert.deepEqual(calculateStrikeDistance({ optionType: 'call', strike: 112, currentPrice: 100 }), { percent: 12, label: '12.0% upside' });
   });
 
-  it('scores delta and DTE by distance from configured targets, not by lower or shorter values', () => {
-    const rules = { targetDeltaMin: 0.2, targetDeltaMax: 0.3, minDte: 21, maxDte: 45 };
-    assert.ok(calculateDeltaFit(0.25, rules, config).score > calculateDeltaFit(0.20, rules, config).score);
-    assert.ok(calculateDeltaFit(0.25, rules, config).score > calculateDeltaFit(0.30, rules, config).score);
+  it('uses each complete goal range midpoint as its own delta and DTE target', () => {
+    const rules = { targetDeltaMin: 0.30, targetDeltaMax: 0.46, minDte: 8, maxDte: 20 };
+    assert.ok(calculateDeltaFit(0.38, rules, config).score > calculateDeltaFit(0.30, rules, config).score);
+    assert.ok(calculateDeltaFit(0.38, rules, config).score > calculateDeltaFit(0.46, rules, config).score);
     assert.ok(calculateDeltaFit(0.25, { targetDeltaMin: null, targetDeltaMax: null }, config).score
       > calculateDeltaFit(0.05, { targetDeltaMin: null, targetDeltaMax: null }, config).score);
-    assert.ok(calculateDteFit(30, rules, config).score > calculateDteFit(21, rules, config).score);
-    assert.ok(calculateDteFit(30, rules, config).score > calculateDteFit(45, rules, config).score);
+    assert.ok(calculateDteFit(14, rules, config).score > calculateDteFit(8, rules, config).score);
+    assert.ok(calculateDteFit(14, rules, config).score > calculateDteFit(20, rules, config).score);
   });
 
   it('reuses canonical ROC and derives ROC per day and capital from it', () => {

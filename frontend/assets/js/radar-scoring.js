@@ -123,7 +123,7 @@ export function calculateStrikeDistance({ optionType, strike, currentPrice }) {
 }
 
 function targetWithBounds(preferred, minimum, maximum) {
-  if (minimum != null && maximum != null) return clamp(preferred ?? (minimum + maximum) / 2, minimum, maximum);
+  if (minimum != null && maximum != null) return (minimum + maximum) / 2;
   if (minimum != null) return Math.max(preferred ?? minimum, minimum);
   if (maximum != null) return Math.min(preferred ?? maximum, maximum);
   return preferred;

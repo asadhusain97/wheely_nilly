@@ -378,10 +378,79 @@
           <span class="sr-only" id="glossary-search-status" role="status" aria-live="polite"></span>
         </div>
         <div class="glossary-sheet-body" id="glossary-results">
-          <p class="glossary-intro">A field guide to the portfolio and Radar metrics used throughout Wheely
-            Nilly. Dashboard returns use matched, closed contracts; open credits remain unrealized.</p>
+          <p class="glossary-intro">Plain-English definitions for the options and portfolio numbers in Wheely
+            Nilly. Examples are simplified and exclude taxes. "Good" ranges are app starting points, not promises or
+            trade recommendations.</p>
           <p class="sr-only" id="glossary-description">Definitions for portfolio performance, capital, contracts,
             strategy settings, and Radar terms.</p>
+
+          <section class="glossary-group" aria-labelledby="glossary-basics-title">
+            <h3 id="glossary-basics-title">Options basics</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Option contract <span>Call or put</span></dt>
+                <dd>A contract tied to an underlying stock or fund. A call buyer gets the right to buy at the strike;
+                  a put buyer gets the right to sell. The seller takes the other side of that obligation. Standard
+                  equity contracts usually cover 100 shares, but adjusted contracts can differ.</dd>
+                <dd class="glossary-example">Example: one $50 call usually controls 100 shares at a $50 strike.</dd>
+                <dd class="glossary-formula">Contract value = option price per share × contract multiplier</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Option_(finance)" target="_blank"
+                    rel="noopener noreferrer">Option contract on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Covered call <span>CC</span></dt>
+                <dd>You own shares and sell a call against them. You collect premium now, but assignment can force you
+                  to sell the shares at the strike. The premium gives only a small downside cushion and the call caps
+                  the stock's upside above the strike.</dd>
+                <dd class="glossary-example">Example: own 100 shares, sell one $55 call for $2. If assigned, the
+                  effective sale price is $57 per share before fees.</dd>
+                <dd class="glossary-formula">Effective sale price = strike + net premium per share</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Cash-secured put <span>CSP</span></dt>
+                <dd>You sell a put and reserve enough cash to buy the shares if assigned. You keep the premium, but a
+                  large stock drop can leave you buying well above the market price.</dd>
+                <dd class="glossary-example">Example: sell one $50 put for $2 and reserve $5,000. If assigned, the
+                  effective purchase price is $48 per share before fees.</dd>
+                <dd class="glossary-formula">Breakeven at expiration = strike − net premium per share</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Premium <span>Option price</span></dt>
+                <dd>The option's quoted per-share price. A buyer pays it; a seller receives it. For a standard
+                  100-share contract, multiply the quote by 100, then include fees for the actual cash flow.</dd>
+                <dd class="glossary-example">Example: a $1.25 quote is $125 for one standard contract before fees.</dd>
+                <dd class="glossary-formula">Gross premium = option price × multiplier × contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>ITM / ATM / OTM <span>Moneyness state</span></dt>
+                <dd>In the money means exercising now has value. Calls are ITM above the strike; puts are ITM below
+                  it. At the money means stock and strike are about equal. Out of the money means no intrinsic value.
+                  ITM short options have greater assignment risk, especially near expiration, but assignment can occur
+                  earlier.</dd>
+                <dd class="glossary-example">Example: with stock at $100, a $95 call is ITM and a $95 put is OTM.</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Moneyness" target="_blank"
+                    rel="noopener noreferrer">Moneyness on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Intrinsic &amp; extrinsic value <span>What premium contains</span></dt>
+                <dd>Intrinsic value is what exercise would be worth now. Extrinsic value is the rest of the premium,
+                  paid for remaining time and uncertainty. Extrinsic value generally shrinks toward zero by expiration.</dd>
+                <dd class="glossary-example">Example: stock at $105 and a $100 call priced at $7 has $5 intrinsic
+                  value and $2 extrinsic value.</dd>
+                <dd class="glossary-formula">Call intrinsic = max(stock − strike, 0)</dd>
+                <dd class="glossary-formula">Put intrinsic = max(strike − stock, 0)</dd>
+                <dd class="glossary-formula">Extrinsic value = option price − intrinsic value</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Exercise &amp; assignment</dt>
+                <dd>Exercise is the buyer using the contract. Assignment is the seller being required to fulfill it.
+                  A short call assignment sells shares; a short put assignment buys shares. Do not assume an OTM option
+                  cannot be assigned or that every ITM option will be assigned.</dd>
+                <dd class="glossary-guide">Close a short option before the market close if you must
+                  remove that day's assignment exposure. Broker deadlines and contract terms still apply.</dd>
+              </div>
+            </dl>
+          </section>
 
           <section class="glossary-group" aria-labelledby="glossary-settings-title">
             <h3 id="glossary-settings-title">Strategy settings</h3>
@@ -394,59 +463,106 @@
               </div>
               <div class="glossary-entry">
                 <dt>Goal profiles <span>Keep Shares · Earn Income · Plan Exit · Plan Entry</span></dt>
-                <dd>Editable starting points for different intentions. Keep Shares and Plan Exit apply to covered calls,
-                  Plan Entry applies to cash-secured puts, and Earn Income can apply to either. The names organize rules; they
-                  are not trading recommendations.</dd>
+                <dd>Editable starting points for different intentions. “Aggressive” means committed to that goal,
+                  not blindly chasing the largest premium.</dd>
+                <dd class="glossary-guide"><strong>Keep Shares:</strong> 30–60 DTE, 105%–125% moneyness,
+                  0.08–0.18 delta, and a 35% close target. <strong>Earn Income:</strong> 14–35 DTE,
+                  0.30–0.45 delta, at least 1% period return, and a 50% close target.</dd>
+                <dd class="glossary-guide"><strong>Plan Exit:</strong> 7–21 DTE, 95%–105% moneyness,
+                  0.45–0.65 delta, and a 90% close target. <strong>Plan Entry:</strong> 7–28 DTE,
+                  97%–100% moneyness, 0.40–0.55 delta, and an 85% close target.</dd>
+                <dd class="glossary-guide">Plan Exit admits a below-spot call only when the ticker has a minimum net
+                  sale-price guard. The guard remains the real sell or buy boundary for that ticker.</dd>
+                <dd class="glossary-more"><a href="https://www.optionseducation.org/strategies/all-strategies/covered-call-buy-write"
+                    target="_blank" rel="noopener noreferrer">Covered calls at the Options Industry Council</a></dd>
+                <dd class="glossary-more"><a href="https://www.optionseducation.org/strategies/all-strategies/cash-secured-put"
+                    target="_blank" rel="noopener noreferrer">Cash-secured puts at the Options Industry Council</a></dd>
               </div>
               <div class="glossary-entry">
                 <dt>DTE range <span>Time window</span></dt>
-                <dd>The shortest and longest time an option may have before expiration. An option must fall inside
-                  both limits to pass.</dd>
+                <dd>The allowed number of calendar days until expiration. More time usually means more premium and
+                  more time to react. Less time means faster time decay, but price sensitivity and assignment pressure
+                  can rise sharply near expiration.</dd>
+                <dd class="glossary-guide">Goal ranges are Keep Shares 30–60, Earn Income 14–35, Plan Exit 7–21,
+                  and Plan Entry 7–28. Radar favors the midpoint of the saved range, so each goal controls its own
+                  ranking target. These are starting points, not a universal best window.</dd>
                 <dd class="glossary-formula">Minimum DTE ≤ days to expiration ≤ maximum DTE</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Moneyness <span>Strike / stock</span></dt>
-                <dd>How the strike price compares with the current stock price. 100% means they are equal; 90% means
-                  the strike is 10% below the stock; 110% means it is 10% above.</dd>
+                <dd>Strike price compared with the stock price. It locates the strike without changing when you switch
+                  between a call and a put.</dd>
+                <dd class="glossary-example">Example: a $95 strike on a $100 stock is 95%. That strike is OTM for a
+                  put and ITM for a call.</dd>
+                <dd class="glossary-guide">100% is at the money. Farther from 100% usually means less
+                  premium and less immediate assignment pressure for an OTM option. The direction depends on call
+                  versus put.</dd>
                 <dd class="glossary-formula">Moneyness = strike price ÷ stock price × 100%</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Moneyness" target="_blank"
+                    rel="noopener noreferrer">Moneyness on Wikipedia</a></dd>
               </div>
               <div class="glossary-entry">
                 <dt>Target delta range <span>Absolute delta</span></dt>
-                <dd>Keeps options whose delta falls between your chosen limits. Wheely Nilly uses the size of delta,
-                  so a put delta of −0.25 is treated as 0.25. A blank limit leaves that side open.</dd>
+                <dd>Keeps contracts inside your chosen delta sensitivity. Wheely Nilly compares absolute values, so a
+                  −0.25 put counts as 0.25. A blank minimum or maximum leaves that side open.</dd>
+                <dd class="glossary-guide">Goal ranges are Keep Shares 0.08–0.18, Earn Income 0.30–0.45, Plan Exit
+                  0.45–0.65, and Plan Entry 0.40–0.55. Radar favors each saved range's midpoint. Higher absolute delta
+                  generally means more premium and more stock-like risk, not guaranteed assignment odds.</dd>
                 <dd class="glossary-formula">Minimum delta ≤ |option delta| ≤ maximum delta</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Maximum spread <span>Liquidity rule</span></dt>
-                <dd>The largest allowed gap between the bid and ask, measured against their midpoint. A smaller gap
-                  usually means a more usable quote.</dd>
+                <dd>The widest bid-ask gap Radar will accept, measured against the midpoint. A tighter spread usually
+                  means lower trading friction and a midpoint estimate you can trust more.</dd>
+                <dd class="glossary-example">Example: $1.90 bid and $2.10 ask gives a $2 midpoint and a 10% spread.</dd>
+                <dd class="glossary-guide">Radar labels ≤2% excellent, ≤5% good, ≤10% fair, and warns above 15%.
+                  Keep Shares and Earn Income cap eligibility at 8%; Exit and Entry use 10% so the target strike has
+                  slightly more room. A wide spread is a cost warning even when activity looks healthy.</dd>
                 <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
-                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100%</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Minimum open interest <span>Liquidity rule</span></dt>
-                <dd>The fewest open contracts an option must have to pass. Open interest counts contracts that remain
-                  open across the market.</dd>
+                <dd>The fewest outstanding contracts a candidate may have. It is a rough activity check, not a promise
+                  that your order will fill. Current bid and ask prices matter more to execution.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 2,000+ excellent, 500+ good, 100+ fair, and
+                  below 100 poor. Keep Shares and Earn Income require 100; Exit and Entry require 50 to preserve more
+                  target-price choices. The private system fallback of 10 is only a permissive screen.</dd>
                 <dd class="glossary-formula">Passes when open interest ≥ minimum</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Open_interest" target="_blank"
+                    rel="noopener noreferrer">Open interest on Wikipedia</a></dd>
               </div>
               <div class="glossary-entry">
                 <dt>Minimum volume <span>Liquidity rule</span></dt>
-                <dd>The fewest contracts that must have traded during the current session. It filters out options
-                  with too little recent trading activity.</dd>
+                <dd>The fewest contracts that must have traded today. Volume resets each session, so a zero early in
+                  the day is not the same signal as a zero near the close.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 500+ excellent, 100+ good, 20+ fair, and below
+                  20 poor. Keep Shares and Earn Income require 20; Exit and Entry require 10. Always read volume with
+                  the spread because volume resets each session.</dd>
                 <dd class="glossary-formula">Passes when today's volume ≥ minimum</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Minimum return <span>One option period</span></dt>
-                <dd>The smallest estimated return accepted over that option's own DTE. It is not an annualized rate.
-                  Net premium is the estimated option credit after the estimated fee.</dd>
+                <dd>The lowest estimated return Radar will accept for this contract's own lifetime. It uses net credit
+                  after the estimated fee and does not annualize the result.</dd>
+                <dd class="glossary-example">Example: $100 net credit on $4,900 of put capital is about 2.04% for the
+                  contract term.</dd>
+                <dd class="glossary-guide">There is no universal good minimum. Higher return usually pays for some
+                  mix of higher volatility, closer strike, longer time, or worse liquidity. Compare the same strategy,
+                  ticker, and DTE before calling one return better.</dd>
+                <dd class="glossary-guide">The goal floors are Keep Shares 0.20%, Earn Income 1.00%, Plan Exit 0.25%,
+                  and Plan Entry 0.50% for the option period. A candidate below the floor is excluded, not merely
+                  ranked lower.</dd>
                 <dd class="glossary-formula">Covered call = net premium ÷ current value of 100 shares</dd>
                 <dd class="glossary-formula">Cash-secured put = net premium ÷ (strike × 100 − net premium)</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Net price guard <span>Ticker setting</span></dt>
-                <dd>An optional per-share limit for one ticker. It can set the lowest net sale price for a covered
-                  call or the highest breakeven price for a cash-secured put. When monitoring begins using these
-                  settings, it will filter choices; it will not place an order.</dd>
+                <dd>Your ticker-specific line in the sand. For a call, it rejects an effective sale price below your
+                  floor. For a put, it rejects an effective purchase price above your ceiling. It filters candidates;
+                  it never places an order.</dd>
+                <dd class="glossary-guide">A useful guard comes from the price at which you are genuinely willing to
+                  sell or buy the shares. A richer premium should not rescue an unacceptable strike.</dd>
                 <dd class="glossary-formula">Covered-call net sale price = strike + net premium per share</dd>
                 <dd class="glossary-formula">Put breakeven price = strike − net premium per share</dd>
               </div>
@@ -458,41 +574,63 @@
             <dl class="glossary-list">
               <div class="glossary-entry">
                 <dt>Booked profit <span>Booked P&amp;L</span></dt>
-                <dd>The profit or loss from matched, closed short-option contracts after fees. Open premium is not
-                  booked until its contract closes.</dd>
+                <dd>Realized option profit or loss from matched contracts that have closed, after recorded fees. An
+                  open credit is cash received, but Wheely Nilly does not count it as booked profit yet.</dd>
+                <dd class="glossary-example">Example: collect $200 net, then pay $80 net to close. Booked profit is
+                  $120.</dd>
+                <dd class="glossary-guide">Positive made money; negative lost money. It excludes any
+                  unrealized stock gain or loss, so it is not the wheel's total economic return.</dd>
                 <dd class="glossary-formula">Opening net credit + closing net cash flow</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Return on collateral <span>Return</span></dt>
-                <dd>Booked profit from qualified closed contracts divided by their combined entry collateral. A
-                  trade is excluded when its profit, collateral, or holding period cannot be established.</dd>
+                <dd>Booked option profit for qualified closed contracts as a percentage of the capital committed when
+                  each trade opened. Trades with missing profit, collateral, or holding time are excluded.</dd>
+                <dd class="glossary-example">Example: $120 profit on $4,800 collateral is a 2.5% return.</dd>
+                <dd class="glossary-guide">Positive is profitable and negative is a loss. Compare it with holding
+                  time and risk. A higher percentage is not automatically better if it came from a closer strike or a
+                  more volatile stock.</dd>
                 <dd class="glossary-formula">Qualified booked profit ÷ qualified entry collateral</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Annualized return <span>Annualized rate</span></dt>
-                <dd>A return scaled to one year. The portfolio dashboard weights qualified closed contracts by
-                  collateral and days held; same-day trades count as one day. The screener annualizes each candidate's
-                  estimated period return.</dd>
+                <dd>A simple one-year pace calculated from a shorter result. It makes different holding periods easier
+                  to compare, but it does not mean the return can be repeated for a year. Very short trades can produce
+                  eye-catching, unstable annualized numbers.</dd>
+                <dd class="glossary-example">Example: 2% over 30 days becomes about 24.3% annualized: 2% × 365 ÷ 30.</dd>
+                <dd class="glossary-guide">Use it as a comparison rate, not a forecast. Check the raw period return,
+                  DTE, losses, and excluded trades before judging it.</dd>
                 <dd class="glossary-formula">Dashboard: qualified booked profit × 365 ÷ Σ(collateral × days held)</dd>
                 <dd class="glossary-formula">Radar: net premium ÷ return collateral × 365 ÷ DTE</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Remaining annualized return</dt>
-                <dd>The option's remaining extrinsic value as a return on the position's current capital at risk,
-                  scaled to one year. It describes remaining time value, not the Close decision.</dd>
+                <dd>The yearly pace of the option's remaining time value relative to current capital at risk. It asks,
+                  "How much annualized time value remains if the inputs stayed unchanged?" It is not a prediction or
+                  the Close signal.</dd>
+                <dd class="glossary-guide">Higher means more time value remains to earn, but usually with more time or
+                  market risk still attached. Compare it with premium already captured and days left.</dd>
                 <dd class="glossary-formula">Remaining extrinsic ÷ capital at risk × 365 ÷ max(DTE, 1)</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Capital velocity</dt>
-                <dd>Booked profit produced per $1,000 of collateral over a standardized 30-day period. It measures
-                  how efficiently deployed capital has generated realized profit.</dd>
+                <dd>Dollars of booked option profit produced by each $1,000 of collateral at a 30-day pace. It puts
+                  dollars, capital, and time into one realized-efficiency number.</dd>
+                <dd class="glossary-example">Example: $200 profit from $10,000 held for 30 days equals $20 per $1,000
+                  per 30 days.</dd>
+                <dd class="glossary-guide">Above $0 means profitable; below $0 means losses. Higher is more efficient
+                  only when the underlying risk and missing-trade count are comparable.</dd>
                 <dd class="glossary-formula">Qualified booked profit ÷ collateral-days × 30 × $1,000</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Premium capture</dt>
-                <dd>For an open contract, the estimated share of the received premium retained after buying it back now.
-                  On the dashboard, it aggregates booked profit across closed contracts. Losses and buyback costs
-                  reduce either result.</dd>
+                <dd>How much of the opening credit has become estimated or booked profit. For an open contract, Radar
+                  subtracts an ask-price buyback and estimated closing fee. The dashboard uses closed contracts.</dd>
+                <dd class="glossary-example">Example: collect $200 and estimate an $80 buyback. Profit if closed is
+                  $120, so capture is 60%.</dd>
+                <dd class="glossary-guide">0% means no premium retained, 50% means half, and 100% means the full credit.
+                  A negative number means an estimated or booked loss. Goal targets are Keep Shares 35%, Earn Income
+                  50%, Plan Exit 90%, and Plan Entry 85%; your saved setting controls the signal.</dd>
                 <dd class="glossary-formula">Open contract = estimated profit if closed ÷ opening net credit</dd>
                 <dd class="glossary-formula">Dashboard = booked profit ÷ positive premium received on closed contracts</dd>
               </div>
@@ -508,19 +646,25 @@
             <dl class="glossary-list">
               <div class="glossary-entry">
                 <dt>Wheel capital</dt>
-                <dd>Capital currently associated with the wheel: cash securing open puts plus the broker cost basis
-                  of complete 100-share lots.</dd>
+                <dd>Capital currently tied to the wheel: cash securing open puts plus broker cost basis for complete
+                  share lots. It is exposure, not profit and not current market value.</dd>
+                <dd class="glossary-guide">There is no ideal dollar amount. Judge it against account size,
+                  diversification, and how much stock you could be assigned. More deployed capital raises concentration
+                  even when option income rises.</dd>
                 <dd class="glossary-formula">Open CSP collateral + share capital</dd>
               </div>
               <div class="glossary-entry">
                 <dt>CSP collateral <span>Cash secured</span></dt>
-                <dd>Cash required to secure a short put at its strike. CSP means cash-secured put.</dd>
+                <dd>Cash set aside to buy the shares if a short put is assigned. Wheely Nilly shows the full strike
+                  obligation and does not subtract premium here.</dd>
+                <dd class="glossary-example">Example: one standard $50 put requires $5,000 of gross collateral.</dd>
                 <dd class="glossary-formula">Strike × contract multiplier × open contracts</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Share capital <span>Shares committed</span></dt>
-                <dd>The broker-reported per-share cost basis of complete 100-share lots. For a covered call, only the
-                  shares committed to its contracts are used as collateral.</dd>
+                <dd>Broker-reported cost basis for complete share lots. For one covered call, only the shares committed
+                  to that call count as its collateral.</dd>
+                <dd class="glossary-example">Example: 100 shares with a $48 broker basis use $4,800 of share capital.</dd>
                 <dd class="glossary-formula">Broker cost basis per share × 100-share lots</dd>
               </div>
               <div class="glossary-entry">
@@ -535,36 +679,42 @@
               </div>
               <div class="glossary-entry">
                 <dt>Contract multiplier</dt>
-                <dd>The number of shares one option contract controls. Standard equity options generally use 100;
-                  calculations use the contract's recorded multiplier when available.</dd>
+                <dd>How many shares one contract controls. Standard equity options usually use 100. Corporate actions
+                  can create adjusted contracts with a different deliverable, so check the recorded multiplier.</dd>
+                <dd class="glossary-formula">Total shares controlled = multiplier × contracts</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Premium received</dt>
-                <dd>The net cash received when a short option was opened, after recorded fees and allocated to the
-                  matched contract quantity.</dd>
+                <dd>Net cash credited when the short option opened, after recorded fees and allocated to the matched
+                  contract quantity. It becomes booked profit only as the contract closes.</dd>
+                <dd class="glossary-formula">Gross opening credit − recorded opening fees</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Buyback debit</dt>
-                <dd>The estimated cash needed to buy the current short option back immediately at its ask, including
-                  the closing-fee estimate.</dd>
+                <dd>A conservative estimate of what it would cost to close the short option now. Wheely Nilly uses the
+                  displayed ask plus estimated closing fees. A limit order may fill better, but no fill is guaranteed.</dd>
                 <dd class="glossary-formula">Ask per share × multiplier × contracts + estimated closing fees</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Profit if closed</dt>
-                <dd>The estimated option profit left after subtracting the immediate buyback debit from the opening
-                  net credit.</dd>
+                <dd>Estimated option profit if you bought the contract back now at the displayed ask. It can change
+                  with every quote and becomes booked only after an actual close.</dd>
+                <dd class="glossary-guide">Positive means an estimated option profit; negative means an estimated
+                  option loss. It excludes unrealized stock gain or loss.</dd>
                 <dd class="glossary-formula">Opening net credit − buyback debit</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Earned per day</dt>
-                <dd>The estimated profit if closed spread across the calendar days the position has been open.
-                  A same-day position counts as one day.</dd>
+                <dd>The current estimated option profit divided by calendar days held. It describes the pace so far,
+                  not what tomorrow will earn. A same-day position counts as one day.</dd>
                 <dd class="glossary-formula">Profit if closed ÷ days held</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Extrinsic per day</dt>
-                <dd>The option's remaining time value spread across its remaining calendar days. An option expiring
-                  today uses one day.</dd>
+                <dd>Remaining time value divided evenly across calendar days left. Actual theta decay is not even and
+                  can change with stock price and IV. An option expiring today uses one day.</dd>
+                <dd class="glossary-guide">Compare this with earned per day. A small remaining amount may make closing
+                  attractive, but assignment risk, taxes, fees, and your strategy still matter.</dd>
                 <dd class="glossary-formula">Remaining extrinsic value ÷ max(DTE, 1)</dd>
               </div>
               <div class="glossary-entry">
@@ -574,8 +724,10 @@
               </div>
               <div class="glossary-entry">
                 <dt>DTE <span>Days to expiration</span></dt>
-                <dd>Calendar days remaining until the option expires. Next expiry is the earliest expiration among
-                  current short-option contracts.</dd>
+                <dd>Calendar days until expiration. Zero means the contract expires today. "Next expiry" is the
+                  earliest expiration among your current short options.</dd>
+                <dd class="glossary-guide">Lower is not simply better. Time decay tends to accelerate near expiration,
+                  while short-dated ATM options also become more sensitive to stock moves.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Stock price</dt>
@@ -590,13 +742,18 @@
             <dl class="glossary-list">
               <div class="glossary-entry">
                 <dt>Candidate rank</dt>
-                <dd>The order of matching contracts. Radar sorts first by closeness to the target delta, then the
-                  middle of the DTE range, period return, spread, expiration, and strike.</dd>
+                <dd>The order of contracts that passed every saved rule. It is a fit ranking, not a prediction of
+                  profit. Contracts with delta data come first. If both delta bounds exist, Radar next favors their
+                  midpoint, then the DTE midpoint, period return, spread, expiration, and strike.</dd>
+                <dd class="glossary-guide">Rank 1 means "closest to your settings" among the current matches. It does
+                  not mean safe, underpriced, or most likely to profit.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Strike price</dt>
-                <dd>The fixed per-share price at which the option holder may buy shares for a call or sell shares for
-                  a put if the option is exercised.</dd>
+                <dd>The contract's fixed per-share transaction price. A call holder can buy at the strike; a put
+                  holder can sell at the strike. A short-option seller takes the opposite obligation if assigned.</dd>
+                <dd class="glossary-guide">For wheel trades, choose a call strike where you would accept selling and a
+                  put strike where you would accept buying. Premium cannot make a bad stock price safe.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Underlying price</dt>
@@ -605,79 +762,139 @@
               </div>
               <div class="glossary-entry">
                 <dt>Executable option price <span>Midpoint · Bid · Ask</span></dt>
-                <dd>The estimated per-share execution price. Bid is the highest displayed buyer price and ask is the
-                  lowest displayed seller price. Close uses the ask for a directional buyback estimate. Radar uses
-                  the midpoint only after the spread passes the saved liquidity limit.</dd>
+                <dd>The per-share price used for an estimate. Bid is the best displayed buying price; ask is the best
+                  displayed selling price. Radar uses midpoint only when the spread passes your limit. Close uses ask
+                  for a conservative buyback estimate.</dd>
+                <dd class="glossary-example">Example: $1.90 bid and $2.10 ask has a $2 midpoint. A $2 limit order might
+                  fill, but midpoint is not a guaranteed execution.</dd>
                 <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Bid-ask spread <span>Quote width</span></dt>
-                <dd>The percentage gap between the lowest displayed seller price and highest displayed buyer price.
-                  Radar measures that gap against their midpoint.</dd>
-                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100</dd>
+                <dd>The gap between the best displayed ask and bid, measured against midpoint. It is a direct warning
+                  about trading friction. Tighter is better, all else equal.</dd>
+                <dd class="glossary-guide">Radar's guide: ≤2% excellent, ≤5% good, ≤10% fair, and above 15% a hard
+                  warning. Cheap options can show large percentages from a small cent gap, so inspect dollars too.</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100%</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Bid%E2%80%93ask_spread"
+                    target="_blank" rel="noopener noreferrer">Bid-ask spread on Wikipedia</a></dd>
               </div>
               <div class="glossary-entry">
                 <dt>Open interest / volume <span>Liquidity activity</span></dt>
-                <dd>Open interest counts option contracts that remain open across the market. Volume counts contracts
-                  traded during the current session.</dd>
+                <dd>Open interest is outstanding contracts after prior opens and closes. Volume is contracts traded
+                  today and resets each session. Neither tells you whether trades were bullish or guarantees a fill.</dd>
+                <dd class="glossary-guide">Higher usually supports liquidity, but the live spread is the clearest
+                  execution check. Radar scores open interest of 100 / 500 / 2,000 as fair / good / excellent and
+                  volume of 20 / 100 / 500 the same way.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Net contract credit</dt>
-                <dd>The estimated cash received for one standard 100-share contract after the estimated fee.</dd>
+                <dd>Estimated cash left from selling one standard contract after Radar's fee estimate.</dd>
+                <dd class="glossary-example">Example: a $2 midpoint produces $200 gross; after a $0.65 estimated fee,
+                  net contract credit is $199.35.</dd>
                 <dd class="glossary-formula">Net contract credit = executable option price × 100 − estimated fee</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Return on capital <span>Period return · Contract term</span></dt>
-                <dd>The candidate's estimated net credit divided by its return collateral for this option period.</dd>
+                <dd>Estimated net credit as a percentage of the capital backing the candidate for its own DTE. It is a
+                  term return, not annualized and not guaranteed.</dd>
+                <dd class="glossary-guide">Compare candidates with similar ticker risk, strike, and DTE. A larger
+                  number often comes with a closer strike, higher IV, or weaker liquidity.</dd>
                 <dd class="glossary-formula">Covered call = net contract credit ÷ current value of 100 shares</dd>
                 <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Net sale / breakeven price</dt>
-                <dd>The effective per-share stock price after the option's estimated net credit. Calls show a net
-                  sale price; puts show a breakeven price.</dd>
+                <dd>The stock transaction price after spreading estimated net credit over 100 shares. Calls show what
+                  you would effectively receive if assigned; puts show what you would effectively pay.</dd>
+                <dd class="glossary-example">Example: a $50 strike with $199.35 net credit gives a $51.99 call sale
+                  price or a $48.01 put breakeven, rounded.</dd>
                 <dd class="glossary-formula">Net sale price = strike + net contract credit ÷ 100</dd>
                 <dd class="glossary-formula">Breakeven price = strike − net contract credit ÷ 100</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Delta</dt>
-                <dd>The estimated option-price change for a $1 move in the stock, also commonly read as a rough
-                  sensitivity measure. Radar calculates it with Black–Scholes when Yahoo supplies implied volatility.
-                </dd>
+                <dd>Estimated change in the option's per-share price for a $1 stock move, with other model inputs held
+                  still. Calls usually range from 0 to 1; puts from −1 to 0. Delta changes as price, time, and IV change.</dd>
+                <dd class="glossary-example">Example: a 0.25 delta option may move about $0.50 for a $2 stock move at
+                  that moment. It will not stay exactly 0.25.</dd>
+                <dd class="glossary-guide">Wheely Nilly ranks the midpoint of each goal's saved delta range highest.
+                  Traders sometimes use absolute delta as a rough chance-of-finishing-ITM proxy, but it is not the
+                  real-world probability of assignment or profit.</dd>
+                <dd class="glossary-formula">Estimated option-price change ≈ delta × stock-price change</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Greeks_(finance)" target="_blank"
+                    rel="noopener noreferrer">Option Greeks on Wikipedia</a></dd>
               </div>
               <div class="glossary-entry">
                 <dt>Implied volatility <span>IV</span></dt>
-                <dd>The annualized volatility implied by the option's market price. Higher values mean the market is
-                  pricing a wider range of possible stock moves.</dd>
+                <dd>The annualized move implied by an option's market price. It describes expected magnitude, not
+                  direction. Higher IV usually means richer call and put premiums because the market is pricing a wider
+                  range of outcomes.</dd>
+                <dd class="glossary-example">Example: 20% IV on a $100 stock implies roughly a $1.25 one-standard-
+                  deviation daily move: $100 × 20% ÷ 16.</dd>
+                <dd class="glossary-guide">There is no universal good IV. Compare the same ticker across expirations
+                  and with its own history. High IV can pay sellers more, but it also signals larger expected moves and
+                  can make buybacks more expensive.</dd>
+                <dd class="glossary-formula">Rough daily expected move = stock price × IV ÷ √252 ≈ stock price × IV ÷ 16</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Theta per day</dt>
-                <dd>The estimated daily change in the option's value from one day passing, with other inputs held
-                  constant. Radar calculates it with Black–Scholes when Yahoo supplies implied volatility.</dd>
+                <dd>Estimated one-day change in the option's per-share value from time passing, with stock price, IV,
+                  rates, and dividends unchanged. Long options usually show negative theta; that decay generally helps
+                  a short-option seller.</dd>
+                <dd class="glossary-example">Example: theta of −0.05 suggests about $0.05 per share, or $5 per standard
+                  contract, of one-day decay under unchanged model inputs.</dd>
+                <dd class="glossary-guide">More negative is faster decay, not free profit. Theta changes and is often
+                  strongest for short-dated ATM options, where stock-move risk is also concentrated.</dd>
+                <dd class="glossary-formula">Estimated one-day option change from time ≈ theta per day</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Breakeven</dt>
-                <dd>For a put, the strike minus net credit per share. For a covered call, Close subtracts opening
-                  credit per share from broker cost basis and falls back to the current stock price when that basis is
-                  missing. Radar uses the same basis fallback with its estimated net credit.</dd>
+                <dd>The stock price where the combined shares-and-option position is approximately flat at expiration,
+                  before taxes. Put breakeven uses strike. Covered-call breakeven uses broker share basis when available,
+                  otherwise current stock price.</dd>
+                <dd class="glossary-guide">A breakeven is not a stop-loss and does not cap downside. Below a short
+                  put's or covered call's breakeven, stock losses continue dollar for dollar at expiration.</dd>
+                <dd class="glossary-formula">Put breakeven = strike − net credit per share</dd>
+                <dd class="glossary-formula">Covered-call breakeven = share basis − net credit per share</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Strike distance</dt>
-                <dd>The absolute percentage gap between the strike and current stock price.</dd>
-                <dd class="glossary-formula">Strike distance = |strike − stock price| ÷ stock price</dd>
+                <dd>The absolute percentage gap between strike and stock price. It shows cushion size, not direction
+                  and not the probability of assignment.</dd>
+                <dd class="glossary-example">Example: a $95 strike on a $100 stock is 5% away.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 10%+ excellent cushion, 7%+ good, 4%+ fair,
+                  and below 4% poor. That is a ranking input, not a safety guarantee. High-IV stocks can cross a wide
+                  gap quickly.</dd>
+                <dd class="glossary-formula">Strike distance % = |strike − stock price| ÷ stock price × 100%</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Estimated fee</dt>
-                <dd>The per-contract fee estimate subtracted from gross option credit. Radar currently assumes $0.65
-                  for one contract.</dd>
+                <dd>The assumed per-contract charge subtracted from gross credit. Radar currently uses $0.65 for one
+                  contract. Your broker's actual commission, regulatory fees, and contract-specific charges may differ.</dd>
+                <dd class="glossary-guide">Lower is better, but spread cost can dwarf the stated fee. Verify both at
+                  the broker before ordering.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Radar calculation inputs <span>Model assumptions</span></dt>
-                <dd>Standard contracts use a 100-share multiplier. The Black–Scholes estimate uses a 4.5% risk-free
-                  rate and 0% dividend yield. Annualized return uses period return × 365 ÷ DTE.</dd>
+                <dd>Radar assumes a 100-share standard contract, a $0.65 opening fee, a 4.5% risk-free rate, and 0%
+                  dividend yield. It estimates delta and theta with Black–Scholes only when IV is available. Quotes,
+                  Greeks, and midpoint fills remain estimates.</dd>
+                <dd class="glossary-guide">Model output is useful for comparison, not certainty. Dividends, early
+                  assignment, changing IV, stale quotes, and actual fills can move real results away from the estimate.</dd>
+                <dd class="glossary-formula">Simple annualized return = period return × 365 ÷ DTE</dd>
               </div>
             </dl>
           </section>
+          <aside class="glossary-sources" aria-label="Glossary sources and risk note">
+            <strong>Check the contract, then the model.</strong>
+            <p>Definitions were checked against the Options Industry Council's <a
+                href="https://www.optionseducation.org/referencelibrary/optionsglossary" target="_blank"
+                rel="noopener noreferrer">options glossary</a> and strategy guides. Before trading, read OCC's current
+              <a href="https://www.theocc.com/company-information/documents-and-archives/options-disclosure-document"
+                target="_blank" rel="noopener noreferrer">Characteristics and Risks of Standardized Options</a>.
+              Options involve risk and are not suitable for every investor.</p>
+          </aside>
           <p class="glossary-empty" id="glossary-empty" hidden>No definitions match that search.</p>
         </div>
       </section>

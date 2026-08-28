@@ -265,15 +265,50 @@ const completeProfile = (rules = {}) => ({ ...SYSTEM_RULE_DEFAULTS, ...rules });
 const BUILT_IN_SETTINGS = {
   schemaVersion: 2,
   goalProfiles: {
-    protect: { coveredCall: completeProfile({ minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 }) },
+    protect: { coveredCall: {
+      minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
+      targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
+      minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
+      closeAtProfitCapture: 0.35,
+    } },
     income: {
-      coveredCall: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
-      cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+      coveredCall: {
+        minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
+        targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
+        minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
+        closeAtProfitCapture: 0.50,
+      },
+      cashSecuredPut: {
+        minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
+        targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
+        minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
+        closeAtProfitCapture: 0.50,
+      },
     },
-    exit: { coveredCall: completeProfile({ minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 }) },
-    acquire: { cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }) },
+    exit: { coveredCall: {
+      minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
+      targetDeltaMin: 0.45, targetDeltaMax: 0.65, maxSpreadPercent: 0.10,
+      minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.0025,
+      closeAtProfitCapture: 0.90,
+    } },
+    acquire: { cashSecuredPut: {
+      minDte: 7, maxDte: 28, minMoneyness: 0.97, maxMoneyness: 1,
+      targetDeltaMin: 0.40, targetDeltaMax: 0.55, maxSpreadPercent: 0.10,
+      minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.005,
+      closeAtProfitCapture: 0.85,
+    } },
   },
   tickerPlaybooks: {},
+};
+
+const FORMER_BUILT_IN_GOAL_PROFILES = {
+  protect: { coveredCall: completeProfile({ minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 }) },
+  income: {
+    coveredCall: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+    cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
+  },
+  exit: { coveredCall: completeProfile({ minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 }) },
+  acquire: { cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }) },
 };
 
 export function builtInStrategySettings() {
@@ -329,6 +364,20 @@ function defaultPersistedV2(input) {
     }
   }
   settings.tickerPlaybooks = normalizePlaybooks(settings.tickerPlaybooks ?? {});
+  return settings;
+}
+
+function upgradeFormerBuiltInProfiles(input) {
+  const settings = structuredClone(input);
+  for (const [goal, profiles] of Object.entries(FORMER_BUILT_IN_GOAL_PROFILES)) {
+    for (const [leg, formerRules] of Object.entries(profiles)) {
+      const savedRules = settings.goalProfiles?.[goal]?.[leg];
+      const stillFormerDefault = savedRules
+        && Object.keys(savedRules).length === RULE_FIELDS.length
+        && RULE_FIELDS.every((field) => Object.is(savedRules[field], formerRules[field]));
+      if (stillFormerDefault) settings.goalProfiles[goal][leg] = structuredClone(BUILT_IN_SETTINGS.goalProfiles[goal][leg]);
+    }
+  }
   return settings;
 }
 
@@ -408,7 +457,7 @@ export function createStrategySettingsService({
       const raw = JSON.parse(await fsImpl.readFile(file, 'utf8'));
       const persisted = raw.schemaVersion === 1
         ? persistedV1DocumentSchema.parse(raw)
-        : persistedDocumentSchema.parse(defaultPersistedV2(raw));
+        : persistedDocumentSchema.parse(upgradeFormerBuiltInProfiles(defaultPersistedV2(raw)));
       const { updatedAt, ...editable } = persisted;
       const settings = editable.schemaVersion === 1 ? migrateV1StrategySettings(editable) : editable;
       return { settings, persistence: { persisted: true, updatedAt } };

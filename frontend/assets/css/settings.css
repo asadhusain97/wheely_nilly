@@ -678,6 +678,61 @@ details[open] > summary .disclosure-icon {
   display: none;
 }
 
+.glossary-entry .glossary-example,
+.glossary-entry .glossary-guide {
+  padding-left: 9px;
+  border-left: 2px solid var(--line);
+  color: var(--body);
+}
+
+.glossary-entry .glossary-guide {
+  border-left-color: #efb4bd;
+}
+
+.glossary-entry .glossary-guide::before {
+  color: var(--red-deep);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  content: "Practical read  ";
+}
+
+.glossary-entry .glossary-more a,
+.glossary-sources a {
+  color: var(--red-deep);
+  font-weight: 750;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.glossary-entry .glossary-more a::after,
+.glossary-sources a::after {
+  content: " ↗";
+}
+
+.glossary-sources {
+  margin: 12px 4px 0;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--canvas);
+  color: var(--mute);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.glossary-sources strong {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.glossary-sources p {
+  margin: 0;
+}
+
 .glossary-empty {
   margin: 28px 8px;
   color: var(--mute);

@@ -31,6 +31,12 @@ Typography uses the app's Pin Sans/system stack for text, the rounded system sta
 - Empty states explain the next action. Success state should usually be the absence of an alert.
 - Focus rings, keyboard operation, Escape dismissal, and reduced-motion behavior are required.
 
+## Open contracts
+
+Open-contract cards are decision summaries. Ticker and recommendation lead, followed by position state, three economics metrics, and premium-capture progress. A centered, unlabeled chevron ends the collapsed card and matches the Radar candidate disclosure. Its full 44px control remains keyboard and touch accessible.
+
+Expansion adds audit context without restating the summary. Use two balanced 2×2 groups: Trade for opening premium, buyback estimate, collateral, and breakeven; Market for underlying price, bid/ask with spread context, delta, and IV. Keep only the last refresh time in the quiet footer. Do not repeat P/L, premium capture, earned per day, strike state, strike, expiration, or DTE below the disclosure.
+
 ## Radar
 
 Radar's single job is to find wheel trades that fit the user's saved rules. Its structure is:
@@ -58,7 +64,7 @@ Ticker cards carry the hierarchy and begin collapsed until the user opens them. 
 
 Manually tracked ticker cards include a quiet trash icon with a 44px touch target. The first tap changes that control to “Are you sure?” and the second removes its saved rules and Radar's local recent-ticker record. A manual ticker then disappears from Radar. It also disappears from Settings when it has no portfolio or trade-history source. Historical tickers remain discoverable in Settings. Owned eligible tickers do not show this removal action because holdings continue to qualify them for Radar. Do not use a separate browser confirmation dialog.
 
-After a scan, show only the Yahoo quote time and “Yahoo Finance” below it. Do not display unofficial-data or cache prose in this compact line. When no contracts match, explain that the available contracts missed the playbook and name up to three main filters without showing exclusion counts.
+After a scan, show only the market-data time and provider name below it. The normal source label is “Cboe delayed”; a Yahoo fallback remains labeled “Yahoo Finance.” Do not display unofficial-data or cache prose in this compact line. When no contracts match, explain that the available contracts missed the playbook and name up to three main filters without showing exclusion counts.
 
 Brief confirmations appear above the bottom navigation as pearl-glass notices. Success uses a small Earn Income green mark; errors use a small Plan Exit red mark. Never use a solid black toast or a full colored panel for routine confirmation.
 

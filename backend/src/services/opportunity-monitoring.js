@@ -12,7 +12,7 @@ const SIDECAR_LEG = { coveredCall: 'covered_call', cashSecuredPut: 'cash_secured
 const RULE_MAP = {
   minDte: 'min_dte', maxDte: 'max_dte', minMoneyness: 'min_moneyness', maxMoneyness: 'max_moneyness',
   targetDeltaMin: 'target_delta_min', targetDeltaMax: 'target_delta_max', maxSpreadPercent: 'max_spread_percent',
-  minOpenInterest: 'min_open_interest', minVolume: 'min_volume', maxQuoteAgeSeconds: 'max_quote_age_seconds',
+  minOpenInterest: 'min_open_interest', minVolume: 'min_volume',
   minPeriodReturn: 'min_period_return',
 };
 

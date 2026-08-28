@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from scipy.stats import norm
 
-from .models import ChainSnapshot, ScreenRequest
+from .models import ChainSnapshot, ExactContractsRequest, ScreenRequest
 
 CALCULATION_VERSION = "screener-2.2.0"
 
@@ -103,6 +103,21 @@ def screen(snapshot: ChainSnapshot, request: ScreenRequest, now=None):
     return candidates[:request.limit], exclusions
 
 
+def chain_has_usable_quotes(snapshot: ChainSnapshot, request: ScreenRequest, now: datetime):
+    wanted = "put" if request.leg == "cash_secured_put" else "call"
+    quote_reference_time = snapshot.underlying_quote_time.astimezone(UTC) if snapshot.underlying_quote_time else now
+    relevant = 0
+    for quote in snapshot.quotes:
+        dte = (quote.expiration - now.date()).days
+        if quote.option_type != wanted or not request.min_dte <= dte <= request.max_dte:
+            continue
+        relevant += 1
+        age = math.inf if quote.quote_time is None else max(0, (quote_reference_time - quote.quote_time.astimezone(UTC)).total_seconds())
+        if quote.bid is not None and quote.ask is not None and quote.bid > 0 and quote.ask >= quote.bid and age <= request.max_quote_age_seconds:
+            return True
+    return relevant == 0
+
+
 class ScreenerService:
     def __init__(self, provider, ttl_seconds=120, timeout_seconds=15, max_concurrency=2):
         self.provider, self.ttl, self.timeout = provider, ttl_seconds, timeout_seconds
@@ -120,20 +135,24 @@ class ScreenerService:
         finally:
             self.in_flight.pop(key, None)
 
-    async def run(self, request):
-        started, now = time.monotonic(), datetime.now(UTC)
-        chain_min_dte = request.chain_min_dte or request.min_dte
-        chain_max_dte = request.chain_max_dte or request.max_dte
-        cache_key = (request.symbol, chain_min_dte, chain_max_dte)
+    async def _snapshot(self, symbol, min_dte, max_dte, now):
+        cache_key = (symbol, min_dte, max_dte)
         cached = self.cache.get(cache_key)
         cache_age = (now - cached.fetched_at).total_seconds() if cached else None
         cache_hit = cached is not None and cache_age <= self.ttl
         if cache_hit:
-            snapshot = cached
-        else:
-            snapshot = await self._fetch(request.symbol, chain_min_dte, chain_max_dte)
-            self.cache[cache_key] = snapshot
-            cache_age = max(0, (now - snapshot.fetched_at).total_seconds())
+            return cached, True, cache_age
+        snapshot = await self._fetch(symbol, min_dte, max_dte)
+        self.cache[cache_key] = snapshot
+        return snapshot, False, max(0, (now - snapshot.fetched_at).total_seconds())
+
+    async def run(self, request):
+        started, now = time.monotonic(), datetime.now(UTC)
+        chain_min_dte = request.chain_min_dte or request.min_dte
+        chain_max_dte = request.chain_max_dte or request.max_dte
+        snapshot, cache_hit, cache_age = await self._snapshot(request.symbol, chain_min_dte, chain_max_dte, now)
+        if not chain_has_usable_quotes(snapshot, request, now):
+            raise RuntimeError("option chain has no usable quotes")
         candidates, exclusions = screen(snapshot, request, now)
         return {"schema_version": 1, "calculation_version": CALCULATION_VERSION, "symbol": request.symbol, "leg": request.leg,
             "provider": snapshot.provider, "provider_unofficial": snapshot.unofficial, "underlying_price": snapshot.underlying_price,
@@ -141,3 +160,93 @@ class ScreenerService:
             "cache": {"hit": cache_hit, "age_seconds": cache_age},
             "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "fees": "estimated fee is subtracted from gross contract credit", "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net contract credit", "call_breakeven": "broker cost basis when available, otherwise current underlying price, less net credit per share; never used as a sale-price gate", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
             "candidates": candidates, "exclusions": exclusions, "duration_ms": round((time.monotonic() - started) * 1000, 2)}
+
+    async def quote_contracts(self, request: ExactContractsRequest):
+        started, now = time.monotonic(), datetime.now(UTC)
+        grouped = {}
+        for contract in request.contracts:
+            grouped.setdefault(contract.symbol, []).append(contract)
+        async def quote_group(symbol, contracts):
+            group_results = []
+            dtes = [(contract.expiration - now.date()).days for contract in contracts]
+            try:
+                snapshot, cache_hit, cache_age = await self._snapshot(symbol, min(dtes), max(dtes), now)
+            except Exception as error:
+                for contract in contracts:
+                    group_results.append({
+                        "contract": contract.model_dump(mode="json"),
+                        "available": False,
+                        "unavailable_reason": f"provider unavailable ({type(error).__name__})",
+                    })
+                return group_results
+            quotes = {quote.symbol.replace(" ", "").upper(): quote for quote in snapshot.quotes}
+            for contract in contracts:
+                quote = quotes.get(contract.contract_symbol.replace(" ", "").upper())
+                if quote is None:
+                    group_results.append({
+                        "contract": contract.model_dump(mode="json"),
+                        "available": False,
+                        "unavailable_reason": "exact contract quote not found",
+                        "provider": snapshot.provider,
+                        "underlying_price": snapshot.underlying_price,
+                        "underlying_quote_time": snapshot.underlying_quote_time,
+                        "fetched_at": snapshot.fetched_at,
+                        "cache": {"hit": cache_hit, "age_seconds": cache_age},
+                    })
+                    continue
+                if quote.ask is None or quote.ask <= 0 or (quote.bid is not None and quote.ask < quote.bid):
+                    group_results.append({
+                        "contract": contract.model_dump(mode="json"),
+                        "available": False,
+                        "unavailable_reason": "exact contract has no usable ask",
+                        "provider": snapshot.provider,
+                        "underlying_price": snapshot.underlying_price,
+                        "underlying_quote_time": snapshot.underlying_quote_time,
+                        "contract_quote_time": quote.quote_time,
+                        "fetched_at": snapshot.fetched_at,
+                        "cache": {"hit": cache_hit, "age_seconds": cache_age},
+                    })
+                    continue
+                dte = (contract.expiration - now.date()).days
+                delta, theta = estimated_greeks(
+                    contract.option_type, snapshot.underlying_price, contract.strike,
+                    max(dte, 0) / 365, quote.implied_volatility,
+                    request.risk_free_rate, request.dividend_yield,
+                )
+                group_results.append({
+                    "contract": contract.model_dump(mode="json"),
+                    "available": True,
+                    "unavailable_reason": None,
+                    "provider": snapshot.provider,
+                    "provider_unofficial": snapshot.unofficial,
+                    "bid": quote.bid,
+                    "ask": quote.ask,
+                    "underlying_price": snapshot.underlying_price,
+                    "strike": quote.strike,
+                    "expiration": quote.expiration,
+                    "option_type": quote.option_type,
+                    "volume": quote.volume,
+                    "open_interest": quote.open_interest,
+                    "implied_volatility": quote.implied_volatility,
+                    "delta": delta,
+                    "theta_per_day": theta,
+                    "contract_quote_time": quote.quote_time,
+                    "underlying_quote_time": snapshot.underlying_quote_time,
+                    "fetched_at": snapshot.fetched_at,
+                    "cache": {"hit": cache_hit, "age_seconds": cache_age},
+                })
+            return group_results
+
+        batches = await asyncio.gather(*(
+            quote_group(symbol, contracts) for symbol, contracts in grouped.items()
+        ))
+        results = [item for batch in batches for item in batch]
+        order = {contract.contract_symbol: index for index, contract in enumerate(request.contracts)}
+        results.sort(key=lambda item: order[item["contract"]["contract_symbol"]])
+        return {
+            "schema_version": 1,
+            "calculation_version": CALCULATION_VERSION,
+            "scanned_at": now,
+            "results": results,
+            "duration_ms": round((time.monotonic() - started) * 1000, 2),
+        }

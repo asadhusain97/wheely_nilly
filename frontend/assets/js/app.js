@@ -15,6 +15,7 @@ function loadScreenedTickers() {
 
 const state = {
   dashboard: null,
+  closeByContract: new Map(),
   tickerSort: 'date_desc',
   monthlyTicker: null,
   monthlyDetail: null,
@@ -32,6 +33,9 @@ const marketPrice = (value) => money(value, { maximumFractionDigits: 2 });
 const percent = (value, { sign = true } = {}) => value == null
   ? '—'
   : new Intl.NumberFormat('en-US', { style: 'percent', signDisplay: sign ? 'exceptZero' : 'auto', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
+const decimal = (value, digits = 2) => value == null
+  ? 'Unavailable'
+  : new Intl.NumberFormat('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(Number(value));
 const quantity = (value) => new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(Number(value));
 const shortDate = (value) => value
   ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(new Date(value))
@@ -42,6 +46,9 @@ const historyDate = (value) => value
 const updatedAt = (value) => value
   ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value)).replace(',', ' ·')
   : '—';
+const refreshTime = (value) => value
+  ? new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(value))
+  : null;
 const label = (value) => String(value ?? '').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function el(tag, className, content) {
@@ -627,7 +634,7 @@ function tickerOpenTradeRow(trade) {
   );
   const value = stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'ticker-contract-value');
   const note = el('small', 'ticker-contract-note');
-  appendLabeledAmount(note, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
+  appendLabeledAmount(note, trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received', 'Premium received');
   if (trade.needsReview) note.append(' · Check data');
   row.append(identity, value, note);
   return row;
@@ -658,7 +665,7 @@ function tickerPastTradeRow(trade) {
   );
   const closeCash = Number(trade.closingCashFlow);
   const cashFlow = el('small', 'history-cashflow');
-  appendLabeledAmount(cashFlow, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
+  appendLabeledAmount(cashFlow, trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received', 'Premium received');
   cashFlow.append(document.createTextNode(' · '));
   if (trade.closingCashFlow == null) {
     cashFlow.append(document.createTextNode('Closing cash unavailable'));
@@ -814,33 +821,239 @@ function renderOpenTrades(dashboard) {
     return;
   }
   for (const trade of dashboard.openTrades) {
+    const management = state.closeByContract.get(trade.contractSymbol);
     const card = el('article', 'trade-card');
-    const top = el('div', 'trade-topline');
-    const identity = el('div', 'trade-identity');
-    identity.append(
-      el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
-      el('strong', '', trade.symbol),
-      stockPriceTag(trade.stockPrice),
+    const details = contractDetails(trade, management);
+    card.setAttribute('aria-label', `${trade.symbol} ${trade.type.toUpperCase()} open contract`);
+    card.append(
+      contractHeader(trade),
+      recommendationSummary(management),
+      positionState(management),
+      economicsSummary(management),
+      premiumCaptureProgress(management),
+      details.footer,
+      details.panel,
     );
-    top.append(identity, el('span', trade.dte !== null && trade.dte <= 7 ? 'trade-timing urgent' : 'trade-timing', dteLabel(trade.dte)));
-
-    const contract = el('div', 'trade-contract');
-    contract.append(
-      stack(`${marketPrice(trade.strike)} strike`, `${shortDate(trade.expiration)} expiry`),
-      stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'trade-number'),
-    );
-    const footer = el('div', 'trade-footer');
-    const credit = el('small');
-    appendLabeledAmount(credit, trade.openingCredit == null ? null : money(trade.openingCredit), 'Opening credit', 'Opening credit');
-    if (trade.needsReview) credit.append(' · Check data');
-    const rollButton = el('button', 'roll-button', 'Find roll');
-    rollButton.type = 'button';
-    rollButton.disabled = true;
-    rollButton.title = 'Rollover comparison logic is the next feature';
-    footer.append(credit, rollButton);
-    card.append(top, contract, footer);
     container.append(card);
   }
+}
+
+function contractHeader(trade) {
+  const header = el('header', 'contract-header');
+  const title = el('div', 'contract-title');
+  const identity = el('div', 'contract-identity');
+  identity.append(
+    el('h3', '', trade.symbol),
+    el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
+  );
+  const optionType = trade.type === 'csp' ? 'Put' : 'Call';
+  title.append(
+    identity,
+    el('p', 'contract-terms', `${marketPrice(trade.strike)} ${optionType} · ${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
+  );
+  const contracts = trade.contracts == null ? Number.NaN : Math.abs(Number(trade.contracts));
+  header.append(
+    title,
+    el('small', 'contract-quantity', Number.isFinite(contracts)
+      ? `${quantity(contracts)} contract${contracts === 1 ? '' : 's'}`
+      : 'Quantity unavailable'),
+  );
+  return header;
+}
+
+function recommendationPresentation(management) {
+  const close = management?.close;
+  if (!close?.available) {
+    return {
+      label: 'Review now',
+      tone: 'review',
+      reason: close?.unavailableReason ?? 'Close guidance has not been calculated yet.',
+    };
+  }
+  const capture = percent(close.metrics.premiumCapture, { sign: false });
+  const target = percent(management.effectiveSettings.rules.closeAtProfitCapture, { sign: false });
+  return close.signal
+    ? { label: 'Close candidate', tone: 'close', reason: `${capture} of premium captured, meeting your ${target} close target.` }
+    : { label: 'Hold', tone: 'hold', reason: `${capture} of premium captured; your close target is ${target}.` };
+}
+
+function recommendationSummary(management) {
+  const recommendation = recommendationPresentation(management);
+  const summary = el('section', `recommendation-summary is-${recommendation.tone}`);
+  const heading = el('div', 'recommendation-heading');
+  heading.append(
+    el('span', 'recommendation-eyebrow', 'Recommendation'),
+    el('strong', 'recommendation-label', recommendation.label),
+  );
+  summary.append(heading, el('p', 'recommendation-reason', recommendation.reason));
+  return summary;
+}
+
+function positionState(management) {
+  const metrics = management?.close?.metrics;
+  const section = el('div', 'position-state');
+  section.append(el('span', 'position-state-label', 'Position state'));
+  const value = el('div', 'position-state-value');
+  const moneyState = metrics?.moneyState ?? 'Unavailable';
+  value.append(el('strong', `money-state-badge is-${moneyState.toLowerCase()}`, moneyState));
+  value.append(el(
+    'span',
+    'strike-distance',
+    metrics?.distanceFromStrikePercent == null
+      ? 'Distance to strike unavailable'
+      : `${percent(Math.abs(metrics.distanceFromStrikePercent), { sign: false })} from strike`,
+  ));
+  section.append(value);
+  return section;
+}
+
+function summaryMetric(labelText, value, glossaryTerm, context) {
+  const item = el('div', 'economics-metric');
+  const term = el('dt');
+  term.append(tradesGlossaryLabel(labelText, glossaryTerm));
+  item.append(term, el('dd', '', value));
+  if (context) item.append(el('small', '', context));
+  return item;
+}
+
+function economicsSummary(management) {
+  const metrics = management?.close?.metrics;
+  const summary = el('dl', 'trade-economics');
+  summary.append(
+    summaryMetric(
+      'P/L if closed',
+      metrics?.profitIfClosed == null ? '—' : money(metrics.profitIfClosed, { sign: true }),
+      'Profit if closed',
+      'Estimated now',
+    ),
+    summaryMetric(
+      'Premium captured',
+      metrics?.premiumCapture == null ? '—' : percent(metrics.premiumCapture, { sign: false }),
+      'Premium capture',
+      'Of opening credit',
+    ),
+    summaryMetric(
+      'Earned / day',
+      metrics?.earnedPerDay == null ? '—' : money(metrics.earnedPerDay, { sign: true, maximumFractionDigits: 2 }),
+      'Earned per day',
+      'Since opening',
+    ),
+  );
+  return summary;
+}
+
+function premiumCaptureProgress(management) {
+  const rawCapture = management?.close?.metrics?.premiumCapture;
+  const rawTarget = management?.effectiveSettings?.rules?.closeAtProfitCapture;
+  const capture = rawCapture == null ? Number.NaN : Number(rawCapture);
+  const target = rawTarget == null ? Number.NaN : Number(rawTarget);
+  const captureAvailable = Number.isFinite(capture);
+  const targetAvailable = Number.isFinite(target);
+  const available = captureAvailable && targetAvailable;
+  const progress = el('div', `premium-progress${management?.close?.signal === true ? ' is-met' : ''}${available ? '' : ' is-unavailable'}`);
+  const heading = el('div', 'premium-progress-heading');
+  heading.append(
+    el('span', '', 'Premium capture progress'),
+    el('strong', '', targetAvailable ? `Target ${percent(target, { sign: false })}` : 'Target unavailable'),
+  );
+  progress.append(heading);
+  if (!available) {
+    progress.append(el('p', 'premium-progress-unavailable', 'Progress unavailable until premium capture can be calculated.'));
+    return progress;
+  }
+
+  const capturePercent = Math.min(100, Math.max(0, capture * 100));
+  const targetPercent = Math.min(100, Math.max(0, target * 100));
+  const track = el('div', 'premium-progress-track');
+  track.style.setProperty('--capture-progress', `${capturePercent}%`);
+  track.style.setProperty('--capture-target', `${targetPercent}%`);
+  track.setAttribute('role', 'progressbar');
+  track.setAttribute('aria-valuemin', '0');
+  track.setAttribute('aria-valuemax', '100');
+  track.setAttribute('aria-valuenow', String(Math.round(capturePercent)));
+  track.setAttribute('aria-valuetext', `${percent(capture, { sign: false })} premium captured; target ${percent(target, { sign: false })}`);
+  const marker = el('span', 'premium-progress-target');
+  marker.title = `Close target ${percent(target, { sign: false })}`;
+  marker.setAttribute('aria-hidden', 'true');
+  track.append(el('span', 'premium-progress-fill'), marker);
+  progress.append(track);
+  return progress;
+}
+
+function detailMetric(labelText, value, glossaryTerm = labelText, qualifier = '') {
+  if (value == null) return null;
+  const item = el('div', 'close-metric');
+  const term = el('dt');
+  term.append(glossaryTerm ? tradesGlossaryLabel(labelText, glossaryTerm) : document.createTextNode(labelText));
+  item.append(term, el('dd', '', value));
+  if (qualifier) item.append(el('small', '', qualifier));
+  return item;
+}
+
+function detailGroup(title, metrics) {
+  const visibleMetrics = metrics.filter(Boolean);
+  if (!visibleMetrics.length) return null;
+  const group = el('section', 'contract-detail-group');
+  group.append(el('h4', '', title));
+  const grid = el('dl', 'contract-detail-grid');
+  grid.append(...visibleMetrics);
+  group.append(grid);
+  return group;
+}
+
+function contractDetails(trade, management) {
+  const metrics = management?.close?.metrics;
+  const footer = el('div', 'contract-details-footer');
+  const updateTime = management?.quoteTimestamps?.contract
+    ?? management?.quoteTimestamps?.underlying
+    ?? management?.quoteTimestamps?.providerFetchedAt;
+  const control = el('button', 'contract-details-control');
+  const panelId = `contract-details-${String(trade.contractSymbol).replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  control.type = 'button';
+  control.id = `${panelId}-control`;
+  control.setAttribute('aria-expanded', 'false');
+  control.setAttribute('aria-controls', panelId);
+  footer.append(control);
+
+  const panel = el('div', 'contract-details');
+  panel.id = panelId;
+  panel.hidden = true;
+  panel.setAttribute('role', 'region');
+  panel.setAttribute('aria-labelledby', control.id);
+  const setExpanded = (expanded) => {
+    control.setAttribute('aria-expanded', String(expanded));
+    control.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} contract information for ${trade.symbol} ${trade.contractSymbol}`);
+    panel.hidden = !expanded;
+  };
+  control.addEventListener('click', () => setExpanded(control.getAttribute('aria-expanded') !== 'true'));
+  setExpanded(false);
+
+  const economics = detailGroup('Trade', [
+    detailMetric('Premium received', trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received'),
+    detailMetric('Buyback estimate', metrics?.estimatedBuybackDebit == null ? null : money(metrics.estimatedBuybackDebit), 'Buyback debit', 'At the current ask'),
+    detailMetric('Collateral', trade.collateral == null ? null : money(trade.collateral), 'Collateral', trade.type === 'csp' ? 'Cash secured' : 'Shares committed'),
+    detailMetric('Breakeven price', metrics?.breakevenPrice == null ? null : marketPrice(metrics.breakevenPrice), 'Breakeven'),
+  ]);
+  const market = detailGroup('Market', [
+    detailMetric('Underlying price', metrics?.underlyingPrice == null ? (trade.stockPrice == null ? null : marketPrice(trade.stockPrice)) : marketPrice(metrics.underlyingPrice), 'Underlying price'),
+    detailMetric(
+      'Bid / ask',
+      metrics?.bidPerShare == null && metrics?.askPerShare == null
+        ? null
+        : `${metrics?.bidPerShare == null ? 'Unavailable' : marketPrice(metrics.bidPerShare)} / ${metrics?.askPerShare == null ? 'Unavailable' : marketPrice(metrics.askPerShare)}`,
+      'Bid-ask spread',
+      metrics?.spreadPercent == null ? '' : `${percent(metrics.spreadPercent, { sign: false })} spread`,
+    ),
+    detailMetric('Delta', metrics?.delta == null ? null : decimal(metrics.delta, 3), 'Delta'),
+    detailMetric('Implied volatility', metrics?.impliedVolatility == null ? null : percent(metrics.impliedVolatility, { sign: false }), 'Implied volatility'),
+  ]);
+  panel.append(...[economics, market].filter(Boolean));
+  if (trade.needsReview) {
+    panel.append(el('p', 'contract-data-note', 'Some opening-position data needs review.'));
+  }
+  const refreshed = refreshTime(updateTime);
+  panel.append(el('p', 'contract-detail-refresh', refreshed ? `Last refreshed ${refreshed}` : 'Last refresh unavailable'));
+  return { footer, panel };
 }
 
 function renderDashboard(dashboard) {
@@ -882,6 +1095,13 @@ async function loadDashboard() {
   strategySettingsController.refresh();
   setFreshness(dashboard.freshness);
   renderDashboard(dashboard);
+  try {
+    const closeBatch = await json('/api/v1/position-management');
+    state.closeByContract = new Map(closeBatch.results.map((item) => [item.contract.contractSymbol, item]));
+    renderOpenTrades(dashboard);
+  } catch {
+    // Dashboard positions stay visible with explicit uncalculated Close details.
+  }
 }
 
 function showScreen(target) {
@@ -923,20 +1143,40 @@ $('#refresh-button').addEventListener('click', async () => {
   button.disabled = true;
   button.classList.add('is-refreshing');
   button.setAttribute('aria-busy', 'true');
-  button.setAttribute('aria-label', 'Refreshing prices and scanning Radar');
+  button.setAttribute('aria-label', 'Refreshing prices and scanning Close and Radar');
   try {
-    const report = await json('/api/v1/snaptrade/refresh', { method: 'POST' });
-    await loadDashboard();
-    const scan = await screenerController.scanAll();
-    const errors = scan.results.filter((result) => result.status === 'error').length + (report.ok ? 0 : 1);
-    toast(errors ? `Refresh completed with ${errors} error${errors === 1 ? '' : 's'}.` : 'Prices refreshed and Radar scanned.', errors ? 'error' : 'success');
+    const failures = [];
+    let report = null;
+    let dashboard = null;
+    let closeBatch = null;
+    let scan = null;
+    try { report = await json('/api/v1/snaptrade/refresh', { method: 'POST' }); } catch { failures.push('brokerage refresh'); }
+    if (report && !report.ok) failures.push('brokerage endpoints');
+    try { dashboard = await json('/api/v1/wheel/dashboard'); } catch { failures.push('dashboard reload'); }
+    try { closeBatch = await json('/api/v1/position-management/scan', { method: 'POST' }); } catch { failures.push('Close scan'); }
+    try { scan = await screenerController.scanAll(); } catch { failures.push('Radar scan'); }
+    if (closeBatch) {
+      state.closeByContract = new Map(closeBatch.results.map((item) => [item.contract.contractSymbol, item]));
+      if (closeBatch.failures) failures.push(`${closeBatch.failures} Close position${closeBatch.failures === 1 ? '' : 's'}`);
+    }
+    if (scan) {
+      const radarFailures = scan.results.filter((result) => result.status === 'error').length;
+      if (radarFailures) failures.push(`${radarFailures} Radar target${radarFailures === 1 ? '' : 's'}`);
+    }
+    if (dashboard) {
+      state.dashboard = dashboard;
+      strategySettingsController.refresh();
+      setFreshness(dashboard.freshness);
+      renderDashboard(dashboard);
+    }
+    toast(failures.length ? `Refresh finished. Failed: ${failures.join(', ')}.` : 'Prices, Close guidance, and Radar refreshed.', failures.length ? 'error' : 'success');
   } catch (error) {
     toast(error.message, 'error');
   } finally {
     button.disabled = false;
     button.classList.remove('is-refreshing');
     button.removeAttribute('aria-busy');
-    button.setAttribute('aria-label', 'Refresh prices and scan Radar');
+    button.setAttribute('aria-label', 'Refresh prices, Close guidance, and Radar');
   }
 });
 

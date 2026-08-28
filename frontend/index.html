@@ -24,7 +24,7 @@
         <div><strong>Wheely Nilly</strong></div>
       </div>
       <div class="app-actions"><time id="last-updated" aria-live="polite">Updated —</time><button class="refresh-button"
-          id="refresh-button" type="button" aria-label="Refresh prices and scan Radar"><span
+          id="refresh-button" type="button" aria-label="Refresh prices, Close guidance, and Radar"><span
             aria-hidden="true">↻</span></button></div>
     </header>
 
@@ -102,7 +102,7 @@
           <div class="section-title">
             <div>
               <p>Capital at work</p>
-              <h2 id="open-trades-title">Open trades</h2>
+              <h2 id="open-trades-title">Open contracts</h2>
             </div><span id="open-trade-count" class="section-count">—</span>
           </div>
           <div class="trade-list" id="open-trade-list" aria-live="polite"></div>
@@ -436,12 +436,6 @@
                 <dd class="glossary-formula">Passes when today's volume ≥ minimum</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Maximum quote age <span>Freshness</span></dt>
-                <dd>The oldest price quote the screener may use. Older quotes are left out because the market may have
-                  moved since they were recorded.</dd>
-                <dd class="glossary-formula">Quote age = current time − quote timestamp</dd>
-              </div>
-              <div class="glossary-entry">
                 <dt>Minimum return <span>One option period</span></dt>
                 <dd>The smallest estimated return accepted over that option's own DTE. It is not an annualized rate.
                   Net premium is the estimated option credit after the estimated fee.</dd>
@@ -451,10 +445,10 @@
               <div class="glossary-entry">
                 <dt>Net price guard <span>Ticker setting</span></dt>
                 <dd>An optional per-share limit for one ticker. It can set the lowest net sale price for a covered
-                  call or the highest net purchase price for a cash-secured put. When monitoring begins using these
+                  call or the highest breakeven price for a cash-secured put. When monitoring begins using these
                   settings, it will filter choices; it will not place an order.</dd>
                 <dd class="glossary-formula">Covered-call net sale price = strike + net premium per share</dd>
-                <dd class="glossary-formula">Put net purchase price = strike − net premium per share</dd>
+                <dd class="glossary-formula">Put breakeven price = strike − net premium per share</dd>
               </div>
             </dl>
           </section>
@@ -483,6 +477,12 @@
                 <dd class="glossary-formula">Radar: net premium ÷ return collateral × 365 ÷ DTE</dd>
               </div>
               <div class="glossary-entry">
+                <dt>Remaining annualized return</dt>
+                <dd>The option's remaining extrinsic value as a return on the position's current capital at risk,
+                  scaled to one year. It describes remaining time value, not the Close decision.</dd>
+                <dd class="glossary-formula">Remaining extrinsic ÷ capital at risk × 365 ÷ max(DTE, 1)</dd>
+              </div>
+              <div class="glossary-entry">
                 <dt>Capital velocity</dt>
                 <dd>Booked profit produced per $1,000 of collateral over a standardized 30-day period. It measures
                   how efficiently deployed capital has generated realized profit.</dd>
@@ -490,9 +490,11 @@
               </div>
               <div class="glossary-entry">
                 <dt>Premium capture</dt>
-                <dd>The share of positive opening credit retained as booked profit across closed contracts. Losses
-                  and buyback costs reduce the result.</dd>
-                <dd class="glossary-formula">Booked profit ÷ positive opening credit on closed contracts</dd>
+                <dd>For an open contract, the estimated share of the received premium retained after buying it back now.
+                  On the dashboard, it aggregates booked profit across closed contracts. Losses and buyback costs
+                  reduce either result.</dd>
+                <dd class="glossary-formula">Open contract = estimated profit if closed ÷ opening net credit</dd>
+                <dd class="glossary-formula">Dashboard = booked profit ÷ positive premium received on closed contracts</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Monthly booked P&amp;L</dt>
@@ -537,9 +539,33 @@
                   calculations use the contract's recorded multiplier when available.</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Opening credit</dt>
+                <dt>Premium received</dt>
                 <dd>The net cash received when a short option was opened, after recorded fees and allocated to the
                   matched contract quantity.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Buyback debit</dt>
+                <dd>The estimated cash needed to buy the current short option back immediately at its ask, including
+                  the closing-fee estimate.</dd>
+                <dd class="glossary-formula">Ask per share × multiplier × contracts + estimated closing fees</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Profit if closed</dt>
+                <dd>The estimated option profit left after subtracting the immediate buyback debit from the opening
+                  net credit.</dd>
+                <dd class="glossary-formula">Opening net credit − buyback debit</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Earned per day</dt>
+                <dd>The estimated profit if closed spread across the calendar days the position has been open.
+                  A same-day position counts as one day.</dd>
+                <dd class="glossary-formula">Profit if closed ÷ days held</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Extrinsic per day</dt>
+                <dd>The option's remaining time value spread across its remaining calendar days. An option expiring
+                  today uses one day.</dd>
+                <dd class="glossary-formula">Remaining extrinsic value ÷ max(DTE, 1)</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Closing cash flow <span>Close cost</span></dt>
@@ -580,8 +606,8 @@
               <div class="glossary-entry">
                 <dt>Executable option price <span>Midpoint · Bid · Ask</span></dt>
                 <dd>The estimated per-share execution price. Bid is the highest displayed buyer price and ask is the
-                  lowest displayed seller price. Radar uses their midpoint only after the spread passes the saved
-                  liquidity limit.</dd>
+                  lowest displayed seller price. Close uses the ask for a directional buyback estimate. Radar uses
+                  the midpoint only after the spread passes the saved liquidity limit.</dd>
                 <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
               </div>
               <div class="glossary-entry">
@@ -607,11 +633,11 @@
                 <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>
               </div>
               <div class="glossary-entry">
-                <dt>Net sale / purchase price</dt>
+                <dt>Net sale / breakeven price</dt>
                 <dd>The effective per-share stock price after the option's estimated net credit. Calls show a net
-                  sale price; puts show a net purchase price.</dd>
+                  sale price; puts show a breakeven price.</dd>
                 <dd class="glossary-formula">Net sale price = strike + net contract credit ÷ 100</dd>
-                <dd class="glossary-formula">Net purchase price = strike − net contract credit ÷ 100</dd>
+                <dd class="glossary-formula">Breakeven price = strike − net contract credit ÷ 100</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Delta</dt>
@@ -631,8 +657,9 @@
               </div>
               <div class="glossary-entry">
                 <dt>Breakeven</dt>
-                <dd>For a put, the strike minus net credit per share. For a call, Radar subtracts net credit per share
-                  from broker cost basis when available, otherwise from the current stock price.</dd>
+                <dd>For a put, the strike minus net credit per share. For a covered call, Close subtracts opening
+                  credit per share from broker cost basis and falls back to the current stock price when that basis is
+                  missing. Radar uses the same basis fallback with its estimated net credit.</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Strike distance</dt>

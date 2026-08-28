@@ -13,13 +13,14 @@ import { createWheelRouter } from './routes/wheel.js';
 import { createScreenerRouter } from './routes/screener.js';
 import { createNotificationsRouter } from './routes/notifications.js';
 import { createStrategySettingsRouter } from './routes/strategy-settings.js';
+import { createPositionManagementRouter } from './routes/position-management.js';
 
 const frontendDirectory = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '../../frontend',
 );
 
-export function createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings }) {
+export function createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings, positionManagement }) {
   const app = express();
 
   app.disable('x-powered-by');
@@ -51,6 +52,7 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived, oppor
   if (opportunityMonitoring) app.use('/api/v1/screens', createScreenerRouter({ monitoring: opportunityMonitoring }));
   if (notifications) app.use('/api/v1/notifications', createNotificationsRouter({ notifications }));
   if (strategySettings) app.use('/api/v1/strategy-settings', createStrategySettingsRouter({ strategySettings }));
+  if (positionManagement) app.use('/api/v1/position-management', createPositionManagementRouter({ positionManagement }));
 
   if (config.corsOrigins.length > 0) {
     app.use(cors({ origin: config.corsOrigins }));

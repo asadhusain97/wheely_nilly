@@ -6,12 +6,12 @@ const RULE_FIELDS = [
   { key: 'targetDeltaMin', label: 'Minimum delta', short: 'Min delta', step: 0.01, min: 0, max: 1, nullable: true },
   { key: 'targetDeltaMax', label: 'Maximum delta', short: 'Max delta', step: 0.01, min: 0, max: 1, nullable: true },
   { key: 'minPeriodReturn', label: 'Minimum period return', short: 'Min return', step: 0.1, min: 0, max: 1000, scale: 100, suffix: '%' },
+  { key: 'closeAtProfitCapture', label: 'Close when premium captured', short: 'Close when premium captured', step: 1, min: 0.01, max: 100, scale: 100, suffix: '%' },
   { key: 'minMoneyness', label: 'Minimum strike / stock', short: 'Min moneyness', step: 1, min: 0.01, max: 200, scale: 100, suffix: '%' },
   { key: 'maxMoneyness', label: 'Maximum strike / stock', short: 'Max moneyness', step: 1, min: 0.01, max: 300, scale: 100, suffix: '%' },
   { key: 'maxSpreadPercent', label: 'Maximum bid / ask spread', short: 'Max spread', step: 1, min: 0.01, max: 100, scale: 100, suffix: '%' },
   { key: 'minOpenInterest', label: 'Minimum open interest', short: 'Min open interest', step: 1, min: 0, integer: true },
   { key: 'minVolume', label: 'Minimum daily volume', short: 'Min volume', step: 1, min: 0, integer: true },
-  { key: 'maxQuoteAgeSeconds', label: 'Maximum quote age', short: 'Quote age', step: 1, min: 1, max: 1440, divisor: 60, suffix: 'min' },
 ];
 
 const FIELD_BY_KEY = Object.fromEntries(RULE_FIELDS.map((field) => [field.key, field]));
@@ -23,12 +23,12 @@ const GLOSSARY_TERM_BY_RULE_KEY = {
   targetDeltaMin: 'Delta',
   targetDeltaMax: 'Delta',
   minPeriodReturn: 'Minimum return',
+  closeAtProfitCapture: 'Premium capture',
   minMoneyness: 'Moneyness',
   maxMoneyness: 'Moneyness',
   maxSpreadPercent: 'Maximum spread',
   minOpenInterest: 'Minimum open interest',
   minVolume: 'Minimum volume',
-  maxQuoteAgeSeconds: 'Maximum quote age',
 };
 const LEG_LABELS = {
   coveredCall: 'Covered call',
@@ -70,8 +70,8 @@ const SYSTEM_RULES = {
   maxSpreadPercent: 0.2,
   minOpenInterest: 10,
   minVolume: 0,
-  maxQuoteAgeSeconds: 900,
   minPeriodReturn: 0,
+  closeAtProfitCapture: 0.50,
 };
 const recommendedRules = (rules) => ({ ...SYSTEM_RULES, ...rules });
 const BUILT_IN_GOAL_PROFILES = {
@@ -197,7 +197,7 @@ function rulesError(rules, scope) {
     const display = uiValue(field, value);
     if (field.min != null && display < field.min) return `${scope}: ${field.label} is below its allowed minimum.`;
     if (field.max != null && display > field.max) return `${scope}: ${field.label} is above its allowed maximum.`;
-    if ((field.integer || ['minDte', 'maxDte', 'maxQuoteAgeSeconds'].includes(field.key)) && !Number.isSafeInteger(value)) {
+    if ((field.integer || ['minDte', 'maxDte'].includes(field.key)) && !Number.isSafeInteger(value)) {
       return `${scope}: ${field.label} must be a whole number.`;
     }
   }
@@ -391,6 +391,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       rangeSummary('DTE', rules, 'minDte', 'maxDte', specificKeys, source, 'days', glossaryTerms),
       rangeSummary('Delta', rules, 'targetDeltaMin', 'targetDeltaMax', specificKeys, source, '', glossaryTerms),
       singleSummary('Minimum return', rules, 'minPeriodReturn', specificKeys, source, glossaryTerms),
+      singleSummary('Close when premium captured', rules, 'closeAtProfitCapture', specificKeys, source, glossaryTerms),
     );
     const advanced = element('details', 'settings-rule-advanced');
     const advancedSummary = element('summary');
@@ -402,7 +403,6 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       singleSummary('Maximum spread', rules, 'maxSpreadPercent', specificKeys, source, glossaryTerms),
       singleSummary('Minimum open interest', rules, 'minOpenInterest', specificKeys, source, glossaryTerms),
       singleSummary('Minimum volume', rules, 'minVolume', specificKeys, source, glossaryTerms),
-      singleSummary('Maximum quote age', rules, 'maxQuoteAgeSeconds', specificKeys, source, glossaryTerms),
     );
     advanced.append(advancedList);
     list.append(advanced);
@@ -654,7 +654,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const inputWrap = element('div', 'rule-input');
     const input = document.createElement('input');
     input.id = id;
-    const wholeNumber = field.integer || ['minDte', 'maxDte', 'maxQuoteAgeSeconds'].includes(field.key);
+    const wholeNumber = field.integer || ['minDte', 'maxDte'].includes(field.key);
     constrainNumericInput(input, { allowDecimal: !wholeNumber });
     input.step = String(field.step);
     if (field.min != null) input.min = String(field.min);
@@ -750,7 +750,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const row = element('div', 'editor-rule-row ticker-price-guard');
     const id = `price-guard-${symbol}-${leg}`;
     const copy = element('div', 'editor-rule-copy');
-    const labelText = leg === 'coveredCall' ? 'Minimum net sale price' : 'Max. net purchase price';
+    const labelText = leg === 'coveredCall' ? 'Minimum net sale price' : 'Maximum breakeven price';
     const label = element('label', 'sr-only', labelText);
     label.htmlFor = id;
     copy.append(

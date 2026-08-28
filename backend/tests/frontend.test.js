@@ -43,7 +43,8 @@ describe('responsive dashboard shell', () => {
       assert.match(html, new RegExp(`id="${id}"`));
     }
     assert.match(js, /\/api\/v1\/wheel\/dashboard/);
-    assert.match(js, /Rollover comparison logic is the next feature/);
+    assert.match(js, /function contractDetails/);
+    assert.doesNotMatch(js, /Rollover comparison logic|Find roll|Roll over now/);
     assert.match(js, /tradeLabel.*since/s);
     assert.doesNotMatch(js, /closed trades included in returns/);
     assert.match(html, /id="opportunities-section"[^>]+hidden/);
@@ -85,6 +86,74 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /marketPrice\(candidate\.strike\)/);
     assert.match(screenerJs, /money\(candidate\.net_contract_credit\)/);
   });
+  it('turns binary Close guidance into a compact decision-first contract card', () => {
+    for (const component of ['contractHeader', 'recommendationSummary', 'positionState', 'economicsSummary', 'premiumCaptureProgress', 'contractDetails']) {
+      assert.match(js, new RegExp(`function ${component}`));
+    }
+    const cardSource = js.slice(js.indexOf('function renderOpenTrades'), js.indexOf('function renderDashboard'));
+    const hierarchy = ['contractHeader(trade)', 'recommendationSummary(management)', 'positionState(management)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
+    for (let index = 1; index < hierarchy.length; index += 1) {
+      assert.ok(cardSource.indexOf(hierarchy[index - 1]) < cardSource.indexOf(hierarchy[index]));
+    }
+
+    assert.match(js, /label: 'Review now'/);
+    assert.match(js, /label: 'Close candidate'/);
+    assert.match(js, /label: 'Hold'/);
+    assert.match(js, /management\.effectiveSettings\.rules\.closeAtProfitCapture/);
+    assert.match(js, /meeting your \$\{target\} close target/);
+    assert.doesNotMatch(cardSource, /weighted score|majority|assignment override|quoteAge|Roll over now/);
+
+    for (const metric of ['P/L if closed', 'Premium captured', 'Earned / day']) assert.match(js, new RegExp(metric.replace('/', '\\/')));
+    assert.match(css, /\.trade-economics\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+    assert.match(js, /--capture-progress/);
+    assert.match(js, /--capture-target/);
+    assert.match(js, /role', 'progressbar'/);
+    assert.match(js, /aria-valuetext/);
+    assert.match(css, /\.premium-progress\.is-met \.premium-progress-fill\{background:var\(--green\)\}/);
+
+    assert.match(js, /const control = el\('button', 'contract-details-control'\)/);
+    assert.doesNotMatch(js, /contract-details-control', 'Details'/);
+    assert.match(js, /control\.setAttribute\('aria-expanded', 'false'\)/);
+    assert.match(js, /control\.setAttribute\('aria-controls', panelId\)/);
+    assert.match(js, /panel\.hidden = !expanded/);
+    assert.match(js, /panel\.setAttribute\('role', 'region'\)/);
+    assert.match(js, /panel\.setAttribute\('aria-labelledby', control\.id\)/);
+    assert.match(css, /\.contract-details-control:focus-visible/);
+    assert.match(css, /\.contract-details-footer\{height:36px;display:grid;place-items:center/);
+    assert.match(css, /\.contract-details-control::after\{[^}]*border-right:1px solid currentColor[^}]*rotate\(45deg\)/);
+    assert.match(css, /\.contract-details\[hidden\]\{display:none\}/);
+
+    const detailsSource = js.slice(js.indexOf('function contractDetails'), js.indexOf('function renderDashboard'));
+    assert.ok(detailsSource.indexOf("detailGroup('Trade'") < detailsSource.indexOf("detailGroup('Market'"));
+    for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Underlying price', 'Bid / ask', 'Delta', 'Implied volatility']) {
+      assert.match(detailsSource, new RegExp(term.replace('/', '\\/')));
+    }
+    for (const duplicate of ['Profit if closed', 'Premium captured', 'Earned per day', 'Strike price', 'Position state', 'Strike distance', 'Moneyness', 'Expiration', 'DTE', 'Days held', 'Theta / day', 'Extrinsic per day', 'Remaining annualized return', 'Open interest / volume']) {
+      assert.doesNotMatch(detailsSource, new RegExp(duplicate.replace('/', '\\/')));
+    }
+    assert.match(detailsSource, /Last refreshed/);
+    assert.doesNotMatch(detailsSource, /Cboe delayed|Yahoo Finance/);
+    assert.match(css, /\.contract-detail-grid\{[^}]*gap:10px 20px/);
+    assert.match(css, /\.contract-detail-refresh\{margin:12px 0 0;padding-top:9px/);
+    assert.match(js, /money-state-badge is-\$\{moneyState\.toLowerCase\(\)\}/);
+    assert.match(css, /\.money-state-badge\.is-itm\{[^}]*var\(--warning\)/);
+    assert.match(css, /\.recommendation-summary\.is-close \.recommendation-label\{color:var\(--green\)\}/);
+    assert.match(css, /\.recommendation-summary\.is-review \.recommendation-label\{color:var\(--warning\)\}/);
+    assert.match(html, /Moneyness = strike price ÷ stock price × 100%/);
+    assert.match(js, /tradesGlossaryLabel\(labelText, glossaryTerm\)/);
+    assert.match(css, /prefers-reduced-motion/);
+  });
+  it('coordinates refresh in brokerage, dashboard, Close, Radar, render order', () => {
+    const refresh = js.slice(js.indexOf("$('#refresh-button').addEventListener"), js.indexOf('loadDashboard().catch'));
+    const tokens = [
+      "/api/v1/snaptrade/refresh", "/api/v1/wheel/dashboard", "/api/v1/position-management/scan",
+      'screenerController.scanAll()', 'renderDashboard(dashboard)',
+    ];
+    for (let index = 1; index < tokens.length; index += 1) {
+      assert.ok(refresh.indexOf(tokens[index - 1]) < refresh.indexOf(tokens[index]), `${tokens[index - 1]} should precede ${tokens[index]}`);
+    }
+    assert.match(refresh, /Failed:/);
+  });
   it('keeps primary navigation to four clear destinations', () => {
     const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
     assert.equal((navigation.match(/<button/g) ?? []).length, 4);
@@ -103,7 +172,7 @@ describe('responsive dashboard shell', () => {
     assert.doesNotMatch(html, /selected-instrument|verified-mark|Add a valid instrument/);
     assert.doesNotMatch(html, /monitor-last-scan|monitor-freshness|monitor-target-count|Targets use current holdings|Edit playbook/);
     assert.doesNotMatch(html, /id="screener-form"|id="screener-body"/);
-    for (const token of ['net_contract_credit', 'period_return', 'estimated_fees', 'theta_per_day', 'greek_source', 'implied_volatility', 'breakeven', 'strike_distance', 'annualized_return', 'candidate.bid', 'candidate.ask']) {
+    for (const token of ['net_contract_credit', 'period_return', 'theta_per_day', 'implied_volatility', 'breakeven', 'strike_distance', 'annualized_return', 'candidate.bid', 'candidate.ask']) {
       assert.match(screenerJs, new RegExp(token.replace('.', '\\.')));
     }
     for (const token of ['Fits ', 'candidate-fit', 'contract_symbol', 'Option type', 'Quote time', 'gross_contract_credit', 'downside_buffer', 'quote_age_seconds', 'Applied rules', 'candidate-rules', 'Calculation assumptions', 'candidate-assumptions', 'Why other contracts were filtered', 'candidate-exclusions', 'exclusionsText']) {
@@ -115,7 +184,7 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /target\.stockPrice = result\.underlying_price/);
     assert.match(screenerJs, /return \{ initialize, loadTargets, scanTarget, scanAll \}/);
     assert.match(js, /await screenerController\.scanAll\(\)/);
-    assert.match(html, /id="refresh-button"[^>]+aria-label="Refresh prices and scan Radar"/);
+    assert.match(html, /id="refresh-button"[^>]+aria-label="Refresh prices, Close guidance, and Radar"/);
     assert.match(screenerJs, /state\.loading\.has/);
     assert.match(screenerJs, /\/api\/v1\/screens\/instruments\?query=/);
     assert.match(screenerJs, /Select a verified instrument from the results/);
@@ -137,17 +206,29 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /function glossaryLabel/);
     assert.match(screenerJs, /function rulesSummary/);
     const candidateCardSource = screenerJs.slice(screenerJs.indexOf('function candidateCard'), screenerJs.indexOf('function scanResultView'));
-    assert.equal((candidateCardSource.match(/\bmetric\(/g) ?? []).length, 2);
-    assert.equal((candidateCardSource.match(/\bdetailRow\(/g) ?? []).length, 10);
+    assert.doesNotMatch(candidateCardSource, /candidate-compact|\bmetric\(/);
+    assert.equal((candidateCardSource.match(/\bdetailRow\(/g) ?? []).length, 8);
+    const candidateDetailOrder = [
+      "detailRow('Approx. |delta|'", "detailRow('Theta per day'", "detailRow('Strike distance'",
+      "detailRow('Annualized return'", "detailRow('Open interest / volume'", "detailRow('Implied volatility'",
+      "detailRow('Executable option price'", "detailRow('Spread'",
+    ];
+    for (let index = 1; index < candidateDetailOrder.length; index += 1) {
+      assert.ok(candidateCardSource.indexOf(candidateDetailOrder[index - 1]) < candidateCardSource.indexOf(candidateDetailOrder[index]));
+    }
     assert.match(candidateCardSource, /glossaryLabel\('net credit', 'Net contract credit'\)/);
     assert.match(candidateCardSource, /glossaryLabel\('return on capital', 'Return on capital'\)/);
     assert.doesNotMatch(candidateCardSource, /glossaryLabel\(candidate(?:Headline|ReturnCaption)/);
     assert.match(screenerJs, /metricName\.append\(glossaryLabel\(label, term\)\);[\s\S]*?node\('dd', '', value\)/);
     assert.match(screenerJs, /document\.createTextNode\(`\$\{rules\.minDte\}–\$\{rules\.maxDte\} `\)[\s\S]*?glossaryLabel\('DTE', 'DTE range'\)/);
     assert.match(screenerJs, /document\.createTextNode\(`≥ \$\{percent\(rules\.minPeriodReturn\)\} `\)[\s\S]*?glossaryLabel\('term return', 'Minimum return'\)/);
-    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Net sale / purchase price', 'Underlying price', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Annualized return', 'Estimated fee']) {
+    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Implied volatility', 'Theta per day', 'Strike distance', 'Annualized return']) {
       assert.match(screenerJs, new RegExp(term.replace(/[|/]/g, '\\$&')));
     }
+    assert.match(candidateCardSource, /detailRow\('Approx\. \|delta\|'[^\n]+candidate\.delta[^\n]+Math\.abs\(candidate\.delta\)[^\n]+, 'Delta'\)/);
+    assert.doesNotMatch(candidateCardSource, /Breakeven|Net sale price|Net sale \/ breakeven price/);
+    assert.doesNotMatch(candidateCardSource, /Underlying price|Estimated fees|Secondary metric|Provider-derived|Black–Scholes estimate/);
+    assert.match(candidateCardSource, /Bid \$\{marketPrice\(candidate\.bid\)\} · Ask \$\{marketPrice\(candidate\.ask\)\}/);
     assert.match(screenerJs, /hydrateTargetIdentities/);
     assert.match(screenerJs, /exactInstrumentIdentity/);
     assert.match(screenerJs, /instrumentType/);
@@ -198,10 +279,15 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /\.monitor-target-meta > \.stock-price-tag/);
     assert.match(screenerCss, /\.monitor-target-body\[hidden\]/);
     assert.doesNotMatch(screenerCss, /\.monitor-target-disclosure/);
-    assert.match(screenerCss, /\.candidate-open-label \{[^}]*min-width: 56px[^}]*grid-column: 1\/-1[^}]*grid-row: 3/);
-    assert.match(screenerCss, /\.candidate-open-label::after \{[^}]*width: 4px[^}]*height: 4px[^}]*border-right: 1\.25px solid currentColor[^}]*transform: rotate\(45deg\)/);
-    assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-open-label::after \{ transform: rotate\(225deg\); \}/);
+    assert.doesNotMatch(screenerCss, /\.candidate-compact|\.monitor-metric|\.candidate-open-label/);
+    assert.match(screenerCss, /\.candidate-disclosure \{[^}]*width: 24px[^}]*grid-column: 1\/-1[^}]*grid-row: 2[^}]*justify-self: center/);
+    assert.match(screenerCss, /\.candidate-disclosure::after \{[^}]*width: 3px[^}]*height: 3px[^}]*border-right: 1px solid currentColor[^}]*transform: rotate\(45deg\)/);
+    assert.match(screenerCss, /\.candidate-card\[open\] \.candidate-disclosure::after \{ transform: rotate\(225deg\); \}/);
     assert.doesNotMatch(screenerCss, /content: "⌄"/);
+    assert.doesNotMatch(candidateCardSource, /'Details'/);
+    assert.match(screenerJs, /`Breakeven at most \$\{price\}`/);
+    assert.match(settingsJs, /'Maximum breakeven price'/);
+    assert.doesNotMatch(`${screenerJs}\n${settingsJs}\n${html}`, /net purchase price/i);
     assert.doesNotMatch(screenerCss, /\.scan-all-button/);
     assert.match(screenerCss, /\.scan-source small/);
     assert.doesNotMatch(screenerCss, /\.provider-strip/);
@@ -304,6 +390,9 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /createGlossaryTerm/);
     assert.match(settingsJs, /\{ glossaryTerms: true \}/);
     assert.match(settingsJs, /GLOSSARY_TERM_BY_RULE_KEY/);
+    assert.match(settingsJs, /key: 'closeAtProfitCapture', label: 'Close when premium captured'[^\n]+scale: 100/);
+    assert.match(settingsJs, /closeAtProfitCapture: 0\.50/);
+    assert.doesNotMatch(settingsJs, /maxQuoteAgeSeconds|Maximum quote age/);
     assert.match(settingsJs, /ruleSummary\(rules,[\s\S]*?\{ glossaryTerms: true \}\)/);
     assert.match(settingsJs, /createGlossaryTerm\(labelText, 'Net price guard', 'editor-rule-label'\)/);
     assert.match(settingsJs, /createGlossaryTerm\('Goal', 'Goal profiles', 'ticker-goal-label'\)/);
@@ -318,7 +407,7 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.glossary-search\s*\{[^}]*border-radius: 999px/);
     assert.match(settingsCss, /\.glossary-search:focus-within/);
     assert.match(settingsCss, /\.glossary-search input::\-webkit-search-cancel-button\s*\{[^}]*display: none/);
-    for (const term of ['Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Opening credit', 'DTE', 'Delta', 'Open interest', 'Settings layers', 'Goal profiles', 'Moneyness', 'Target delta range', 'Maximum spread', 'Minimum open interest', 'Minimum volume', 'Maximum quote age', 'Minimum return', 'Net price guard', 'Candidate rank', 'Strike price', 'Underlying price', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Net contract credit', 'Return on capital', 'Period return', 'Net sale / purchase price', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Estimated fee', 'Radar calculation inputs']) {
+    for (const term of ['Booked profit', 'Return on collateral', 'Annualized rate', 'Capital velocity', 'Premium capture', 'Wheel capital', 'CSP collateral', 'Contract multiplier', 'Premium received', 'DTE', 'Delta', 'Open interest', 'Settings layers', 'Goal profiles', 'Moneyness', 'Target delta range', 'Maximum spread', 'Minimum open interest', 'Minimum volume', 'Minimum return', 'Net price guard', 'Candidate rank', 'Strike price', 'Underlying price', 'Executable option price', 'Bid-ask spread', 'Open interest / volume', 'Net contract credit', 'Return on capital', 'Period return', 'Net sale / breakeven price', 'Implied volatility', 'Theta per day', 'Breakeven', 'Strike distance', 'Estimated fee', 'Radar calculation inputs']) {
       assert.match(glossary, new RegExp(term));
     }
     assert.equal((glossary.match(/<dt>Annualized/g) ?? []).length, 1);
@@ -327,7 +416,7 @@ describe('responsive dashboard shell', () => {
     assert.match(glossary, /Moneyness = strike price ÷ stock price × 100%/);
     assert.match(glossary, /Spread % = \(ask − bid\) ÷ midpoint × 100/);
     assert.match(glossary, /Cash-secured put = net premium ÷ \(strike × 100 − net premium\)/);
-    assert.match(glossary, /Put net purchase price = strike − net premium per share/);
+    assert.match(glossary, /Put breakeven price = strike − net premium per share/);
     assert.doesNotMatch(more, /<table|CC holdings|Premium ledger|Alerts/);
     assert.doesNotMatch(js, /loadMore|loadAlerts|test-notification|\/api\/v1\/wheel\/(?:positions|premiums)/);
   });
@@ -393,7 +482,8 @@ describe('responsive dashboard shell', () => {
     }
     assert.match(js, /tradesGlossaryLabel\('Booked option P&L', 'Booked profit'\)/);
     assert.match(js, /tradesGlossaryLabel\('close cost', 'Closing cash flow'\)/);
-    assert.match(js, /appendLabeledAmount\([^\n]+, 'Opening credit', 'Opening credit'\)/);
+    assert.match(js, /appendLabeledAmount\([^\n]+, 'Premium received', 'Premium received'\)/);
+    assert.doesNotMatch(js, /'Opening credit'/);
     assert.doesNotMatch(js, /tradesGlossaryLabel\(`?\$\{?(?:money|percent)/);
     assert.match(css, /\.trades-glossary-label\{display:inline;vertical-align:baseline\}/);
     assert.match(html, /<dt>Closing cash flow <span>Close cost<\/span><\/dt>/);

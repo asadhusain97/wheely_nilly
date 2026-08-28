@@ -41,6 +41,37 @@ const instrumentResponseSchema = z.object({
     instrument_type: z.enum(['Equity', 'ETF', 'Mutual Fund']), exchange: z.string().nullable(), currency: z.string().nullable() }).strict()),
 }).strict();
 
+const exactContractSchema = z.object({
+  contract_symbol: z.string().regex(/^[A-Z0-9.]{1,6}\d{6}[CP]\d{8}$/),
+  symbol: z.string().regex(/^[A-Z][A-Z0-9.-]{0,9}$/),
+  option_type: z.enum(['put', 'call']),
+  expiration: z.string().date(),
+  strike: z.number().positive(),
+}).strict();
+const exactContractsRequestSchema = z.object({
+  contracts: z.array(exactContractSchema).min(1).max(500),
+}).strict();
+const nullableNumber = z.number().nullable();
+const exactQuoteResultSchema = z.object({
+  contract: exactContractSchema,
+  available: z.boolean(),
+  unavailable_reason: z.string().nullable().optional(),
+  provider: z.string().optional(),
+  provider_unofficial: z.boolean().optional(),
+  bid: nullableNumber.optional(), ask: nullableNumber.optional(), underlying_price: nullableNumber.optional(),
+  strike: z.number().positive().optional(), expiration: z.string().date().optional(), option_type: z.enum(['put', 'call']).optional(),
+  volume: z.number().int().nonnegative().nullable().optional(), open_interest: z.number().int().nonnegative().nullable().optional(),
+  implied_volatility: nullableNumber.optional(), delta: nullableNumber.optional(), theta_per_day: nullableNumber.optional(),
+  contract_quote_time: z.string().datetime({ offset: true }).nullable().optional(),
+  underlying_quote_time: z.string().datetime({ offset: true }).nullable().optional(),
+  fetched_at: z.string().datetime({ offset: true }).optional(),
+  cache: z.object({ hit: z.boolean(), age_seconds: nullableNumber }).optional(),
+}).strict();
+const exactQuotesResponseSchema = z.object({
+  schema_version: z.literal(1), calculation_version: z.string(),
+  scanned_at: z.string().datetime({ offset: true }), results: z.array(exactQuoteResultSchema), duration_ms: z.number().nonnegative(),
+}).strict();
+
 export class ScreenerError extends Error { constructor(message, status = 503) { super(message); this.name = 'ScreenerError'; this.status = status; } }
 
 export function createScreenerService({ config, fetchImpl = fetch, now = Date.now }) {
@@ -58,6 +89,22 @@ export function createScreenerService({ config, fetchImpl = fetch, now = Date.no
       if (error instanceof ScreenerError) throw error;
       if (error instanceof TypeError) throw new ScreenerError(`Cannot connect to ticker search at ${config.screener.url}; start Wheely Nilly with npm run app`);
       throw new ScreenerError(`Instrument lookup unavailable (${error.name ?? 'network error'})`);
+    }
+  }, async quoteContracts(input) {
+    const parsed = exactContractsRequestSchema.safeParse(input);
+    if (!parsed.success) throw new ScreenerError(`Invalid exact-contract request: ${parsed.error.issues[0].message}`, 400);
+    try {
+      const symbolCount = new Set(parsed.data.contracts.map((contract) => contract.symbol)).size;
+      const timeoutMs = Math.min(60_000, config.screener.timeoutMs * Math.max(1, symbolCount));
+      const response = await fetchImpl(`${config.screener.url}/v1/contracts/quotes`, { method: 'POST', signal: AbortSignal.timeout(timeoutMs), headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(parsed.data) });
+      if (!response.ok) throw new ScreenerError(`Exact-contract quotes returned HTTP ${response.status}`);
+      const result = exactQuotesResponseSchema.safeParse(await response.json());
+      if (!result.success) throw new ScreenerError('Exact-contract quotes returned an invalid contract');
+      return result.data;
+    } catch (error) {
+      if (error instanceof ScreenerError) throw error;
+      if (error instanceof TypeError) throw new ScreenerError(`Cannot connect to screener at ${config.screener.url}; start the Python sidecar and verify PYTHON_SIDECAR_URL`);
+      throw new ScreenerError(`Exact-contract quotes unavailable (${error.name ?? 'network error'})`);
     }
   }, async screen(input) {
     const parsed = requestSchema.safeParse(input);

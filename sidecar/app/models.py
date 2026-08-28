@@ -69,3 +69,24 @@ class ChainSnapshot(BaseModel):
     underlying_quote_time: datetime | None = None
     fetched_at: datetime
     quotes: list[OptionQuote]
+
+
+class ExactContract(BaseModel):
+    contract_symbol: str = Field(pattern=r"^[A-Z0-9.]{1,6}\d{6}[CP]\d{8}$")
+    symbol: str = Field(pattern=r"^[A-Z][A-Z0-9.-]{0,9}$")
+    option_type: Literal["put", "call"]
+    expiration: date
+    strike: float = Field(gt=0)
+
+
+class ExactContractsRequest(BaseModel):
+    contracts: list[ExactContract] = Field(min_length=1, max_length=500)
+    risk_free_rate: float = Field(default=0.045, ge=-0.1, le=0.5)
+    dividend_yield: float = Field(default=0, ge=0, le=0.5)
+
+    @model_validator(mode="after")
+    def validate_unique_contracts(self):
+        symbols = [contract.contract_symbol for contract in self.contracts]
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("contracts must be unique")
+        return self

@@ -11,6 +11,7 @@ import { createScreenerService } from './services/screener.js';
 import { createNotificationService } from './services/notifications.js';
 import { createStrategySettingsService } from './services/strategy-settings.js';
 import { createOpportunityMonitoringService } from './services/opportunity-monitoring.js';
+import { createPositionManagementService } from './services/position-management.js';
 
 let config;
 try {
@@ -34,8 +35,9 @@ const screener = createScreenerService({ config });
 const notifications = createNotificationService({ config });
 const strategySettings = createStrategySettingsService({ dataDir: config.dataDir });
 const opportunityMonitoring = createOpportunityMonitoringService({ derived, strategySettings, screener });
-const scheduler = createScheduler({ config, ingest, notifications, derived, monitoring: opportunityMonitoring });
-const app = createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings });
+const positionManagement = createPositionManagementService({ derived, strategySettings, screener });
+const scheduler = createScheduler({ config, ingest, notifications, derived, monitoring: opportunityMonitoring, positionManagement });
+const app = createApp({ config, snaptrade, ingest, snapshots, derived, opportunityMonitoring, notifications, strategySettings, positionManagement });
 
 const server = app.listen(config.port, config.host, () => {
   console.log(

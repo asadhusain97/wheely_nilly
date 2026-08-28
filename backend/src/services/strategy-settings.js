@@ -21,8 +21,8 @@ export const RULE_FIELDS = [
   'maxSpreadPercent',
   'minOpenInterest',
   'minVolume',
-  'maxQuoteAgeSeconds',
   'minPeriodReturn',
+  'closeAtProfitCapture',
 ];
 
 const legSchema = z.enum(STRATEGY_LEGS);
@@ -42,8 +42,14 @@ const ruleShape = {
   maxSpreadPercent: z.number().positive().max(1),
   minOpenInterest: safeNonnegativeInteger,
   minVolume: safeNonnegativeInteger,
-  maxQuoteAgeSeconds: z.number().int().min(1).max(86_400),
   minPeriodReturn: z.number().min(0).max(10),
+  closeAtProfitCapture: z.number().positive().max(1),
+};
+
+const legacyRuleShape = {
+  ...ruleShape,
+  closeAtProfitCapture: ruleShape.closeAtProfitCapture.optional(),
+  maxQuoteAgeSeconds: z.number().int().min(1).max(86_400).optional(),
 };
 
 function addRangeIssues(rules, context, pathPrefix = []) {
@@ -77,19 +83,19 @@ export const partialRuleSetSchema = z.object(ruleShape).partial().strict()
 
 const v1ProtectPresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall')]),
-  rules: partialRuleSetSchema,
+  rules: z.object(legacyRuleShape).partial().strict(),
 }).strict();
 const v1IncomePresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall'), z.literal('cashSecuredPut')]),
-  rules: partialRuleSetSchema,
+  rules: z.object(legacyRuleShape).partial().strict(),
 }).strict();
 const v1ExitPresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('coveredCall')]),
-  rules: partialRuleSetSchema,
+  rules: z.object(legacyRuleShape).partial().strict(),
 }).strict();
 const v1AcquirePresetSchema = z.object({
   applicableLegs: z.tuple([z.literal('cashSecuredPut')]),
-  rules: partialRuleSetSchema,
+  rules: z.object(legacyRuleShape).partial().strict(),
 }).strict();
 
 const coveredCallPlaybookSchema = z.object({
@@ -112,11 +118,22 @@ const tickerPlaybookSchema = z.object({
 
 const tickerPlaybooksSchema = z.record(tickerSymbolSchema, tickerPlaybookSchema);
 
+const legacyCoveredCallPlaybookSchema = coveredCallPlaybookSchema.extend({
+  overrides: z.object(legacyRuleShape).partial().strict(),
+});
+const legacyCashSecuredPutPlaybookSchema = cashSecuredPutPlaybookSchema.extend({
+  overrides: z.object(legacyRuleShape).partial().strict(),
+});
+const legacyTickerPlaybooksSchema = z.record(tickerSymbolSchema, z.object({
+  coveredCall: legacyCoveredCallPlaybookSchema,
+  cashSecuredPut: legacyCashSecuredPutPlaybookSchema,
+}).strict());
+
 const v1EditableDocumentShape = {
   schemaVersion: z.literal(1),
   globalRules: z.object({
-    coveredCall: completeRuleSetSchema,
-    cashSecuredPut: completeRuleSetSchema,
+    coveredCall: z.object(legacyRuleShape).strict(),
+    cashSecuredPut: z.object(legacyRuleShape).strict(),
   }).strict(),
   goalPresets: z.object({
     protect: v1ProtectPresetSchema,
@@ -124,7 +141,7 @@ const v1EditableDocumentShape = {
     exit: v1ExitPresetSchema,
     acquire: v1AcquirePresetSchema,
   }).strict(),
-  tickerPlaybooks: tickerPlaybooksSchema,
+  tickerPlaybooks: legacyTickerPlaybooksSchema,
 };
 
 const v1DocumentSchema = z.object(v1EditableDocumentShape).strict()
@@ -239,8 +256,8 @@ const SYSTEM_RULE_DEFAULTS = {
   maxSpreadPercent: 0.2,
   minOpenInterest: 10,
   minVolume: 0,
-  maxQuoteAgeSeconds: 900,
   minPeriodReturn: 0,
+  closeAtProfitCapture: 0.50,
 };
 
 const completeProfile = (rules = {}) => ({ ...SYSTEM_RULE_DEFAULTS, ...rules });
@@ -269,14 +286,50 @@ export function migrateV1StrategySettings(input) {
   for (const [goal, preset] of Object.entries(settings.goalPresets)) {
     goalProfiles[goal] = Object.fromEntries(preset.applicableLegs.map((leg) => [
       leg,
-      { ...settings.globalRules[leg], ...preset.rules },
+      completeProfile(withoutLegacyQuoteAge({ ...settings.globalRules[leg], ...preset.rules })),
     ]));
   }
   return {
     schemaVersion: 2,
     goalProfiles,
-    tickerPlaybooks: structuredClone(settings.tickerPlaybooks),
+    tickerPlaybooks: normalizePlaybooks(settings.tickerPlaybooks),
   };
+}
+
+function withoutLegacyQuoteAge(rules) {
+  if (!rules || typeof rules !== 'object' || Array.isArray(rules)) return rules;
+  const { maxQuoteAgeSeconds: _removed, ...current } = rules;
+  return current;
+}
+
+function normalizePlaybooks(playbooks) {
+  if (!playbooks || typeof playbooks !== 'object' || Array.isArray(playbooks)) return playbooks;
+  return Object.fromEntries(Object.entries(playbooks).map(([symbol, playbook]) => {
+    if (!playbook || typeof playbook !== 'object' || Array.isArray(playbook)) return [symbol, playbook];
+    const normalizeLeg = (leg) => leg && typeof leg === 'object' && !Array.isArray(leg)
+      ? { ...leg, overrides: withoutLegacyQuoteAge(leg.overrides) }
+      : leg;
+    return [symbol, {
+      ...playbook,
+      coveredCall: normalizeLeg(playbook.coveredCall),
+      cashSecuredPut: normalizeLeg(playbook.cashSecuredPut),
+    }];
+  }));
+}
+
+function defaultPersistedV2(input) {
+  const settings = structuredClone(input);
+  for (const profiles of Object.values(settings.goalProfiles ?? {})) {
+    if (!profiles || typeof profiles !== 'object' || Array.isArray(profiles)) continue;
+    for (const [leg, rules] of Object.entries(profiles)) {
+      const compatible = withoutLegacyQuoteAge(rules);
+      profiles[leg] = compatible && typeof compatible === 'object' && !Array.isArray(compatible)
+        ? completeProfile(compatible)
+        : compatible;
+    }
+  }
+  settings.tickerPlaybooks = normalizePlaybooks(settings.tickerPlaybooks ?? {});
+  return settings;
 }
 
 function issueMessage(error) {
@@ -294,7 +347,8 @@ export class StrategySettingsValidationError extends Error {
 }
 
 export function normalizeStrategySettings(input) {
-  const result = strategySettingsDocumentSchema.safeParse(input);
+  const compatible = input?.schemaVersion === 2 ? defaultPersistedV2(input) : input;
+  const result = strategySettingsDocumentSchema.safeParse(compatible);
   if (!result.success) {
     throw new StrategySettingsValidationError(issueMessage(result.error), result.error.issues);
   }
@@ -354,7 +408,7 @@ export function createStrategySettingsService({
       const raw = JSON.parse(await fsImpl.readFile(file, 'utf8'));
       const persisted = raw.schemaVersion === 1
         ? persistedV1DocumentSchema.parse(raw)
-        : persistedDocumentSchema.parse(raw);
+        : persistedDocumentSchema.parse(defaultPersistedV2(raw));
       const { updatedAt, ...editable } = persisted;
       const settings = editable.schemaVersion === 1 ? migrateV1StrategySettings(editable) : editable;
       return { settings, persistence: { persisted: true, updatedAt } };

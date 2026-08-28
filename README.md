@@ -2,7 +2,7 @@
 
 A lightweight, self-hosted dashboard for observing and improving an options wheel strategy. The application is designed for a 64-bit Raspberry Pi and keeps brokerage credentials, normalized trade history, and strategy calculations on infrastructure you control.
 
-Phases 1–4 are implemented locally: the backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, screens options through an internal Python sidecar, and delivers deduplicated risk notifications through ntfy. Implementation follows [`PLAN.md`](PLAN.md).
+The backend stores immutable SnapTrade snapshots, derives a source-linked wheel ledger, screens options through an internal Python sidecar, calculates binary Close guidance for every open short option, and delivers deduplicated risk notifications through ntfy. See [`docs/position-management.md`](docs/position-management.md) for the Close contract.
 
 ## First-run setup
 
@@ -30,7 +30,8 @@ flowchart LR
     Node -->|Signed HTTPS requests| SnapTrade[SnapTrade API]
     SnapTrade --> Robinhood[Robinhood connection]
     Node -->|Local HTTP| Python[Python screener sidecar]
-    Python -->|Stock and options data| Yahoo[yfinance]
+    Python -->|Delayed option chains| Cboe[Cboe]
+    Python -->|Ticker search and fallback| Yahoo[yfinance]
     Node -->|HTTP POST| Ntfy[ntfy]
     Node --> Data[(Local data volume)]
     Python --> Data
@@ -193,7 +194,7 @@ python -m pip install -r requirements.txt
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-The sidecar exposes `GET /health` and the internal `POST /v1/screens` contract on loopback only.
+The sidecar exposes `GET /health`, `POST /v1/screens`, and the exact-contract `POST /v1/contracts/quotes` contract on loopback only.
 
 ## Optional Docker deployment on Raspberry Pi
 
@@ -360,9 +361,9 @@ After tests pass, ask the user to run `tailscale login` if SSH needs authenticat
 
 ### Radar opportunity finder
 
-Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Yahoo Finance supplies the underlying stock price, option chains, quote timestamps, and liquidity fields through `yfinance`. The 120-second cache limits duplicate Yahoo calls. An expired cache is never served when Yahoo is unavailable.
+Start the app with `cd backend && npm run app`, then use the Radar tab. The on-demand scan discovers uncovered owned lots and enabled ticker playbooks, applies backend-resolved Phase 1 rules, and preserves partial results when another ticker fails. Cboe's delayed feed supplies the underlying stock price, option chains, quote timestamps, and liquidity fields. Yahoo Finance remains the ticker-search source and the chain fallback. The 120-second cache limits duplicate provider calls. An expired cache is never served when the providers are unavailable.
 
-Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless a Plan Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are Black–Scholes estimates when Yahoo supplies usable implied volatility. Contract freshness uses Yahoo's `lastTradeDate`, not the local fetch time. Missing volume or open interest stays unavailable and fails only a configured positive minimum for that field. Yahoo data is unofficial and may be delayed or unavailable.
+Candidate premiums assume a 100-share multiplier and midpoint execution only for spreads within the configured limit. Estimated fees are removed before period return and net price guards are evaluated. Puts must be at or out of the money. Calls remain at or above spot unless a Plan Exit playbook has an explicit minimum net sale price; broker cost basis is never an implicit sale floor. Put return uses strike collateral less net contract credit. Period return is the primary opportunity metric and annualized return is secondary. Greeks are Black–Scholes estimates when the provider supplies usable implied volatility. Contract freshness uses the provider's option trade time, not the local fetch time. Missing volume or open interest stays unavailable and fails only a configured positive minimum for that field. Delayed market data may be unavailable and is not execution-grade.
 
 ### Opportunity-monitoring settings foundation
 
@@ -401,7 +402,7 @@ The normalized schema, accounting conventions, idempotency keys, and migration a
 - Preserve provider/source identifiers to make ingestion idempotent and prevent duplicate premiums.
 - Model rolls as a close and a new open contract rather than mutating the original trade.
 - Include contract multipliers and fees in premium and basis calculations.
-- Label delayed or unofficial market data clearly. `yfinance` is convenient but is not an execution-grade or guaranteed data source.
+- Label delayed or unofficial market data clearly. Neither Cboe's delayed feed nor the Yahoo fallback is execution-grade or guaranteed.
 - Treat all calculated Greeks, yields, and assignment indicators as estimates, not trading instructions.
 
 ## Roadmap

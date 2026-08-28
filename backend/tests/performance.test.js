@@ -124,4 +124,21 @@ describe('wheel performance dashboard', () => {
     assert.equal(dashboard.tickerPerformance[0].stockPrice, '43.00');
     assert.ok(dashboard.openTrades.every((trade) => trade.stockPrice === '43.00'));
   });
+
+  it('aggregates multiple opening lots for one exact open contract without duplicating lot matching', () => {
+    const put = option('WXYZ260918P00050000', 'put', 5000);
+    const position = { accountId: 'acct-1', symbol: 'WXYZ', option: put, quantity: -2, priceMinor: 90, brokerCostBasisMinor: 100 };
+    const dashboard = buildPerformanceDashboard({
+      events: [
+        event('first-open', 'sell_to_open', put, '2026-08-01T00:00:00Z', 1, 5000),
+        event('second-open', 'sell_to_open', put, '2026-08-05T00:00:00Z', 1, 7000),
+      ],
+      positions: [position], holdings: [], optionPositions: [position], quotes: [], balances: [],
+    }, { now: new Date('2026-08-23T00:00:00Z') });
+    assert.equal(dashboard.openTrades.length, 1);
+    assert.equal(dashboard.openTrades[0].contracts, 2);
+    assert.equal(dashboard.openTrades[0].openingCredit, '120.00');
+    assert.equal(dashboard.openTrades[0].openedAt, '2026-08-01T00:00:00Z');
+    assert.equal(dashboard.openTrades[0].needsReview, false);
+  });
 });

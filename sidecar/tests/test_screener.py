@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models import ChainSnapshot, OptionQuote, ScreenRequest
+from app.models import ChainSnapshot, ExactContract, ExactContractsRequest, OptionQuote, ScreenRequest
 from app.screener import ScreenerService, estimated_greeks, screen
 
 NOW = datetime(2026, 8, 23, 16, tzinfo=UTC)
@@ -14,6 +14,74 @@ NOW = datetime(2026, 8, 23, 16, tzinfo=UTC)
 def snapshot():
     quote = OptionQuote(symbol="XYZ260918P00095000", option_type="put", expiration=date(2026, 9, 18), strike=95, bid=2, ask=2.10, volume=100, open_interest=500, implied_volatility=.3, quote_time=NOW)
     return ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=NOW, quotes=[quote])
+
+
+def test_exact_contract_quotes_group_by_symbol_reuse_cache_and_skip_screening_gates():
+    today = datetime.now(UTC).date()
+    far_expiration = today + timedelta(days=180)
+    today_symbol = f"XYZ{today:%y%m%d}P00095000"
+    far_symbol = f"XYZ{far_expiration:%y%m%d}C00105000"
+    zero_symbol = f"XYZ{today:%y%m%d}C00110000"
+    quotes = [
+        OptionQuote(symbol=today_symbol, option_type="put", expiration=today, strike=95,
+                    bid=2, ask=2.1, volume=0, open_interest=0, implied_volatility=None,
+                    quote_time=datetime(2020, 1, 1, tzinfo=UTC)),
+        OptionQuote(symbol=far_symbol, option_type="call", expiration=far_expiration, strike=105,
+                    bid=None, ask=3.2, volume=None, open_interest=None, implied_volatility=.3,
+                    quote_time=None),
+        OptionQuote(symbol=zero_symbol, option_type="call", expiration=today, strike=110,
+                    bid=0, ask=0, volume=0, open_interest=0, implied_volatility=.3,
+                    quote_time=datetime.now(UTC)),
+    ]
+
+    class StaticProvider:
+        def __init__(self):
+            self.calls = []
+
+        async def fetch_chain(self, symbol, min_dte, max_dte):
+            self.calls.append((symbol, min_dte, max_dte))
+            return ChainSnapshot(provider="fixture", underlying_price=100,
+                                 underlying_quote_time=datetime.now(UTC), fetched_at=datetime.now(UTC), quotes=quotes)
+
+    provider = StaticProvider()
+    service = ScreenerService(provider)
+    request = ExactContractsRequest(contracts=[
+        ExactContract(contract_symbol=quotes[0].symbol, symbol="XYZ", option_type="put", expiration=today, strike=95),
+        ExactContract(contract_symbol=quotes[1].symbol, symbol="XYZ", option_type="call", expiration=far_expiration, strike=105),
+        ExactContract(contract_symbol=quotes[2].symbol, symbol="XYZ", option_type="call", expiration=today, strike=110),
+    ])
+    first = asyncio.run(service.quote_contracts(request))
+    second = asyncio.run(service.quote_contracts(request))
+
+    assert provider.calls == [("XYZ", 0, 180)]
+    assert [item["available"] for item in first["results"]] == [True, True, False]
+    assert first["results"][0]["contract_quote_time"] == datetime(2020, 1, 1, tzinfo=UTC)
+    assert first["results"][1]["ask"] == 3.2
+    assert first["results"][1]["bid"] is None
+    assert first["results"][2]["unavailable_reason"] == "exact contract has no usable ask"
+    assert second["results"][0]["cache"]["hit"] is True
+
+
+def test_exact_contract_batch_preserves_symbol_level_provider_failure():
+    today = datetime.now(UTC).date()
+    xyz_symbol = f"XYZ{today:%y%m%d}P00095000"
+    bad_symbol = f"BAD{today:%y%m%d}P00095000"
+
+    class PartialProvider:
+        async def fetch_chain(self, symbol, _min_dte, _max_dte):
+            if symbol == "BAD":
+                raise RuntimeError("offline")
+            quote = OptionQuote(symbol=xyz_symbol, option_type="put", expiration=today, strike=95, ask=2)
+            return ChainSnapshot(provider="fixture", underlying_price=100, fetched_at=datetime.now(UTC), quotes=[quote])
+
+    request = ExactContractsRequest(contracts=[
+        ExactContract(contract_symbol=xyz_symbol, symbol="XYZ", option_type="put", expiration=today, strike=95),
+        ExactContract(contract_symbol=bad_symbol, symbol="BAD", option_type="put", expiration=today, strike=95),
+    ])
+    result = asyncio.run(ScreenerService(PartialProvider()).quote_contracts(request))
+    assert result["results"][0]["available"] is True
+    assert result["results"][1]["available"] is False
+    assert "provider unavailable" in result["results"][1]["unavailable_reason"]
 
 
 def test_known_put_metrics_and_estimated_greeks():
@@ -135,6 +203,22 @@ def test_response_keeps_underlying_price_when_no_contract_matches():
     assert result["underlying_price"] == 123.45
 
 
+def test_screen_rejects_a_chain_when_every_relevant_quote_is_unusable():
+    unusable = snapshot().model_copy(update={
+        "underlying_quote_time": NOW,
+        "quotes": [snapshot().quotes[0].model_copy(update={"bid": 0, "ask": 0})],
+    })
+
+    class UnusableProvider:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            return unusable
+
+    with pytest.raises(RuntimeError, match="no usable quotes"):
+        asyncio.run(ScreenerService(UnusableProvider()).run(ScreenRequest(
+            symbol="XYZ", leg="cash_secured_put", cash_available=10_000,
+        )))
+
+
 def test_expired_cache_is_not_used_when_yahoo_fails():
     class FailingProvider:
         async def fetch_chain(self, _symbol, _min_dte, _max_dte):
@@ -158,10 +242,19 @@ def test_contract_rejects_invalid_bounds_and_oversized_symbol():
     assert response.status_code == 422
 
 
-def test_health_reports_yfinance_provider():
+def test_exact_contract_endpoint_rejects_empty_and_malformed_batches():
+    client = TestClient(app)
+    assert client.post("/v1/contracts/quotes", json={"contracts": []}).status_code == 422
+    assert client.post("/v1/contracts/quotes", json={"contracts": [{
+        "contract_symbol": "not-an-occ", "symbol": "XYZ", "option_type": "put",
+        "expiration": "2026-09-18", "strike": 95,
+    }]}).status_code == 422
+
+
+def test_health_reports_cboe_option_provider():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
-    assert response.json()["provider"] == "yfinance"
+    assert response.json()["provider"] == "cboe_delayed"
 
 
 def test_instrument_lookup_rejects_untrusted_query_characters_before_provider_call():

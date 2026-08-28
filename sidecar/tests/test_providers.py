@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from app.providers import ProviderUnavailable, YFinanceProvider
+from app.providers import CboeProvider, MarketDataProvider, ProviderUnavailable, YFinanceProvider
 
 
 class FakeResponse:
@@ -132,3 +132,117 @@ def test_yfinance_chain_preserves_missing_trade_time(monkeypatch):
     snapshot = YFinanceProvider._fetch("XYZ", 7, 45)
 
     assert snapshot.quotes[0].quote_time is None
+
+
+def test_yfinance_chain_supports_contracts_expiring_today(monkeypatch):
+    price_time = datetime.now(UTC).replace(microsecond=0)
+    expiration = price_time.date()
+    contract_symbol = f"XYZ{expiration:%y%m%d}P00095000"
+    puts = pd.DataFrame([{
+        "contractSymbol": contract_symbol, "strike": 95, "bid": 2, "ask": 2.1,
+        "lastPrice": 2.05, "volume": 1, "openInterest": 1, "impliedVolatility": .3,
+        "lastTradeDate": pd.Timestamp(price_time),
+    }])
+
+    class FakeTicker:
+        options = (expiration.isoformat(),)
+
+        def history(self, period, interval):
+            return pd.DataFrame({"Close": [100.0]}, index=[pd.Timestamp(price_time)])
+
+        def option_chain(self, requested_expiration):
+            assert requested_expiration == expiration.isoformat()
+            return SimpleNamespace(calls=pd.DataFrame(), puts=puts)
+
+    monkeypatch.setitem(sys.modules, "yfinance", SimpleNamespace(Ticker=lambda _symbol: FakeTicker()))
+    result = YFinanceProvider._fetch("XYZ", 0, 0)
+    assert [quote.symbol for quote in result.quotes] == [contract_symbol]
+
+
+def test_cboe_chain_parses_occ_contracts_and_eastern_trade_times():
+    expiration = date.today() + timedelta(days=21)
+    contract_symbol = f"XYZ{expiration:%y%m%d}P00095000"
+
+    class FakeCboeClient:
+        async def get(self, url):
+            assert url == "https://cdn.cboe.com/api/global/delayed_quotes/options/XYZ.json"
+            return FakeResponse({
+                "timestamp": "2026-08-28 03:44:44",
+                "data": {
+                    "symbol": "XYZ",
+                    "current_price": 100.25,
+                    "last_trade_time": "2026-08-27T15:59:59",
+                    "options": [{
+                        "option": contract_symbol,
+                        "bid": 2.0,
+                        "ask": 2.1,
+                        "last_trade_price": 2.05,
+                        "volume": 12.0,
+                        "open_interest": 345.0,
+                        "iv": 0.3,
+                        "last_trade_time": "2026-08-27T15:58:30",
+                    }],
+                },
+            })
+
+    snapshot = asyncio.run(CboeProvider(chain_client=FakeCboeClient()).fetch_chain("XYZ", 7, 45))
+
+    assert snapshot.provider == "cboe_delayed"
+    assert snapshot.unofficial is False
+    assert snapshot.underlying_price == 100.25
+    assert snapshot.underlying_quote_time == datetime(2026, 8, 27, 19, 59, 59, tzinfo=UTC)
+    assert snapshot.quotes[0].symbol == contract_symbol
+    assert snapshot.quotes[0].option_type == "put"
+    assert snapshot.quotes[0].strike == 95
+    assert snapshot.quotes[0].bid == 2
+    assert snapshot.quotes[0].ask == 2.1
+    assert snapshot.quotes[0].open_interest == 345
+    assert snapshot.quotes[0].quote_time == datetime(2026, 8, 27, 19, 58, 30, tzinfo=UTC)
+
+
+def test_cboe_rejects_a_malformed_chain():
+    class FakeCboeClient:
+        async def get(self, _url):
+            return FakeResponse({"data": {"current_price": 100, "options": None}})
+
+    with pytest.raises(ProviderUnavailable) as raised:
+        asyncio.run(CboeProvider(chain_client=FakeCboeClient()).fetch_chain("XYZ", 7, 45))
+    assert raised.value.code == "invalid_response"
+
+
+def test_market_data_provider_falls_back_to_yahoo_when_cboe_is_unavailable():
+    expected = SimpleNamespace(provider="yfinance")
+
+    class UnavailableCboe:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            raise ProviderUnavailable("cboe_delayed", "network_error")
+
+    class FakeYahoo:
+        async def fetch_chain(self, symbol, min_dte, max_dte):
+            assert (symbol, min_dte, max_dte) == ("XYZ", 7, 45)
+            return expected
+
+        async def search_instruments(self, query, limit):
+            return {"query": query, "limit": limit}
+
+    provider = MarketDataProvider(cboe=UnavailableCboe(), yahoo=FakeYahoo())
+
+    assert asyncio.run(provider.fetch_chain("XYZ", 7, 45)) is expected
+    assert asyncio.run(provider.search_instruments("xyz", 3)) == {"query": "xyz", "limit": 3}
+
+
+def test_market_data_provider_uses_cboe_without_calling_yahoo_for_option_chains():
+    expected = SimpleNamespace(provider="cboe_delayed")
+
+    class FakeCboe:
+        async def fetch_chain(self, symbol, min_dte, max_dte):
+            assert (symbol, min_dte, max_dte) == ("XYZ", 7, 45)
+            return expected
+
+    class UnexpectedYahoo:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            raise AssertionError("Yahoo should not run when Cboe succeeds")
+
+    provider = MarketDataProvider(cboe=FakeCboe(), yahoo=UnexpectedYahoo())
+
+    assert asyncio.run(provider.fetch_chain("XYZ", 7, 45)) is expected

@@ -1,6 +1,6 @@
 # Strategy Settings v2
 
-Strategy settings provide the authoritative rules for on-demand opportunity monitoring. Radar resolves them on the backend for every eligible symbol and strategy leg. They do not run background scans, create open-contract recommendations, send alerts, compare trades, or place orders.
+Strategy settings provide the authoritative rules for Radar and Close. Radar resolves them for eligible new-trade targets. Close resolves them for every open short option, including untracked tickers and disabled legs. Neither feature places orders.
 
 Goal profiles are editable starting points, not trading recommendations. Quotes and candidates must still be verified with a broker.
 
@@ -38,14 +38,14 @@ Each complete rule set resolves all of these fields:
 | `maxSpreadPercent` | Maximum bid/ask spread as a decimal ratio |
 | `minOpenInterest` | Minimum contract open interest |
 | `minVolume` | Minimum contract volume |
-| `maxQuoteAgeSeconds` | Maximum quote age |
 | `minPeriodReturn` | Minimum estimated period return as a decimal ratio |
+| `closeAtProfitCapture` | Close threshold as a decimal greater than 0 through 1 |
 
 All objects reject unknown fields. Validation also rejects unsafe integers, malformed tickers, unsupported goal/leg pairs, out-of-range values, and effective DTE, moneyness, or delta inversions.
 
 ## Recommended profiles
 
-Every recommended profile starts with 0.80–1.20 moneyness, 0.20 maximum spread, 10 minimum open interest, 0 minimum volume, a 900-second quote age, and 0 minimum period return. The goal supplies DTE and delta values.
+Every recommended profile starts with 0.80–1.20 moneyness, 0.20 maximum spread, 10 minimum open interest, 0 minimum volume, 0 minimum period return, and a 0.50 Close threshold. The goal supplies DTE and delta values. Settings displays `closeAtProfitCapture` as `Close when premium captured` and edits it as a percentage in the existing rule editor.
 
 The recommended profiles are:
 
@@ -59,7 +59,7 @@ The recommended profiles are:
 
 If no saved file exists, the service returns a fresh deterministic copy of these profiles with `persistence.persisted: false`.
 
-The loader accepts persisted version 1 documents and migrates them in memory. It merges each strategy's saved global rules with every compatible goal preset, producing complete version 2 profiles while preserving ticker overrides and the saved timestamp. The next save writes version 2.
+The loader accepts persisted version 1 documents and migrates them in memory. It merges each strategy's saved global rules with every compatible goal preset, producing complete version 2 profiles while preserving ticker overrides and the saved timestamp. It also accepts saved version 2 documents that predate `closeAtProfitCapture`, supplies the 0.50 default, and preserves every saved current field. The retired `maxQuoteAgeSeconds` strategy-setting field is removed during compatibility loading. Radar retains its provider-side freshness behavior, but quote freshness is not user-configurable and never affects Close. The next save writes the current version 2 shape.
 
 ## Persistence
 

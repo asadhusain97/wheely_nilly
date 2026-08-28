@@ -1,6 +1,6 @@
 # Playbook-aware opportunity monitoring
 
-Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. The browser keeps the latest completed result for each ticker and strategy leg across reloads, then replaces it on the next scan. Results for targets that are no longer eligible are removed. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
+Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. The browser keeps the latest successful result for each ticker and strategy leg across reloads, then replaces it after a successful scan. A failed refresh retains and labels the previous result. Results for targets that are no longer eligible are removed. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
 
 ## Target discovery
 
@@ -29,10 +29,10 @@ gross contract credit = executable option price per share × 100
 net contract credit = gross contract credit − estimated contract fee
 net credit per share = net contract credit ÷ 100
 covered-call net sale price = strike + net credit per share
-CSP net purchase price = strike − net credit per share
+CSP breakeven price = strike − net credit per share
 ```
 
-`minNetSalePriceMinor` rejects a covered call when its net sale price is too low. `maxNetPurchasePriceMinor` rejects a CSP when its net purchase price is too high. Both use premium after estimated fees. Broker cost basis remains visible for context but is not an implicit minimum sale price. Without a configured guard, calls retain the safe out-of-the-money default. A Plan Exit covered-call playbook may consider an ITM call only when it has an explicit minimum net sale guard, which the candidate must still pass.
+`minNetSalePriceMinor` rejects a covered call when its net sale price is too low. `maxNetPurchasePriceMinor` rejects a CSP when its breakeven price is too high. Both use premium after estimated fees. Broker cost basis remains visible for context but is not an implicit minimum sale price. Without a configured guard, calls retain the safe out-of-the-money default. A Plan Exit covered-call playbook may consider an ITM call only when it has an explicit minimum net sale guard, which the candidate must still pass.
 
 `minPeriodReturn` is a hard gate after fees. Covered-call period return uses current value of 100 shares. CSP period return uses strike collateral less net contract credit. Annualized return is secondary and is not the primary opportunity label.
 
@@ -51,32 +51,32 @@ There is no composite score.
 
 ## Provider and caching behavior
 
-Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Cache entries are used only within their TTL. Yahoo calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics.
+Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Cache entries are used only within their TTL. Provider calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics. A chain whose relevant contracts have no usable, timely bid-ask quote is unavailable rather than a successful empty result.
 
-Yahoo Finance supplies instrument search, the underlying stock price, and option chains through `yfinance`.
+Cboe's delayed feed supplies option chains and their underlying snapshots. Yahoo Finance supplies instrument search and acts as the option-chain fallback when Cboe is unavailable. Responses identify the provider that supplied each snapshot.
 
 ## Displayed metrics and sources
 
 | Metric | Meaning and source |
 | --- | --- |
 | Contract symbol, option type, expiration, DTE, strike | Provider contract identity; DTE is calculated from expiration and evaluation date. |
-| Underlying price | Yahoo Finance snapshot. |
-| Bid, ask, volume, open interest, IV | Yahoo quote fields. Missing volume/OI remain unavailable. A missing field passes when its minimum is zero and is conservatively excluded when its configured minimum is positive. |
+| Underlying price | Provider snapshot, normally Cboe delayed. |
+| Bid, ask, volume, open interest, IV | Provider quote fields. Missing volume/OI remain unavailable. A missing field passes when its minimum is zero and is conservatively excluded when its configured minimum is positive. |
 | Executable option price per share | Estimated bid/ask midpoint after the spread gate; not contract credit. |
 | Gross contract credit | Executable per-share price × 100. |
 | Estimated fees | Configured sidecar fee estimate; marked estimated. |
 | Net contract credit | Gross contract credit less estimated fees; the primary credit displayed in collapsed results. |
 | Period return | Calculated for the candidate's actual term and used as the primary return metric. |
 | Annualized return | Simple period return × 365 ÷ DTE; shown only in expanded details. |
-| Delta and theta/day | Black–Scholes estimates when Yahoo supplies usable IV, otherwise explicitly unavailable. `greekSource` identifies which. |
+| Delta and theta/day | Black–Scholes estimates when the provider supplies usable IV, otherwise explicitly unavailable. `greekSource` identifies which. |
 | Spread percent | `(ask − bid) ÷ midpoint`. |
-| Underlying price and displayed time | Latest Yahoo one-minute close and that bar's timestamp in Eastern Time, labeled `ET`. The displayed time is market-data time, not scan time. |
-| Option quote time and age | Yahoo option `lastTradeDate`, aged against the latest underlying market-data timestamp. The closing data clock remains fixed until Yahoo publishes the next session's bar. A missing trade date is stale. Cache age is reported separately. |
-| Breakeven | Put: net purchase price. Call: broker cost basis when available (otherwise current underlying price) less net credit per share. The basis is informational and is never a sale-price gate. |
+| Underlying price and displayed time | Provider underlying price and trade timestamp in Eastern Time, labeled `ET`. The displayed time is market-data time, not scan time. |
+| Option quote time and age | Provider option trade time, aged against the underlying market-data timestamp. The closing data clock remains fixed until the provider publishes the next session's data. A missing trade date is stale. Cache age is reported separately. |
+| Breakeven | Put: strike less net credit per share. Call: broker cost basis when available (otherwise current underlying price) less net credit per share. The basis is informational and is never a sale-price gate. |
 | Downside buffer | `(underlying − strike) ÷ underlying`. |
 | Strike distance | `(strike − underlying) ÷ underlying`. |
-| Net sale / purchase price | Calculated from strike and net credit per share using the formulas above. |
+| Net sale / breakeven price | Calculated from strike and net credit per share using the formulas above. |
 | Applied rules and guard | Backend-resolved Phase 1 configuration, including source lineage. |
 | Exclusion counts | Named hard-gate failures accumulated across evaluated contracts. |
 
-The workspace distinguishes Yahoo values, estimated execution/fees/Greeks, unofficial data, stale quotes, and provider failures in plain wording.
+The workspace distinguishes provider values, estimated execution/fees/Greeks, delayed data, stale quotes, and provider failures in plain wording.

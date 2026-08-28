@@ -57,4 +57,28 @@ describe('screener adapter', () => {
     const service = createScreenerService({ config, fetchImpl: async () => { throw new TypeError('fetch failed'); } });
     await assert.rejects(service.screen({ symbol: 'AAPL', leg: 'covered_call' }), /start the Python sidecar.*PYTHON_SIDECAR_URL/);
   });
+
+  it('validates exact-contract requests and preserves partial provider results', async () => {
+    const contract = { contract_symbol: 'AAPL260918P00180000', symbol: 'AAPL', option_type: 'put', expiration: '2026-09-18', strike: 180 };
+    const response = {
+      schema_version: 1, calculation_version: 'screener-2.2.0', scanned_at: '2026-08-27T16:00:00Z', duration_ms: 2,
+      results: [
+        { contract, available: true, unavailable_reason: null, provider: 'fixture', provider_unofficial: false,
+          bid: 2, ask: 2.1, underlying_price: 195, strike: 180, expiration: '2026-09-18', option_type: 'put',
+          volume: null, open_interest: 100, implied_volatility: null, delta: null, theta_per_day: null,
+          contract_quote_time: '2020-01-01T00:00:00Z', underlying_quote_time: '2026-08-27T16:00:00Z',
+          fetched_at: '2026-08-27T16:00:00Z', cache: { hit: false, age_seconds: 0 } },
+      ],
+    };
+    let body;
+    const service = createScreenerService({ config, fetchImpl: async (_url, options) => {
+      body = JSON.parse(options.body);
+      return new Response(JSON.stringify(response), { status: 200 });
+    } });
+    const result = await service.quoteContracts({ contracts: [contract] });
+    assert.deepEqual(body, { contracts: [contract] });
+    assert.equal(result.results[0].ask, 2.1);
+    assert.equal(result.results[0].contract_quote_time, '2020-01-01T00:00:00Z');
+    await assert.rejects(service.quoteContracts({ contracts: [{ ...contract, contract_symbol: 'bad' }] }), /Invalid exact-contract request/);
+  });
 });

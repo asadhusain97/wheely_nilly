@@ -29,7 +29,7 @@ export async function runOpportunityAlerts({ config, monitoring, notifications, 
   return { scanned: true, candidates, enqueued, failures };
 }
 
-export function createScheduler({ config, ingest, notifications, derived, monitoring, logger = console, cronImpl = cron }) {
+export function createScheduler({ config, ingest, notifications, derived, monitoring, positionManagement, logger = console, cronImpl = cron }) {
   let ingestTask = null;
   let opportunityTask = null;
   let outboxTimer = null;
@@ -55,13 +55,27 @@ export function createScheduler({ config, ingest, notifications, derived, monito
       );
       logger.info({ cron: config.ingest.cron, timezone: config.timezone }, 'ingest scheduler started');
     }
-    if (config.notifications.enabled && notifications && monitoring) {
+    if (positionManagement || (config.notifications.enabled && notifications && monitoring)) {
       opportunityTask = cronImpl.schedule(
         config.notifications.screenerCron,
         async () => {
           try {
-            const result = await runOpportunityAlerts({ config, monitoring, notifications, logger });
-            logger.info(result, 'scheduled opportunity scan completed');
+            if (positionManagement) {
+              try {
+                const closeResult = await positionManagement.scan();
+                logger.info({ positions: closeResult.results.length, failures: closeResult.failures }, 'scheduled Close scan completed');
+              } catch (error) {
+                logger.warn({ err: error.name }, 'scheduled Close scan failed');
+              }
+            }
+            if (config.notifications.enabled && notifications && monitoring) {
+              try {
+                const result = await runOpportunityAlerts({ config, monitoring, notifications, logger });
+                logger.info(result, 'scheduled opportunity scan completed');
+              } catch (error) {
+                logger.warn({ err: error.name }, 'scheduled opportunity scan failed');
+              }
+            }
           } catch (error) { logger.error({ err: error.name }, 'scheduled opportunity scan failed'); }
         },
         { timezone: config.notifications.screenerTimezone, noOverlap: true },

@@ -238,11 +238,13 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
     const collateralMinor = collateralFor(position.option, contracts, equityBySymbol);
     return {
       id: position.option.symbol,
+      accountId: position.accountId,
       symbol: position.option.underlying,
       stockPrice: fromMinor(stockPriceBySymbol.get(position.option.underlying)),
       contractSymbol: position.option.symbol,
       type: position.option.optionType === 'put' ? 'csp' : 'cc',
       contracts,
+      multiplier: position.option.multiplier || 100,
       strike: fromMinor(position.option.strikeMinor),
       expiration: position.option.expiration,
       dte: daysToExpiration(position.option.expiration, now),

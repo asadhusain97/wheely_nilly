@@ -68,6 +68,8 @@ describe('strategy settings model and persistence', () => {
     assert.deepEqual(second.settings, builtInStrategySettings());
     assert.equal(second.persistence.persisted, false);
     assert.equal(second.persistence.updatedAt, null);
+    assert.equal(second.settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 0.5);
+    assert.equal('maxQuoteAgeSeconds' in second.settings.goalProfiles.acquire.cashSecuredPut, false);
   });
 
   it('atomically saves, reloads across service restarts, and restricts permissions', async () => {
@@ -171,6 +173,39 @@ describe('strategy settings model and persistence', () => {
     assert.equal(loaded.settings.goalProfiles.income.coveredCall.minVolume, 25);
     assert.equal(loaded.settings.tickerPlaybooks.VOOG.coveredCall.minNetSalePriceMinor, 12_345);
     assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
+    assert.equal(loaded.settings.goalProfiles.income.coveredCall.closeAtProfitCapture, 0.5);
+    assert.equal('maxQuoteAgeSeconds' in loaded.settings.goalProfiles.income.coveredCall, false);
+  });
+
+  it('defaults a persisted schema-v2 document missing Close without discarding saved values', async () => {
+    const { service } = await temporaryService();
+    const olderV2 = builtInStrategySettings();
+    olderV2.goalProfiles.protect.coveredCall.minVolume = 77;
+    for (const profiles of Object.values(olderV2.goalProfiles)) {
+      for (const rules of Object.values(profiles)) {
+        delete rules.closeAtProfitCapture;
+        rules.maxQuoteAgeSeconds = 123;
+      }
+    }
+    const updatedAt = '2026-08-24T12:00:00.000Z';
+    await fs.mkdir(path.dirname(service.file), { recursive: true });
+    await fs.writeFile(service.file, JSON.stringify({ ...olderV2, updatedAt }));
+    const loaded = await service.load();
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.minVolume, 77);
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.closeAtProfitCapture, 0.5);
+    assert.equal('maxQuoteAgeSeconds' in loaded.settings.goalProfiles.protect.coveredCall, false);
+    assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
+  });
+
+  it('validates Close as greater than zero through one', () => {
+    for (const value of [0, -0.1, 1.01]) {
+      const settings = builtInStrategySettings();
+      settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture = value;
+      assert.throws(() => normalizeStrategySettings(settings), /closeAtProfitCapture/);
+    }
+    const settings = builtInStrategySettings();
+    settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture = 1;
+    assert.equal(normalizeStrategySettings(settings).goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 1);
   });
 });
 
@@ -190,6 +225,7 @@ describe('effective strategy settings resolution', () => {
     assert.equal(effective.sourceMap.maxDte, 'goal');
     assert.equal(effective.sourceMap.minMoneyness, 'goal');
     assert.equal(effective.sourceMap.minVolume, 'tickerOverride');
+    assert.equal(effective.sourceMap.closeAtProfitCapture, 'goal');
     assert.equal(effective.goal, 'income');
     assert.deepEqual(effective.priceGuard, { field: 'minNetSalePriceMinor', valueMinor: 12_345 });
   });
@@ -202,6 +238,14 @@ describe('effective strategy settings resolution', () => {
     const reset = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
     assert.equal(reset.rules.minDte, 21);
     assert.equal(reset.sourceMap.minDte, 'goal');
+  });
+
+  it('resolves a ticker-specific Close threshold and source', () => {
+    const settings = addPlaybook(builtInStrategySettings());
+    settings.tickerPlaybooks.VOOG.coveredCall.overrides.closeAtProfitCapture = 0.3;
+    const effective = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
+    assert.equal(effective.rules.closeAtProfitCapture, 0.3);
+    assert.equal(effective.sourceMap.closeAtProfitCapture, 'tickerOverride');
   });
 
   it('uses system rules and a disabled state for an unconfigured ticker', () => {

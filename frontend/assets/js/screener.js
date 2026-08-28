@@ -47,6 +47,12 @@ export function storeScanResults(results, storage = browserStorage()) {
   }
 }
 
+export function failedScanEntry(previous, error) {
+  return previous?.status === 'success'
+    ? { ...previous, refreshFailed: true }
+    : { status: 'error', error };
+}
+
 const node = (tag, className, text) => {
   const item = document.createElement(tag);
   if (className) item.className = className;
@@ -70,7 +76,7 @@ const EXCLUSION_LABELS = {
   invalid_quote: 'usable quotes', spread: 'bid-ask spread', open_interest: 'open interest', volume: 'volume',
   open_interest_unavailable: 'available open-interest data', volume_unavailable: 'available volume data',
   stale_quote: 'quote freshness', insufficient_cash: 'available cash', insufficient_shares: 'share coverage',
-  max_net_purchase_price: 'maximum purchase price', min_net_sale_price: 'minimum sale price',
+  max_net_purchase_price: 'maximum breakeven price', min_net_sale_price: 'minimum sale price',
   delta_low: 'delta range', delta_high: 'delta range', period_return: 'term return',
 };
 
@@ -88,15 +94,6 @@ function glossaryLabel(label, term) {
   return createGlossaryTerm(label, term, 'radar-glossary-label');
 }
 
-function metric(label, value, term, note = '') {
-  const item = node('div', 'monitor-metric');
-  const metricName = node('dt');
-  metricName.append(glossaryLabel(label, term));
-  item.append(metricName, node('dd', '', value));
-  if (note) item.append(node('small', '', note));
-  return item;
-}
-
 export function exclusionSummary(exclusions = {}) {
   const labels = Object.entries(exclusions)
     .filter(([, count]) => count > 0)
@@ -106,7 +103,9 @@ export function exclusionSummary(exclusions = {}) {
 }
 
 export function providerName(provider) {
-  return provider === 'yfinance' ? 'Yahoo Finance' : sentence(provider);
+  if (provider === 'yfinance') return 'Yahoo Finance';
+  if (provider === 'cboe_delayed') return 'Cboe delayed';
+  return sentence(provider);
 }
 
 export function targetIdentity(target, savedIdentity = null) {
@@ -161,7 +160,7 @@ function rulesSummary(rules) {
 function priceGuardText(effective) {
   if (effective.priceGuard.valueMinor == null) return 'No net price guard';
   const price = marketPrice(effective.priceGuard.valueMinor / 100);
-  return effective.leg === 'coveredCall' ? `Net sale at least ${price}` : `Net purchase at most ${price}`;
+  return effective.leg === 'coveredCall' ? `Net sale at least ${price}` : `Breakeven at most ${price}`;
 }
 
 function trashIcon() {
@@ -177,12 +176,12 @@ function trashIcon() {
   return svg;
 }
 
-function detailRow(label, value, term, qualifier = '') {
+function detailRow(label, value, term, note = '') {
   const row = node('div', 'candidate-detail-row');
   const metricName = node('dt');
   metricName.append(glossaryLabel(label, term));
   row.append(metricName, node('dd', '', value));
-  if (qualifier) row.append(node('small', '', qualifier));
+  if (note) row.append(node('small', '', note));
   return row;
 }
 
@@ -207,26 +206,19 @@ function candidateCard(candidate, result, rank) {
     document.createTextNode(`: ${percent(candidate.period_return)}`),
   );
   primary.append(credit, candidateReturn);
-  const compact = node('dl', 'candidate-compact');
-  compact.append(
-    metric('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta)), 'Delta'),
-    metric(candidate.option_type === 'call' ? 'Net sale price' : 'Net purchase price', marketPrice(candidate.net_sale_price ?? candidate.net_purchase_price), 'Net sale / purchase price'),
-  );
-  summary.append(identity, primary, compact, node('span', 'candidate-open-label', 'Details'));
+  summary.append(identity, primary, node('span', 'candidate-disclosure'));
 
   const detail = node('div', 'candidate-detail');
   const quote = node('dl', 'candidate-detail-grid');
   quote.append(
-    detailRow('Underlying price', marketPrice(candidate.underlying_price), 'Underlying price', providerName(result.provider)),
+    detailRow('Approx. |delta|', candidate.delta == null ? 'Unavailable' : number(Math.abs(candidate.delta)), 'Delta'),
+    detailRow('Theta per day', number(candidate.theta_per_day, 4), 'Theta per day'),
+    detailRow('Strike distance', percent(Math.abs(candidate.strike_distance)), 'Strike distance'),
+    detailRow('Annualized return', percent(candidate.annualized_return), 'Annualized return'),
+    detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`, 'Open interest / volume'),
+    detailRow('Implied volatility', percent(candidate.implied_volatility), 'Implied volatility'),
     detailRow('Executable option price', `${marketPrice(candidate.executable_option_price_per_share)} per share`, 'Executable option price', `Bid ${marketPrice(candidate.bid)} · Ask ${marketPrice(candidate.ask)}`),
     detailRow('Spread', percent(candidate.spread_percent), 'Bid-ask spread'),
-    detailRow('Open interest / volume', `${number(candidate.open_interest, 0)} / ${number(candidate.volume, 0)}`, 'Open interest / volume'),
-    detailRow('Implied volatility', percent(candidate.implied_volatility), 'Implied volatility', 'Provider-derived'),
-    detailRow('Theta per day', number(candidate.theta_per_day, 4), 'Theta per day', candidate.greek_source === 'unavailable' ? 'Greek unavailable' : 'Black–Scholes estimate'),
-    detailRow('Breakeven', marketPrice(candidate.breakeven), 'Breakeven'),
-    detailRow('Strike distance', percent(Math.abs(candidate.strike_distance)), 'Strike distance'),
-    detailRow('Annualized return', percent(candidate.annualized_return), 'Annualized return', 'Secondary metric'),
-    detailRow('Estimated fees', money(candidate.estimated_fees), 'Estimated fee', 'Estimate'),
   );
   detail.append(quote);
   card.append(summary, detail);
@@ -250,6 +242,9 @@ function scanResultView(entry) {
     return container;
   }
   const result = entry.result;
+  if (entry.refreshFailed) {
+    container.append(node('p', 'scan-history-warning', 'Latest scan unavailable. Showing the previous result.'));
+  }
   const source = node('div', 'scan-source');
   source.append(node('time', '', marketDateTime(result.quote_timestamp)), node('small', '', providerName(result.provider)));
   if (result.quote_timestamp) source.firstChild.dateTime = result.quote_timestamp;
@@ -437,6 +432,7 @@ export function createScreenerController({ request, notify, addTicker, removeTic
   async function scanAll() {
     await loadTargets(true);
     const scanKeys = state.targets.flatMap((target) => target.legs.map((leg) => key(target.symbol, leg.leg)));
+    const previousResults = new Map(scanKeys.map((scanKey) => [scanKey, state.results.get(scanKey)]));
     for (const scanKey of scanKeys) {
       state.loading.add(scanKey);
       state.results.set(scanKey, { status: 'loading' });
@@ -449,16 +445,17 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       await hydrateTargetIdentities(state.targets, request, getTickerIdentity, state.identities);
       for (const entry of scan.results) {
         const target = state.targets.find((item) => item.symbol === entry.symbol);
+        const entryKey = key(entry.symbol, entry.leg);
         if (entry.status === 'success' && target && entry.result.underlying_price != null) {
           target.stockPrice = entry.result.underlying_price;
         }
-        state.results.set(key(entry.symbol, entry.leg), entry.status === 'success'
+        state.results.set(entryKey, entry.status === 'success'
           ? { status: 'success', result: entry.result }
-          : { status: 'error', error: entry.error });
+          : failedScanEntry(previousResults.get(entryKey), entry.error));
       }
       return scan;
     } catch (error) {
-      for (const scanKey of scanKeys) state.results.set(scanKey, { status: 'error', error });
+      for (const scanKey of scanKeys) state.results.set(scanKey, failedScanEntry(previousResults.get(scanKey), error));
       throw error;
     } finally {
       for (const scanKey of scanKeys) state.loading.delete(scanKey);
@@ -472,17 +469,22 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     await loadTargets();
     const target = state.targets.find((item) => item.symbol === symbol && item.legs.some((itemLeg) => itemLeg.leg === leg));
     if (!target || state.loading.has(key(symbol, leg))) return;
-    state.loading.add(key(symbol, leg));
-    state.results.set(key(symbol, leg), { status: 'loading' });
+    const scanKey = key(symbol, leg);
+    const previous = state.results.get(scanKey);
+    state.loading.add(scanKey);
+    state.results.set(scanKey, { status: 'loading' });
     render();
     try {
       const result = await request('/api/v1/screens', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ symbol, leg }) });
       if (result.underlying_price != null) target.stockPrice = result.underlying_price;
-      state.results.set(key(symbol, leg), { status: 'success', result });
+      state.results.set(scanKey, { status: 'success', result });
     } catch (error) {
-      state.results.set(key(symbol, leg), { status: 'error', error });
+      state.results.set(scanKey, failedScanEntry(previous, error));
+      notify(previous?.status === 'success'
+        ? 'Latest scan unavailable. The previous result is still shown.'
+        : 'Scan unavailable. Try again when quotes are available.', 'error');
     } finally {
-      state.loading.delete(key(symbol, leg));
+      state.loading.delete(scanKey);
       storeScanResults(state.results, resultStorage);
       render();
     }

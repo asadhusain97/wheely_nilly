@@ -61,4 +61,26 @@ describe('scheduled opportunity alerts', () => {
     scheduler.stop();
     assert.equal(schedules[0].stopped, true);
   });
+
+  it('reuses the market-hours schedule for Close even when alerts are disabled', async () => {
+    const schedules = [];
+    const closeRuns = [];
+    const disabled = config();
+    disabled.notifications.enabled = false;
+    const cronImpl = { schedule(expression, callback, options) {
+      const task = { expression, callback, options, stop() {} };
+      schedules.push(task); return task;
+    } };
+    const scheduler = createScheduler({
+      config: disabled, ingest: {}, positionManagement: { scan: async () => {
+        closeRuns.push(true); return { results: [{ close: { signal: false } }], failures: 0 };
+      } },
+      cronImpl, logger: { info() {}, warn() {}, error() {} },
+    });
+    scheduler.start();
+    assert.equal(schedules.length, 1);
+    assert.equal(schedules[0].expression, disabled.notifications.screenerCron);
+    await schedules[0].callback();
+    assert.equal(closeRuns.length, 1);
+  });
 });

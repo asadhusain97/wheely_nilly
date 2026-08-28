@@ -2,8 +2,8 @@ import os
 
 from fastapi import FastAPI, HTTPException, Query
 
-from .models import ScreenRequest
-from .providers import YFinanceProvider
+from .models import ExactContractsRequest, ScreenRequest
+from .providers import MarketDataProvider
 from .screener import CALCULATION_VERSION, ScreenerService
 
 app = FastAPI(
@@ -12,7 +12,7 @@ app = FastAPI(
     version="1.0.0",
 )
 timeout_seconds = float(os.getenv("SCREENER_TIMEOUT_SECONDS", "15"))
-provider = YFinanceProvider(timeout_seconds=timeout_seconds)
+provider = MarketDataProvider(timeout_seconds=timeout_seconds)
 service = ScreenerService(provider, ttl_seconds=int(os.getenv("SCREENER_CACHE_TTL_SECONDS", "120")), timeout_seconds=timeout_seconds, max_concurrency=int(os.getenv("SCREENER_MAX_CONCURRENCY", "2")))
 
 
@@ -35,3 +35,8 @@ async def create_screen(request: ScreenRequest):
         return await service.run(request)
     except Exception as error:
         raise HTTPException(status_code=503, detail={"code": "PROVIDER_UNAVAILABLE", "message": f"Options provider unavailable ({type(error).__name__})"}) from error
+
+
+@app.post("/v1/contracts/quotes")
+async def quote_exact_contracts(request: ExactContractsRequest):
+    return await service.quote_contracts(request)

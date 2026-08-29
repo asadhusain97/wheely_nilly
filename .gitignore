@@ -4,6 +4,7 @@
 !.env.example
 
 # Node
+node_modules/
 backend/node_modules/
 npm-debug.log*
 

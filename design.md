@@ -64,7 +64,7 @@ Ticker cards carry the hierarchy and begin collapsed until the user opens them. 
 
 Manually tracked ticker cards include a quiet trash icon with a 44px touch target. The first tap changes that control to “Are you sure?” and the second removes its saved rules and Radar's local recent-ticker record. A manual ticker then disappears from Radar. It also disappears from Settings when it has no portfolio or trade-history source. Historical tickers remain discoverable in Settings. Owned eligible tickers do not show this removal action because holdings continue to qualify them for Radar. Do not use a separate browser confirmation dialog.
 
-After a scan, show only the market-data time and provider name below it. The normal source label is “Cboe delayed”; a Yahoo fallback remains labeled “Yahoo Finance.” Do not display unofficial-data or cache prose in this compact line. When no contracts match, explain that the available contracts missed the playbook and name up to three main filters without showing exclusion counts.
+After a scan, show only the market-data time and provider name below it. The source label is "Yahoo Finance." Do not display unofficial-data or cache prose in this compact line. When no contracts match, explain that the available contracts missed the playbook and name up to three main filters without showing exclusion counts.
 
 Brief confirmations appear above the bottom navigation as pearl-glass notices. Success uses a small Earn Income green mark; errors use a small Plan Exit red mark. Never use a solid black toast or a full colored panel for routine confirmation.
 

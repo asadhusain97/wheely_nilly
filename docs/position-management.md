@@ -24,7 +24,7 @@ Node sends every current OCC identity to `POST /v1/contracts/quotes` on the loop
 
 Each result returns the identity, bid, ask, underlying price, strike, expiration, option type, volume, open interest, IV, estimated delta and theta when possible, the option trade time, the underlying bar time, the provider fetch time, and cache metadata. A symbol-level provider failure produces unavailable results only for that symbol. Contract and underlying timestamps pass through as data and are never Close conditions.
 
-Cboe delayed data is the primary exact-contract source, with Yahoo Finance as a fallback. The option trade time is the available contract timestamp, not a guaranteed live quote time. The current ask is an estimated immediate buyback input and should be confirmed with a broker.
+Yahoo Finance is the exact-contract source. The option trade time is the available contract timestamp, not a guaranteed live quote time. The current ask is an estimated immediate buyback input and should be confirmed with a broker.
 
 ## Backend formulas
 

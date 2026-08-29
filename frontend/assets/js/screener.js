@@ -107,7 +107,6 @@ export function exclusionSummary(exclusions = {}) {
 
 export function providerName(provider) {
   if (provider === 'yfinance') return 'Yahoo Finance';
-  if (provider === 'cboe_delayed') return 'Cboe delayed';
   return sentence(provider);
 }
 
@@ -497,6 +496,21 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     render();
     try {
       const scan = await request('/api/v1/screens/scan-all', { method: 'POST' });
+      await applyScan(scan, previousResults);
+      return scan;
+    } catch (error) {
+      for (const scanKey of scanKeys) state.results.set(scanKey, failedScanEntry(previousResults.get(scanKey), error));
+      throw error;
+    } finally {
+      for (const scanKey of scanKeys) state.loading.delete(scanKey);
+      pruneStoredResults();
+      storeScanResults(state.results, resultStorage);
+      render();
+    }
+  }
+
+  async function applyScan(scan, previousResults = state.results) {
+    if (!scan || !Array.isArray(scan.targets) || !Array.isArray(scan.results)) return;
       state.targets = scan.targets;
       syncDefaultCollapsedTargets();
       await hydrateTargetIdentities(state.targets, request, getTickerIdentity, state.identities);
@@ -510,16 +524,10 @@ export function createScreenerController({ request, notify, addTicker, removeTic
           ? { status: 'success', result: entry.result }
           : failedScanEntry(previousResults.get(entryKey), entry.error));
       }
-      return scan;
-    } catch (error) {
-      for (const scanKey of scanKeys) state.results.set(scanKey, failedScanEntry(previousResults.get(scanKey), error));
-      throw error;
-    } finally {
-      for (const scanKey of scanKeys) state.loading.delete(scanKey);
+      state.loaded = true;
       pruneStoredResults();
       storeScanResults(state.results, resultStorage);
       render();
-    }
   }
 
   async function scanTarget(symbol, leg) {
@@ -731,6 +739,9 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       }
     });
     document.addEventListener('strategy-settings-saved', () => loadTargets(true));
+    document.addEventListener('wheely-radar-updated', (event) => {
+      void applyScan(event.detail).catch(() => undefined);
+    });
     loadTargets();
   }
 

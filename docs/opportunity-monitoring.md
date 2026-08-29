@@ -53,14 +53,14 @@ There is no composite score.
 
 Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Cache entries are used only within their TTL. Provider calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics. A chain whose relevant contracts have no usable, timely bid-ask quote is unavailable rather than a successful empty result.
 
-Cboe's delayed feed supplies option chains and their underlying snapshots. Yahoo Finance supplies instrument search and acts as the option-chain fallback when Cboe is unavailable. Responses identify the provider that supplied each snapshot.
+Yahoo Finance supplies option chains, underlying snapshots, and instrument search through the market-data provider boundary. Responses identify the provider that supplied each snapshot.
 
 ## Displayed metrics and sources
 
 | Metric | Meaning and source |
 | --- | --- |
 | Contract symbol, option type, expiration, DTE, strike | Provider contract identity; DTE is calculated from expiration and evaluation date. |
-| Underlying price | Provider snapshot, normally Cboe delayed. |
+| Underlying price | Yahoo Finance provider snapshot. |
 | Bid, ask, volume, open interest, IV | Provider quote fields. Missing volume/OI remain unavailable. A missing field passes when its minimum is zero and is conservatively excluded when its configured minimum is positive. |
 | Executable option price per share | Estimated bid/ask midpoint after the spread gate; not contract credit. |
 | Gross contract credit | Executable per-share price × 100. |

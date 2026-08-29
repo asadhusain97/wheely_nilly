@@ -1,5 +1,5 @@
 import { fromMinor, sumMinor } from '../lib/money.js';
-import { CALCULATION_VERSION } from './normalize.js';
+import { CALCULATION_VERSION } from './calculation-constants.js';
 import { buildPerformanceDashboard } from './performance.js';
 
 function displayMoney(minor) {

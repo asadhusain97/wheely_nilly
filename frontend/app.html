@@ -1,0 +1,979 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fbfbf9">
+  <meta name="description" content="Your local-first options wheel workspace">
+  <title>Wheely Nilly</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="/assets/images/favicon.png">
+  <link rel="apple-touch-icon" href="/assets/images/logo.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/settings.css">
+  <link rel="stylesheet" href="/assets/css/screener.css">
+  <link rel="stylesheet" href="/assets/css/goal-selector.css">
+  <script type="module" src="/src/app-bootstrap.ts"></script>
+  <script type="module" src="/assets/js/app.js"></script>
+</head>
+
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="app-shell">
+    <header class="app-bar">
+      <div class="brand"><img class="brand-mark" src="/assets/images/logo.png" alt="">
+        <div><strong>Wheely Nilly</strong></div>
+      </div>
+      <div class="freshness-status" aria-live="polite">
+        <span><i data-market-dot></i>Market <strong data-market-freshness>Saved view</strong></span>
+        <span><i data-brokerage-dot></i>Brokerage <strong data-brokerage-freshness>Checking</strong></span>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="app-screen is-active" id="overview" data-screen="overview" aria-labelledby="overview-title">
+        <header class="screen-header home-header">
+          <h1 id="overview-title">Wheel at a glance.</h1>
+        </header>
+
+        <section class="connection-card" data-connection-card hidden aria-labelledby="connection-title">
+          <div><p>Read-only brokerage access</p><h2 id="connection-title">Bring in your wheel positions.</h2><small>Connect through SnapTrade. Wheely Nilly keeps the resulting snapshot on this device.</small></div>
+          <a href="/api/auth/start?returnTo=/app">Connect SnapTrade</a>
+        </section>
+
+        <section class="performance-hero" aria-labelledby="booked-profit-label">
+          <div class="profit-primary">
+            <span class="hero-label" id="booked-profit-label">Booked profit</span>
+            <strong class="hero-total" id="booked-profit">—</strong>
+          </div>
+          <dl class="return-primary">
+            <dt>Return on collateral</dt>
+            <dd id="return-rate">—</dd>
+          </dl>
+          <dl class="return-secondary">
+            <dt>Annualized rate</dt>
+            <dd id="annualized-return-rate">—</dd>
+          </dl>
+          <p class="quality-line" id="calculation-quality">Calculating trade history…</p>
+        </section>
+
+        <dl class="kpi-grid">
+          <div class="kpi-wide">
+            <dt>Wheel capital</dt>
+            <dd id="wheel-capital">—</dd><small id="wheel-capital-detail">Cash-secured puts + 100-share lots</small>
+          </div>
+          <div>
+            <dt id="open-csps-label">Open CSPs</dt>
+            <dd id="open-csps">—</dd><small id="csp-collateral">— secured</small>
+          </div>
+          <div>
+            <dt id="open-ccs-label">Open CCs</dt>
+            <dd id="open-ccs">—</dd><small>Current short calls</small>
+          </div>
+        </dl>
+
+        <section class="home-section efficiency-section" aria-labelledby="efficiency-title">
+          <div class="section-title">
+            <div>
+              <p>Trading rhythm</p>
+              <h2 id="efficiency-title">Efficiency</h2>
+            </div>
+          </div>
+          <dl class="efficiency-grid">
+            <div>
+              <dt id="capital-velocity-label">Capital velocity</dt>
+              <dd id="capital-velocity">—</dd><small>Per $1k / 30 days</small>
+            </div>
+            <div>
+              <dt id="premium-capture-label">Premium capture</dt>
+              <dd id="premium-capture">—</dd><small>Credit retained</small>
+            </div>
+            <div>
+              <dt>Next expiry</dt>
+              <dd id="next-expiry">—</dd><small id="expiry-detail">No open contracts</small>
+            </div>
+          </dl>
+        </section>
+
+        <section class="home-section" id="opportunities-section" aria-labelledby="opportunities-title" hidden>
+          <div class="section-title">
+            <div>
+              <p>Available now</p>
+              <h2 id="opportunities-title">Opportunities</h2>
+            </div>
+          </div>
+          <div class="opportunity-list" id="opportunity-list" aria-live="polite"></div>
+        </section>
+
+        <section class="home-section" aria-labelledby="open-trades-title">
+          <div class="section-title">
+            <div>
+              <p>Capital at work</p>
+              <h2 id="open-trades-title">Open contracts</h2>
+            </div><span id="open-trade-count" class="section-count">—</span>
+          </div>
+          <div class="trade-list" id="open-trade-list" aria-live="polite"></div>
+        </section>
+
+      </section>
+
+      <section class="app-screen" id="cycles" data-screen="cycles" aria-labelledby="cycles-title" hidden>
+        <header class="screen-header trades-header">
+          <p>One ticker at a time</p>
+          <h1 id="cycles-title">Wheel performance</h1><small>Tap a ticker to see its open and past contracts.</small>
+        </header>
+        <figure class="monthly-pnl-card" aria-labelledby="monthly-pnl-title">
+          <figcaption class="monthly-pnl-heading">
+            <div>
+              <p>Closed contracts by ticker</p>
+              <h2 id="monthly-pnl-title">Monthly booked P&amp;L</h2>
+            </div>
+            <div class="monthly-pnl-total">
+              <strong id="monthly-pnl-total">—</strong>
+              <small id="monthly-pnl-range">All history</small>
+            </div>
+          </figcaption>
+          <div class="monthly-chart-stage" id="monthly-chart-stage">
+            <div class="monthly-chart-scroll" id="monthly-chart-scroll" tabindex="0"
+              aria-label="Monthly booked profit and loss chart. Scroll horizontally to see more months.">
+              <svg id="monthly-pnl-chart" role="img" aria-labelledby="monthly-pnl-title monthly-pnl-description"></svg>
+            </div>
+            <div class="monthly-chart-tooltip" id="monthly-pnl-tooltip" role="tooltip" hidden>
+              <strong id="monthly-pnl-tooltip-label"></strong>
+              <b id="monthly-pnl-tooltip-value"></b>
+              <small id="monthly-pnl-tooltip-meta"></small>
+            </div>
+          </div>
+          <p class="sr-only" id="monthly-pnl-description">Stacked monthly option profit and loss, broken down by
+            ticker. Gains appear above zero and losses below zero.</p>
+          <div class="ticker-key-row">
+            <span>Filter by ticker</span>
+            <div class="ticker-key" id="monthly-pnl-legend" role="group"
+              aria-label="Tickers ranked by contribution magnitude"></div>
+          </div>
+        </figure>
+        <form class="filter-bar trades-filter-bar" id="ticker-filters" role="search">
+          <label class="ticker-search"><span class="sr-only">Search ticker</span><span class="ticker-search-icon"
+              aria-hidden="true"><svg viewBox="0 0 16 16">
+                <circle cx="7" cy="7" r="4.5"></circle>
+                <path d="m10.5 10.5 3 3"></path>
+              </svg></span><input id="ticker-filter" type="search" placeholder="Ticker" autocomplete="off"></label>
+          <label class="ticker-activity"><span class="sr-only">Filter trade activity</span><select
+              id="ticker-status-filter">
+              <option value="">All</option>
+              <option value="open">Open</option>
+              <option value="history">Past</option>
+            </select></label>
+          <div class="ticker-order"><button class="ticker-sort-direction" id="ticker-sort-direction" type="button"
+              aria-label="Sort descending. Tap to reverse." aria-pressed="false"><span id="ticker-sort-arrow"
+                aria-hidden="true">↓</span></button><span class="sr-only" id="ticker-sort-label">Sort tickers
+              by</span><select id="ticker-sort" aria-labelledby="ticker-sort-label">
+              <option value="date" selected>Date</option>
+              <option value="pnl">P&amp;L</option>
+              <option value="capital">Capital</option>
+              <option value="return">Return</option>
+            </select></div>
+        </form>
+        <div class="ticker-list" id="ticker-list" aria-live="polite"></div>
+      </section>
+
+      <section class="app-screen" id="screener" data-screen="screener" aria-labelledby="screener-title" hidden>
+        <header class="screen-header monitor-header">
+          <div>
+            <p>Radar</p>
+            <h1 id="screener-title">Find your next wheel trade</h1>
+          </div>
+          <button class="monitor-add-button" id="open-monitor-add" type="button" aria-haspopup="dialog"
+            aria-controls="monitor-add-dialog" aria-expanded="false"><span aria-hidden="true">+</span><span
+              class="sr-only">Add ticker</span></button>
+        </header>
+        <p class="monitor-notice" id="screener-meta" role="status" aria-live="polite" hidden></p>
+        <section class="monitor-group" id="owned-monitor-group" aria-labelledby="owned-monitor-title" hidden>
+          <header>
+            <div>
+              <p>Shares ready</p>
+              <h2 id="owned-monitor-title">Eligible owned tickers</h2>
+            </div><span id="owned-monitor-count">—</span>
+          </header>
+          <div class="monitor-target-list" id="owned-monitor-targets" aria-live="polite"></div>
+        </section>
+        <section class="monitor-group" aria-labelledby="tracked-monitor-title">
+          <header>
+            <div>
+              <h2 id="tracked-monitor-title">Manually tracked tickers</h2>
+            </div><span id="tracked-monitor-count">—</span>
+          </header>
+          <div class="monitor-target-list" id="tracked-monitor-targets" aria-live="polite"></div>
+        </section>
+        <p class="monitor-settings-note">Customize ticker rules in <button id="monitor-open-settings"
+            type="button">Settings</button>. Confirm live quotes with your broker.</p>
+      </section>
+
+      <section class="app-screen" id="more" data-screen="more" aria-labelledby="more-title" hidden>
+        <header class="screen-header more-header">
+          <div>
+            <p>Monitoring preferences</p>
+            <h1 id="more-title">Strategy settings</h1>
+            <small>Shape the rules Radar uses to find your next wheel trade.</small>
+          </div>
+          <button class="glossary-trigger" id="open-glossary" type="button" aria-haspopup="dialog"
+            aria-controls="glossary-dialog" aria-expanded="false" title="Open glossary">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"></circle>
+              <path d="M12 11v6M12 7.5v.01"></path>
+            </svg><span class="sr-only">Open glossary</span>
+          </button>
+        </header>
+
+        <div class="settings-status is-loading" id="settings-status" role="status" aria-live="polite" tabindex="-1">
+          Loading strategy settings…
+        </div>
+
+        <div class="settings-stack" id="strategy-settings-workspace" aria-label="Strategy settings hierarchy">
+          <section class="settings-layer" aria-labelledby="settings-goals-title">
+            <header class="settings-layer-heading">
+              <div>
+                <h2 id="settings-goals-title">Goals</h2>
+                <small>Choose what Radar should optimize for, then tune its numbers.</small>
+              </div>
+              <button class="settings-edit" id="edit-goal-settings" type="button" title="Edit selected goal"
+                disabled><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m14.5 5.5 4 4M5 19l3.8-.8L19 8a2.1 2.1 0 0 0-3-3L5.8 15.2 5 19Z"></path>
+                </svg><span class="sr-only">Edit selected goal</span></button>
+            </header>
+            <div class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs" role="tablist"
+              aria-label="Goal profile"></div>
+            <div id="goal-rules-view" role="tabpanel" aria-live="polite"></div>
+          </section>
+
+          <section class="settings-layer ticker-layer" aria-labelledby="settings-tickers-title">
+            <header class="settings-layer-heading">
+              <div>
+                <h2 id="settings-tickers-title">Tickers</h2>
+                <small>Recent Radar and traded tickers, with custom settings.</small>
+              </div>
+            </header>
+            <div class="settings-ticker-tools">
+              <label class="settings-ticker-search" for="settings-ticker-search">
+                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4 4"></path>
+                </svg>
+                <span class="sr-only">Search settings tickers</span>
+                <input id="settings-ticker-search" type="search" placeholder="Search tickers" autocomplete="off">
+              </label>
+              <span class="settings-ticker-count" id="settings-ticker-count" aria-live="polite"></span>
+            </div>
+            <div class="ticker-capsules" id="ticker-playbook-list"></div>
+          </section>
+        </div>
+        <section class="data-refresh-settings" aria-labelledby="data-refresh-title">
+          <header><div><p>Data & refresh</p><h2 id="data-refresh-title">Freshness</h2></div><span data-online-state>Online</span></header>
+          <label><span>Market data<small>Only while Wheely Nilly is visible</small></span><select data-market-interval><option value="60000">Every minute</option><option value="120000" selected>Every 2 minutes</option><option value="300000">Every 5 minutes</option></select></label>
+          <label><span>Brokerage<small>Shared by every screen</small></span><select data-brokerage-interval><option value="900000">Every 15 minutes</option><option value="1800000" selected>Every 30 minutes</option><option value="3600000">Every 60 minutes</option><option value="open">On app open only</option><option value="manual">Manual only</option></select></label>
+          <div class="manual-refresh-row"><div><span>Last synced</span><strong data-brokerage-last-sync>Not yet</strong></div><button type="button" data-refresh-brokerage>Refresh brokerage now</button></div>
+          <div class="disconnect-row"><p>Disconnecting removes SnapTrade access. Saved portfolio data stays on this device until you erase it.</p><button type="button" data-disconnect>Disconnect SnapTrade</button><button type="button" data-erase-local>Erase saved financial data</button></div>
+        </section>
+        <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
+        <aside class="settings-support" aria-label="Support Wheely Nilly">
+          <p>If Wheely Nilly has been useful, you can<a id="leave-a-tip"
+              href="https://ko-fi.com/asadhusain">leave a tip</a>.</p>
+        </aside>
+
+      </section>
+    </main>
+
+    <div class="settings-editor-overlay" id="settings-editor-dialog" hidden>
+      <button class="settings-editor-backdrop" type="button" data-settings-editor-close tabindex="-1"
+        aria-label="Close settings editor"></button>
+      <section class="settings-editor-sheet" role="dialog" aria-modal="true" aria-labelledby="settings-editor-title"
+        aria-describedby="settings-editor-description" tabindex="-1">
+        <header class="settings-editor-header" id="settings-editor-drag-zone">
+          <span class="settings-editor-handle" aria-hidden="true"></span>
+          <div>
+            <p id="settings-editor-description">Change only what matters here</p>
+            <h2 id="settings-editor-title">Edit settings</h2>
+          </div>
+          <button class="settings-editor-close" type="button" data-settings-editor-close
+            aria-label="Close settings editor"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg></button>
+        </header>
+        <form class="settings-editor-form" id="settings-editor-form" novalidate>
+          <div class="settings-editor-body" id="settings-editor-body"></div>
+          <footer class="settings-editor-actions">
+            <button class="settings-reset" id="settings-reset-defaults" type="button">Reset to recommended</button>
+            <button class="settings-save" id="save-strategy-settings" type="submit">Save changes</button>
+          </footer>
+        </form>
+      </section>
+    </div>
+
+    <div class="monitor-add-overlay" id="monitor-add-dialog" hidden>
+      <button class="monitor-add-backdrop" type="button" data-monitor-add-close tabindex="-1"
+        aria-label="Close add ticker"></button>
+      <section class="monitor-add-sheet" role="dialog" aria-modal="true" aria-labelledby="monitor-add-title"
+        aria-describedby="monitor-add-description" tabindex="-1">
+        <header class="monitor-add-sheet-header">
+          <span class="monitor-add-handle" aria-hidden="true"></span>
+          <div>
+            <p id="monitor-add-description">Search by ticker or company name</p>
+            <h2 id="monitor-add-title">Add ticker</h2>
+          </div>
+          <button class="monitor-add-close" type="button" data-monitor-add-close aria-label="Close add ticker">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg>
+          </button>
+        </header>
+        <form class="monitor-add-form" id="screener-add-ticker">
+          <div class="instrument-search-field">
+            <label for="screener-add-symbol">Ticker or name</label>
+            <div class="instrument-search-control">
+              <div class="instrument-search-input"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="11" cy="11" r="6.5"></circle>
+                  <path d="m16 16 4 4"></path>
+                </svg>
+                <input id="screener-add-symbol" name="symbol" required maxlength="50" placeholder="Apple or AAPL"
+                  autocomplete="off" spellcheck="false" aria-autocomplete="list"
+                  aria-controls="instrument-search-results" aria-expanded="false">
+              </div>
+              <div class="instrument-search-results" id="instrument-search-results" role="listbox" hidden></div>
+            </div>
+            <p id="instrument-search-status" role="status" aria-live="polite">Type a symbol or company name.</p>
+          </div>
+          <fieldset class="monitor-goal-picker">
+            <legend>Goal</legend>
+            <div class="goal-picker" id="monitor-goal-tabs"></div>
+          </fieldset>
+          <fieldset class="monitor-leg-picker" id="monitor-leg-picker" hidden>
+            <legend>Strategy</legend>
+            <div class="layer-tabs strategy-tabs" id="monitor-leg-tabs">
+              <label class="strategy-option"><input type="radio" name="leg" value="cashSecuredPut"
+                  checked><span>CSP</span></label>
+              <label class="strategy-option"><input type="radio" name="leg"
+                  value="coveredCall"><span>CC</span></label>
+            </div>
+          </fieldset>
+          <p class="monitor-add-guidance">You can customize monitoring configs for this ticker from the Settings page.
+          </p>
+          <p class="monitor-add-error" id="monitor-add-error" role="alert" hidden></p>
+          <button class="monitor-add-submit" id="monitor-add-submit" type="submit" disabled>Add to Radar</button>
+        </form>
+      </section>
+    </div>
+
+    <div class="glossary-overlay" id="glossary-dialog" hidden>
+      <button class="glossary-backdrop" type="button" data-glossary-close tabindex="-1"
+        aria-label="Close glossary"></button>
+      <section class="glossary-sheet" role="dialog" aria-modal="true" aria-labelledby="glossary-title"
+        aria-describedby="glossary-description" tabindex="-1">
+        <header class="glossary-sheet-header" id="glossary-drag-zone">
+          <span class="glossary-handle" aria-hidden="true"></span>
+          <div>
+            <p>How the numbers work</p>
+            <h2 id="glossary-title">Glossary</h2>
+          </div>
+          <button class="glossary-close" id="close-glossary" type="button" data-glossary-close
+            aria-label="Close glossary"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m7 7 10 10M17 7 7 17"></path>
+            </svg></button>
+        </header>
+        <div class="glossary-search-region">
+          <label class="glossary-search" for="glossary-search">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4 4"></path>
+            </svg>
+            <span class="sr-only">Search glossary definitions</span>
+            <input id="glossary-search" type="search" placeholder="Search definitions" autocomplete="off"
+              enterkeyhint="search" aria-controls="glossary-results">
+          </label>
+          <span class="sr-only" id="glossary-search-status" role="status" aria-live="polite"></span>
+        </div>
+        <div class="glossary-sheet-body" id="glossary-results">
+          <p class="glossary-intro">Plain-English definitions for the options and portfolio numbers in Wheely
+            Nilly. Examples are simplified and exclude taxes. "Good" ranges are app starting points, not promises or
+            trade recommendations.</p>
+          <p class="sr-only" id="glossary-description">Definitions for portfolio performance, capital, contracts,
+            strategy settings, and Radar terms.</p>
+
+          <section class="glossary-group" aria-labelledby="glossary-basics-title">
+            <h3 id="glossary-basics-title">Options basics</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Option contract <span>Call or put</span></dt>
+                <dd>A contract tied to an underlying stock or fund. A call buyer gets the right to buy at the strike;
+                  a put buyer gets the right to sell. The seller takes the other side of that obligation. Standard
+                  equity contracts usually cover 100 shares, but adjusted contracts can differ.</dd>
+                <dd class="glossary-example">Example: one $50 call usually controls 100 shares at a $50 strike.</dd>
+                <dd class="glossary-formula">Contract value = option price per share × contract multiplier</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Option_(finance)" target="_blank"
+                    rel="noopener noreferrer">Option contract on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Covered call <span>CC</span></dt>
+                <dd>You own shares and sell a call against them. You collect premium now, but assignment can force you
+                  to sell the shares at the strike. The premium gives only a small downside cushion and the call caps
+                  the stock's upside above the strike.</dd>
+                <dd class="glossary-example">Example: own 100 shares, sell one $55 call for $2. If assigned, the
+                  effective sale price is $57 per share before fees.</dd>
+                <dd class="glossary-formula">Effective sale price = strike + net premium per share</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Cash-secured put <span>CSP</span></dt>
+                <dd>You sell a put and reserve enough cash to buy the shares if assigned. You keep the premium, but a
+                  large stock drop can leave you buying well above the market price.</dd>
+                <dd class="glossary-example">Example: sell one $50 put for $2 and reserve $5,000. If assigned, the
+                  effective purchase price is $48 per share before fees.</dd>
+                <dd class="glossary-formula">Breakeven at expiration = strike − net premium per share</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Premium <span>Option price</span></dt>
+                <dd>The option's quoted per-share price. A buyer pays it; a seller receives it. For a standard
+                  100-share contract, multiply the quote by 100, then include fees for the actual cash flow.</dd>
+                <dd class="glossary-example">Example: a $1.25 quote is $125 for one standard contract before fees.</dd>
+                <dd class="glossary-formula">Gross premium = option price × multiplier × contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>ITM / ATM / OTM <span>Moneyness state</span></dt>
+                <dd>In the money means exercising now has value. Calls are ITM above the strike; puts are ITM below
+                  it. At the money means stock and strike are about equal. Out of the money means no intrinsic value.
+                  ITM short options have greater assignment risk, especially near expiration, but assignment can occur
+                  earlier.</dd>
+                <dd class="glossary-example">Example: with stock at $100, a $95 call is ITM and a $95 put is OTM.</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Moneyness" target="_blank"
+                    rel="noopener noreferrer">Moneyness on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Intrinsic &amp; extrinsic value <span>What premium contains</span></dt>
+                <dd>Intrinsic value is what exercise would be worth now. Extrinsic value is the rest of the premium,
+                  paid for remaining time and uncertainty. Extrinsic value generally shrinks toward zero by expiration.</dd>
+                <dd class="glossary-example">Example: stock at $105 and a $100 call priced at $7 has $5 intrinsic
+                  value and $2 extrinsic value.</dd>
+                <dd class="glossary-formula">Call intrinsic = max(stock − strike, 0)</dd>
+                <dd class="glossary-formula">Put intrinsic = max(strike − stock, 0)</dd>
+                <dd class="glossary-formula">Extrinsic value = option price − intrinsic value</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Exercise &amp; assignment</dt>
+                <dd>Exercise is the buyer using the contract. Assignment is the seller being required to fulfill it.
+                  A short call assignment sells shares; a short put assignment buys shares. Do not assume an OTM option
+                  cannot be assigned or that every ITM option will be assigned.</dd>
+                <dd class="glossary-guide">Close a short option before the market close if you must
+                  remove that day's assignment exposure. Broker deadlines and contract terms still apply.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-settings-title">
+            <h3 id="glossary-settings-title">Strategy settings</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Goals &amp; ticker changes <span>Settings layers</span></dt>
+                <dd>A goal supplies the full monitoring profile for its strategy. A ticker change replaces one value
+                  only for that ticker and strategy.</dd>
+                <dd class="glossary-formula">Effective value = ticker change, otherwise goal value</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Goal profiles <span>Keep Shares · Earn Income · Plan Exit · Plan Entry</span></dt>
+                <dd>Editable starting points for different intentions. “Aggressive” means committed to that goal,
+                  not blindly chasing the largest premium.</dd>
+                <dd class="glossary-guide"><strong>Keep Shares:</strong> 30–60 DTE, 105%–125% moneyness,
+                  0.08–0.18 delta, and a 35% close target. <strong>Earn Income:</strong> 14–35 DTE,
+                  0.30–0.45 delta, at least 1% period return, and a 50% close target.</dd>
+                <dd class="glossary-guide"><strong>Plan Exit:</strong> 7–21 DTE, 95%–105% moneyness,
+                  0.45–0.65 delta, and a 90% close target. <strong>Plan Entry:</strong> 7–28 DTE,
+                  97%–100% moneyness, 0.40–0.55 delta, and an 85% close target.</dd>
+                <dd class="glossary-guide">Plan Exit admits a below-spot call only when the ticker has a minimum net
+                  sale-price guard. The guard remains the real sell or buy boundary for that ticker.</dd>
+                <dd class="glossary-more"><a href="https://www.optionseducation.org/strategies/all-strategies/covered-call-buy-write"
+                    target="_blank" rel="noopener noreferrer">Covered calls at the Options Industry Council</a></dd>
+                <dd class="glossary-more"><a href="https://www.optionseducation.org/strategies/all-strategies/cash-secured-put"
+                    target="_blank" rel="noopener noreferrer">Cash-secured puts at the Options Industry Council</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>DTE range <span>Time window</span></dt>
+                <dd>The allowed number of calendar days until expiration. More time usually means more premium and
+                  more time to react. Less time means faster time decay, but price sensitivity and assignment pressure
+                  can rise sharply near expiration.</dd>
+                <dd class="glossary-guide">Goal ranges are Keep Shares 30–60, Earn Income 14–35, Plan Exit 7–21,
+                  and Plan Entry 7–28. Radar favors the midpoint of the saved range, so each goal controls its own
+                  ranking target. These are starting points, not a universal best window.</dd>
+                <dd class="glossary-formula">Minimum DTE ≤ days to expiration ≤ maximum DTE</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Moneyness <span>Strike / stock</span></dt>
+                <dd>Strike price compared with the stock price. It locates the strike without changing when you switch
+                  between a call and a put.</dd>
+                <dd class="glossary-example">Example: a $95 strike on a $100 stock is 95%. That strike is OTM for a
+                  put and ITM for a call.</dd>
+                <dd class="glossary-guide">100% is at the money. Farther from 100% usually means less
+                  premium and less immediate assignment pressure for an OTM option. The direction depends on call
+                  versus put.</dd>
+                <dd class="glossary-formula">Moneyness = strike price ÷ stock price × 100%</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Moneyness" target="_blank"
+                    rel="noopener noreferrer">Moneyness on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Target delta range <span>Absolute delta</span></dt>
+                <dd>Keeps contracts inside your chosen delta sensitivity. Wheely Nilly compares absolute values, so a
+                  −0.25 put counts as 0.25. A blank minimum or maximum leaves that side open.</dd>
+                <dd class="glossary-guide">Goal ranges are Keep Shares 0.08–0.18, Earn Income 0.30–0.45, Plan Exit
+                  0.45–0.65, and Plan Entry 0.40–0.55. Radar favors each saved range's midpoint. Higher absolute delta
+                  generally means more premium and more stock-like risk, not guaranteed assignment odds.</dd>
+                <dd class="glossary-formula">Minimum delta ≤ |option delta| ≤ maximum delta</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Maximum spread <span>Liquidity rule</span></dt>
+                <dd>The widest bid-ask gap Radar will accept, measured against the midpoint. A tighter spread usually
+                  means lower trading friction and a midpoint estimate you can trust more.</dd>
+                <dd class="glossary-example">Example: $1.90 bid and $2.10 ask gives a $2 midpoint and a 10% spread.</dd>
+                <dd class="glossary-guide">Radar labels ≤2% excellent, ≤5% good, ≤10% fair, and warns above 15%.
+                  Keep Shares and Earn Income cap eligibility at 8%; Exit and Entry use 10% so the target strike has
+                  slightly more room. A wide spread is a cost warning even when activity looks healthy.</dd>
+                <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100%</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum open interest <span>Liquidity rule</span></dt>
+                <dd>The fewest outstanding contracts a candidate may have. It is a rough activity check, not a promise
+                  that your order will fill. Current bid and ask prices matter more to execution.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 2,000+ excellent, 500+ good, 100+ fair, and
+                  below 100 poor. Keep Shares and Earn Income require 100; Exit and Entry require 50 to preserve more
+                  target-price choices. The private system fallback of 10 is only a permissive screen.</dd>
+                <dd class="glossary-formula">Passes when open interest ≥ minimum</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Open_interest" target="_blank"
+                    rel="noopener noreferrer">Open interest on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum volume <span>Liquidity rule</span></dt>
+                <dd>The fewest contracts that must have traded today. Volume resets each session, so a zero early in
+                  the day is not the same signal as a zero near the close.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 500+ excellent, 100+ good, 20+ fair, and below
+                  20 poor. Keep Shares and Earn Income require 20; Exit and Entry require 10. Always read volume with
+                  the spread because volume resets each session.</dd>
+                <dd class="glossary-formula">Passes when today's volume ≥ minimum</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Minimum return <span>One option period</span></dt>
+                <dd>The lowest estimated return Radar will accept for this contract's own lifetime. It uses net credit
+                  after the estimated fee and does not annualize the result.</dd>
+                <dd class="glossary-example">Example: $100 net credit on $4,900 of put capital is about 2.04% for the
+                  contract term.</dd>
+                <dd class="glossary-guide">There is no universal good minimum. Higher return usually pays for some
+                  mix of higher volatility, closer strike, longer time, or worse liquidity. Compare the same strategy,
+                  ticker, and DTE before calling one return better.</dd>
+                <dd class="glossary-guide">The goal floors are Keep Shares 0.20%, Earn Income 1.00%, Plan Exit 0.25%,
+                  and Plan Entry 0.50% for the option period. A candidate below the floor is excluded, not merely
+                  ranked lower.</dd>
+                <dd class="glossary-formula">Covered call = net premium ÷ current value of 100 shares</dd>
+                <dd class="glossary-formula">Cash-secured put = net premium ÷ (strike × 100 − net premium)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net price guard <span>Ticker setting</span></dt>
+                <dd>Your ticker-specific line in the sand. For a call, it rejects an effective sale price below your
+                  floor. For a put, it rejects an effective purchase price above your ceiling. It filters candidates;
+                  it never places an order.</dd>
+                <dd class="glossary-guide">A useful guard comes from the price at which you are genuinely willing to
+                  sell or buy the shares. A richer premium should not rescue an unacceptable strike.</dd>
+                <dd class="glossary-formula">Covered-call net sale price = strike + net premium per share</dd>
+                <dd class="glossary-formula">Put breakeven price = strike − net premium per share</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-performance-title">
+            <h3 id="glossary-performance-title">Performance</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Booked profit <span>Booked P&amp;L</span></dt>
+                <dd>Realized option profit or loss from matched contracts that have closed, after recorded fees. An
+                  open credit is cash received, but Wheely Nilly does not count it as booked profit yet.</dd>
+                <dd class="glossary-example">Example: collect $200 net, then pay $80 net to close. Booked profit is
+                  $120.</dd>
+                <dd class="glossary-guide">Positive made money; negative lost money. It excludes any
+                  unrealized stock gain or loss, so it is not the wheel's total economic return.</dd>
+                <dd class="glossary-formula">Opening net credit + closing net cash flow</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Return on collateral <span>Return</span></dt>
+                <dd>Booked option profit for qualified closed contracts as a percentage of the capital committed when
+                  each trade opened. Trades with missing profit, collateral, or holding time are excluded.</dd>
+                <dd class="glossary-example">Example: $120 profit on $4,800 collateral is a 2.5% return.</dd>
+                <dd class="glossary-guide">Positive is profitable and negative is a loss. Compare it with holding
+                  time and risk. A higher percentage is not automatically better if it came from a closer strike or a
+                  more volatile stock.</dd>
+                <dd class="glossary-formula">Qualified booked profit ÷ qualified entry collateral</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Annualized return <span>Annualized rate</span></dt>
+                <dd>A simple one-year pace calculated from a shorter result. It makes different holding periods easier
+                  to compare, but it does not mean the return can be repeated for a year. Very short trades can produce
+                  eye-catching, unstable annualized numbers.</dd>
+                <dd class="glossary-example">Example: 2% over 30 days becomes about 24.3% annualized: 2% × 365 ÷ 30.</dd>
+                <dd class="glossary-guide">Use it as a comparison rate, not a forecast. Check the raw period return,
+                  DTE, losses, and excluded trades before judging it.</dd>
+                <dd class="glossary-formula">Dashboard: qualified booked profit × 365 ÷ Σ(collateral × days held)</dd>
+                <dd class="glossary-formula">Radar: net premium ÷ return collateral × 365 ÷ DTE</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Remaining annualized return</dt>
+                <dd>The yearly pace of the option's remaining time value relative to current capital at risk. It asks,
+                  "How much annualized time value remains if the inputs stayed unchanged?" It is not a prediction or
+                  the Close signal.</dd>
+                <dd class="glossary-guide">Higher means more time value remains to earn, but usually with more time or
+                  market risk still attached. Compare it with premium already captured and days left.</dd>
+                <dd class="glossary-formula">Remaining extrinsic ÷ capital at risk × 365 ÷ max(DTE, 1)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Capital velocity</dt>
+                <dd>Dollars of booked option profit produced by each $1,000 of collateral at a 30-day pace. It puts
+                  dollars, capital, and time into one realized-efficiency number.</dd>
+                <dd class="glossary-example">Example: $200 profit from $10,000 held for 30 days equals $20 per $1,000
+                  per 30 days.</dd>
+                <dd class="glossary-guide">Above $0 means profitable; below $0 means losses. Higher is more efficient
+                  only when the underlying risk and missing-trade count are comparable.</dd>
+                <dd class="glossary-formula">Qualified booked profit ÷ collateral-days × 30 × $1,000</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Premium capture</dt>
+                <dd>How much of the opening credit has become estimated or booked profit. For an open contract, Radar
+                  subtracts an ask-price buyback and estimated closing fee. The dashboard uses closed contracts.</dd>
+                <dd class="glossary-example">Example: collect $200 and estimate an $80 buyback. Profit if closed is
+                  $120, so capture is 60%.</dd>
+                <dd class="glossary-guide">0% means no premium retained, 50% means half, and 100% means the full credit.
+                  A negative number means an estimated or booked loss. Goal targets are Keep Shares 35%, Earn Income
+                  50%, Plan Exit 90%, and Plan Entry 85%; your saved setting controls the signal.</dd>
+                <dd class="glossary-formula">Open contract = estimated profit if closed ÷ opening net credit</dd>
+                <dd class="glossary-formula">Dashboard = booked profit ÷ positive premium received on closed contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Monthly booked P&amp;L</dt>
+                <dd>Booked profit and loss grouped by the month each contract closed, then stacked by ticker.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-capital-title">
+            <h3 id="glossary-capital-title">Capital &amp; contracts</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Wheel capital</dt>
+                <dd>Capital currently tied to the wheel: cash securing open puts plus broker cost basis for complete
+                  share lots. It is exposure, not profit and not current market value.</dd>
+                <dd class="glossary-guide">There is no ideal dollar amount. Judge it against account size,
+                  diversification, and how much stock you could be assigned. More deployed capital raises concentration
+                  even when option income rises.</dd>
+                <dd class="glossary-formula">Open CSP collateral + share capital</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>CSP collateral <span>Cash secured</span></dt>
+                <dd>Cash set aside to buy the shares if a short put is assigned. Wheely Nilly shows the full strike
+                  obligation and does not subtract premium here.</dd>
+                <dd class="glossary-example">Example: one standard $50 put requires $5,000 of gross collateral.</dd>
+                <dd class="glossary-formula">Strike × contract multiplier × open contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Share capital <span>Shares committed</span></dt>
+                <dd>Broker-reported cost basis for complete share lots. For one covered call, only the shares committed
+                  to that call count as its collateral.</dd>
+                <dd class="glossary-example">Example: 100 shares with a $48 broker basis use $4,800 of share capital.</dd>
+                <dd class="glossary-formula">Broker cost basis per share × 100-share lots</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Collateral <span>Ticker view</span></dt>
+                <dd>Current CSP collateral plus share capital for a ticker. On an individual contract, it means the
+                  cash securing a put or the cost basis of shares committed to a call.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Open CSPs / open CCs</dt>
+                <dd>The number of current short put or short call contracts. CC means covered call; one standard
+                  contract represents 100 shares unless its multiplier says otherwise.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Contract multiplier</dt>
+                <dd>How many shares one contract controls. Standard equity options usually use 100. Corporate actions
+                  can create adjusted contracts with a different deliverable, so check the recorded multiplier.</dd>
+                <dd class="glossary-formula">Total shares controlled = multiplier × contracts</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Premium received</dt>
+                <dd>Net cash credited when the short option opened, after recorded fees and allocated to the matched
+                  contract quantity. It becomes booked profit only as the contract closes.</dd>
+                <dd class="glossary-formula">Gross opening credit − recorded opening fees</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Buyback debit</dt>
+                <dd>A conservative estimate of what it would cost to close the short option now. Wheely Nilly uses the
+                  displayed ask plus estimated closing fees. A limit order may fill better, but no fill is guaranteed.</dd>
+                <dd class="glossary-formula">Ask per share × multiplier × contracts + estimated closing fees</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Profit if closed</dt>
+                <dd>Estimated option profit if you bought the contract back now at the displayed ask. It can change
+                  with every quote and becomes booked only after an actual close.</dd>
+                <dd class="glossary-guide">Positive means an estimated option profit; negative means an estimated
+                  option loss. It excludes unrealized stock gain or loss.</dd>
+                <dd class="glossary-formula">Opening net credit − buyback debit</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Earned per day</dt>
+                <dd>The current estimated option profit divided by calendar days held. It describes the pace so far,
+                  not what tomorrow will earn. A same-day position counts as one day.</dd>
+                <dd class="glossary-formula">Profit if closed ÷ days held</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Extrinsic per day</dt>
+                <dd>Remaining time value divided evenly across calendar days left. Actual theta decay is not even and
+                  can change with stock price and IV. An option expiring today uses one day.</dd>
+                <dd class="glossary-guide">Compare this with earned per day. A small remaining amount may make closing
+                  attractive, but assignment risk, taxes, fees, and your strategy still matter.</dd>
+                <dd class="glossary-formula">Remaining extrinsic value ÷ max(DTE, 1)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Closing cash flow <span>Close cost</span></dt>
+                <dd>The net cash from closing a contract. A buy-to-close cost is negative; expiration and assignment
+                  contribute zero closing option cash in booked option profit.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>DTE <span>Days to expiration</span></dt>
+                <dd>Calendar days until expiration. Zero means the contract expires today. "Next expiry" is the
+                  earliest expiration among your current short options.</dd>
+                <dd class="glossary-guide">Lower is not simply better. Time decay tends to accelerate near expiration,
+                  while short-dated ATM options also become more sensitive to stock moves.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Stock price</dt>
+                <dd>The latest available brokerage quote, falling back to the refreshed position price when a quote
+                  is unavailable.</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="glossary-group" aria-labelledby="glossary-screener-title">
+            <h3 id="glossary-screener-title">Radar opportunities</h3>
+            <dl class="glossary-list">
+              <div class="glossary-entry">
+                <dt>Candidate rank</dt>
+                <dd>The order of contracts that passed every saved rule. It is a fit ranking, not a prediction of
+                  profit. Contracts with delta data come first. If both delta bounds exist, Radar next favors their
+                  midpoint, then the DTE midpoint, period return, spread, expiration, and strike.</dd>
+                <dd class="glossary-guide">Rank 1 means "closest to your settings" among the current matches. It does
+                  not mean safe, underpriced, or most likely to profit.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Strike price</dt>
+                <dd>The contract's fixed per-share transaction price. A call holder can buy at the strike; a put
+                  holder can sell at the strike. A short-option seller takes the opposite obligation if assigned.</dd>
+                <dd class="glossary-guide">For wheel trades, choose a call strike where you would accept selling and a
+                  put strike where you would accept buying. Premium cannot make a bad stock price safe.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Underlying price</dt>
+                <dd>The market-data provider's stock or fund price captured with the option chain and used for Radar
+                  calculations.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Executable option price <span>Midpoint · Bid · Ask</span></dt>
+                <dd>The per-share price used for an estimate. Bid is the best displayed buying price; ask is the best
+                  displayed selling price. Radar uses midpoint only when the spread passes your limit. Close uses ask
+                  for a conservative buyback estimate.</dd>
+                <dd class="glossary-example">Example: $1.90 bid and $2.10 ask has a $2 midpoint. A $2 limit order might
+                  fill, but midpoint is not a guaranteed execution.</dd>
+                <dd class="glossary-formula">Midpoint = (bid + ask) ÷ 2</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Bid-ask spread <span>Quote width</span></dt>
+                <dd>The gap between the best displayed ask and bid, measured against midpoint. It is a direct warning
+                  about trading friction. Tighter is better, all else equal.</dd>
+                <dd class="glossary-guide">Radar's guide: ≤2% excellent, ≤5% good, ≤10% fair, and above 15% a hard
+                  warning. Cheap options can show large percentages from a small cent gap, so inspect dollars too.</dd>
+                <dd class="glossary-formula">Spread % = (ask − bid) ÷ midpoint × 100%</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Bid%E2%80%93ask_spread"
+                    target="_blank" rel="noopener noreferrer">Bid-ask spread on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Open interest / volume <span>Liquidity activity</span></dt>
+                <dd>Open interest is outstanding contracts after prior opens and closes. Volume is contracts traded
+                  today and resets each session. Neither tells you whether trades were bullish or guarantees a fill.</dd>
+                <dd class="glossary-guide">Higher usually supports liquidity, but the live spread is the clearest
+                  execution check. Radar scores open interest of 100 / 500 / 2,000 as fair / good / excellent and
+                  volume of 20 / 100 / 500 the same way.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net contract credit</dt>
+                <dd>Estimated cash left from selling one standard contract after Radar's fee estimate.</dd>
+                <dd class="glossary-example">Example: a $2 midpoint produces $200 gross; after a $0.65 estimated fee,
+                  net contract credit is $199.35.</dd>
+                <dd class="glossary-formula">Net contract credit = executable option price × 100 − estimated fee</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Return on capital <span>Period return · Contract term</span></dt>
+                <dd>Estimated net credit as a percentage of the capital backing the candidate for its own DTE. It is a
+                  term return, not annualized and not guaranteed.</dd>
+                <dd class="glossary-guide">Compare candidates with similar ticker risk, strike, and DTE. A larger
+                  number often comes with a closer strike, higher IV, or weaker liquidity.</dd>
+                <dd class="glossary-formula">Covered call = net contract credit ÷ current value of 100 shares</dd>
+                <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Net sale / breakeven price</dt>
+                <dd>The stock transaction price after spreading estimated net credit over 100 shares. Calls show what
+                  you would effectively receive if assigned; puts show what you would effectively pay.</dd>
+                <dd class="glossary-example">Example: a $50 strike with $199.35 net credit gives a $51.99 call sale
+                  price or a $48.01 put breakeven, rounded.</dd>
+                <dd class="glossary-formula">Net sale price = strike + net contract credit ÷ 100</dd>
+                <dd class="glossary-formula">Breakeven price = strike − net contract credit ÷ 100</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Delta</dt>
+                <dd>Estimated change in the option's per-share price for a $1 stock move, with other model inputs held
+                  still. Calls usually range from 0 to 1; puts from −1 to 0. Delta changes as price, time, and IV change.</dd>
+                <dd class="glossary-example">Example: a 0.25 delta option may move about $0.50 for a $2 stock move at
+                  that moment. It will not stay exactly 0.25.</dd>
+                <dd class="glossary-guide">Wheely Nilly ranks the midpoint of each goal's saved delta range highest.
+                  Traders sometimes use absolute delta as a rough chance-of-finishing-ITM proxy, but it is not the
+                  real-world probability of assignment or profit.</dd>
+                <dd class="glossary-formula">Estimated option-price change ≈ delta × stock-price change</dd>
+                <dd class="glossary-more"><a href="https://en.wikipedia.org/wiki/Greeks_(finance)" target="_blank"
+                    rel="noopener noreferrer">Option Greeks on Wikipedia</a></dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Implied volatility <span>IV</span></dt>
+                <dd>The annualized move implied by an option's market price. It describes expected magnitude, not
+                  direction. Higher IV usually means richer call and put premiums because the market is pricing a wider
+                  range of outcomes.</dd>
+                <dd class="glossary-example">Example: 20% IV on a $100 stock implies roughly a $1.25 one-standard-
+                  deviation daily move: $100 × 20% ÷ 16.</dd>
+                <dd class="glossary-guide">There is no universal good IV. Compare the same ticker across expirations
+                  and with its own history. High IV can pay sellers more, but it also signals larger expected moves and
+                  can make buybacks more expensive.</dd>
+                <dd class="glossary-formula">Rough daily expected move = stock price × IV ÷ √252 ≈ stock price × IV ÷ 16</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Theta per day</dt>
+                <dd>Estimated one-day change in the option's per-share value from time passing, with stock price, IV,
+                  rates, and dividends unchanged. Long options usually show negative theta; that decay generally helps
+                  a short-option seller.</dd>
+                <dd class="glossary-example">Example: theta of −0.05 suggests about $0.05 per share, or $5 per standard
+                  contract, of one-day decay under unchanged model inputs.</dd>
+                <dd class="glossary-guide">More negative is faster decay, not free profit. Theta changes and is often
+                  strongest for short-dated ATM options, where stock-move risk is also concentrated.</dd>
+                <dd class="glossary-formula">Estimated one-day option change from time ≈ theta per day</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Breakeven</dt>
+                <dd>The stock price where the combined shares-and-option position is approximately flat at expiration,
+                  before taxes. Put breakeven uses strike. Covered-call breakeven uses broker share basis when available,
+                  otherwise current stock price.</dd>
+                <dd class="glossary-guide">A breakeven is not a stop-loss and does not cap downside. Below a short
+                  put's or covered call's breakeven, stock losses continue dollar for dollar at expiration.</dd>
+                <dd class="glossary-formula">Put breakeven = strike − net credit per share</dd>
+                <dd class="glossary-formula">Covered-call breakeven = share basis − net credit per share</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Strike distance</dt>
+                <dd>The absolute percentage gap between strike and stock price. It shows cushion size, not direction
+                  and not the probability of assignment.</dd>
+                <dd class="glossary-example">Example: a $95 strike on a $100 stock is 5% away.</dd>
+                <dd class="glossary-guide">Radar's product guide calls 10%+ excellent cushion, 7%+ good, 4%+ fair,
+                  and below 4% poor. That is a ranking input, not a safety guarantee. High-IV stocks can cross a wide
+                  gap quickly.</dd>
+                <dd class="glossary-formula">Strike distance % = |strike − stock price| ÷ stock price × 100%</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Estimated fee</dt>
+                <dd>The assumed per-contract charge subtracted from gross credit. Radar currently uses $0.65 for one
+                  contract. Your broker's actual commission, regulatory fees, and contract-specific charges may differ.</dd>
+                <dd class="glossary-guide">Lower is better, but spread cost can dwarf the stated fee. Verify both at
+                  the broker before ordering.</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Radar calculation inputs <span>Model assumptions</span></dt>
+                <dd>Radar assumes a 100-share standard contract, a $0.65 opening fee, a 4.5% risk-free rate, and 0%
+                  dividend yield. It estimates delta and theta with Black–Scholes only when IV is available. Quotes,
+                  Greeks, and midpoint fills remain estimates.</dd>
+                <dd class="glossary-guide">Model output is useful for comparison, not certainty. Dividends, early
+                  assignment, changing IV, stale quotes, and actual fills can move real results away from the estimate.</dd>
+                <dd class="glossary-formula">Simple annualized return = period return × 365 ÷ DTE</dd>
+              </div>
+            </dl>
+          </section>
+          <aside class="glossary-sources" aria-label="Glossary sources and risk note">
+            <strong>Check the contract, then the model.</strong>
+            <p>Definitions were checked against the Options Industry Council's <a
+                href="https://www.optionseducation.org/referencelibrary/optionsglossary" target="_blank"
+                rel="noopener noreferrer">options glossary</a> and strategy guides. Before trading, read OCC's current
+              <a href="https://www.theocc.com/company-information/documents-and-archives/options-disclosure-document"
+                target="_blank" rel="noopener noreferrer">Characteristics and Risks of Standardized Options</a>.
+              Options involve risk and are not suitable for every investor.</p>
+          </aside>
+          <p class="glossary-empty" id="glossary-empty" hidden>No definitions match that search.</p>
+        </div>
+      </section>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <button class="is-active" type="button" data-target="overview" aria-current="page"><span class="nav-icon"
+          aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M3.5 10.5 12 3.7l8.5 6.8v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1z" />
+          </svg></span><span>Home</span></button>
+      <button type="button" data-target="cycles"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M19.8 8.2A8.5 8.5 0 1 0 20 15h-2.7a6 6 0 1 1 .2-6.2L14 8.7l4.7 4.5L23 8.5z" />
+          </svg></span><span>Trades</span></button>
+      <button type="button" data-target="screener"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="1.7" />
+            <path d="M12 12 18.2 5.8" fill="none" stroke="currentColor" stroke-width="1.7"
+              stroke-linecap="round" />
+            <circle cx="12" cy="12" r="1.35" />
+            <circle cx="16.15" cy="10.1" r="1.15" />
+          </svg></span><span>Radar</span></button>
+      <button type="button" data-target="more"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path
+              d="M12 3.5a2.1 2.1 0 0 1 2 1.5l.3 1a7.7 7.7 0 0 1 1.3.8l1-.3a2.1 2.1 0 0 1 2.4 1l.6 1a2.1 2.1 0 0 1-.4 2.6l-.7.7v1.5l.7.7a2.1 2.1 0 0 1 .4 2.6l-.6 1a2.1 2.1 0 0 1-2.4 1l-1-.3a7.7 7.7 0 0 1-1.3.8l-.3 1a2.1 2.1 0 0 1-2 1.5h-1.2a2.1 2.1 0 0 1-2-1.5l-.3-1a7.7 7.7 0 0 1-1.3-.8l-1 .3a2.1 2.1 0 0 1-2.4-1l-.6-1a2.1 2.1 0 0 1 .4-2.6l.7-.7v-1.5l-.7-.7A2.1 2.1 0 0 1 3.2 8l.6-1a2.1 2.1 0 0 1 2.4-1l1 .3a7.7 7.7 0 0 1 1.3-.8l.3-1a2.1 2.1 0 0 1 2-1.5zm-.6 5.2a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6z" />
+          </svg></span><span>Settings</span></button>
+    </nav>
+    <div class="onboarding" data-onboarding hidden>
+      <section role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+        <header><img src="/assets/images/logo.png" alt=""><span data-onboarding-progress>1 of 4</span></header>
+        <div data-onboarding-step="welcome">
+          <p class="onboarding-eyebrow">Connection ready</p>
+          <h2 id="onboarding-title">Welcome to your wheel workspace.</h2>
+          <p>Wheely Nilly is importing your positions and available activity history. The copy stays in this browser.</p>
+        </div>
+        <div data-onboarding-step="preference" hidden>
+          <p class="onboarding-eyebrow">A sensible starting point</p>
+          <h2>How do you usually run the wheel?</h2>
+          <div class="onboarding-choices">
+            <label><input type="radio" name="wheel-style" value="balanced" checked><span><strong>Balanced</strong><small>Mix premium with room for the stock to move.</small></span></label>
+            <label><input type="radio" name="wheel-style" value="conservative"><span><strong>Conservative</strong><small>Favor lower delta and more downside room.</small></span></label>
+            <label><input type="radio" name="wheel-style" value="income"><span><strong>Income focused</strong><small>Accept closer strikes for stronger premium.</small></span></label>
+          </div>
+        </div>
+        <div data-onboarding-step="tickers" hidden>
+          <p class="onboarding-eyebrow">Detected portfolio</p>
+          <h2>These tickers will seed Radar.</h2>
+          <div class="onboarding-tickers" data-onboarding-tickers><span>Checking your portfolio…</span></div>
+          <p class="onboarding-footnote">You can add ticker-specific rules later in Settings.</p>
+        </div>
+        <div data-onboarding-step="install" hidden>
+          <p class="onboarding-eyebrow">Keep the saved view close</p>
+          <h2>Install Wheely Nilly.</h2>
+          <p data-onboarding-install-copy>Install the app for a full-screen workspace and offline launch from your saved snapshot.</p>
+          <button class="onboarding-install" type="button" data-onboarding-install hidden>Install now</button>
+        </div>
+        <footer><button type="button" data-onboarding-back hidden>Back</button><button type="button" data-onboarding-next>Continue</button></footer>
+      </section>
+    </div>
+    <div class="tip-celebration" id="tip-celebration" role="status" aria-live="polite" hidden>
+      <img id="tip-celebration-image" src="/assets/images/happy-tip.gif" alt="An excited man cheering">
+      <span class="sr-only">Thanks! Opening Ko-fi.</span>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+</body>
+
+</html>

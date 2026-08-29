@@ -226,6 +226,7 @@ initializeTipCelebration();
 
 function setFreshness(value) {
   const updated = $('#last-updated');
+  if (!updated) return;
   updated.replaceChildren(
     el('span', '', value.stale ? 'Last update · stale' : 'Last updated'),
     el('strong', '', updatedAt(value.lastSuccessAt)),
@@ -1138,47 +1139,13 @@ for (const button of document.querySelectorAll('.bottom-nav button')) {
   button.addEventListener('click', () => showScreen(button.dataset.target));
 }
 
-$('#refresh-button').addEventListener('click', async () => {
-  const button = $('#refresh-button');
-  button.disabled = true;
-  button.classList.add('is-refreshing');
-  button.setAttribute('aria-busy', 'true');
-  button.setAttribute('aria-label', 'Refreshing prices and scanning Close and Radar');
-  try {
-    const failures = [];
-    let report = null;
-    let dashboard = null;
-    let closeBatch = null;
-    let scan = null;
-    try { report = await json('/api/v1/snaptrade/refresh', { method: 'POST' }); } catch { failures.push('brokerage refresh'); }
-    if (report && !report.ok) failures.push('brokerage endpoints');
-    try { dashboard = await json('/api/v1/wheel/dashboard'); } catch { failures.push('dashboard reload'); }
-    try { closeBatch = await json('/api/v1/position-management/scan', { method: 'POST' }); } catch { failures.push('Close scan'); }
-    try { scan = await screenerController.scanAll(); } catch { failures.push('Radar scan'); }
-    if (closeBatch) {
-      state.closeByContract = new Map(closeBatch.results.map((item) => [item.contract.contractSymbol, item]));
-      if (closeBatch.failures) failures.push(`${closeBatch.failures} Close position${closeBatch.failures === 1 ? '' : 's'}`);
-    }
-    if (scan) {
-      const radarFailures = scan.results.filter((result) => result.status === 'error').length;
-      if (radarFailures) failures.push(`${radarFailures} Radar target${radarFailures === 1 ? '' : 's'}`);
-    }
-    if (dashboard) {
-      state.dashboard = dashboard;
-      strategySettingsController.refresh();
-      setFreshness(dashboard.freshness);
-      renderDashboard(dashboard);
-    }
-    toast(failures.length ? `Refresh finished. Failed: ${failures.join(', ')}.` : 'Prices, Close guidance, and Radar refreshed.', failures.length ? 'error' : 'success');
-  } catch (error) {
-    toast(error.message, 'error');
-  } finally {
-    button.disabled = false;
-    button.classList.remove('is-refreshing');
-    button.removeAttribute('aria-busy');
-    button.setAttribute('aria-label', 'Refresh prices, Close guidance, and Radar');
-  }
-});
+let localReloadTimer;
+for (const eventName of ['wheely-brokerage-updated', 'wheely-history-updated', 'wheely-market-updated']) {
+  document.addEventListener(eventName, () => {
+    clearTimeout(localReloadTimer);
+    localReloadTimer = setTimeout(() => loadDashboard().catch(() => undefined), 40);
+  });
+}
 
 loadDashboard().catch((error) => {
   toast(`Dashboard unavailable: ${error.message}`, 'error');

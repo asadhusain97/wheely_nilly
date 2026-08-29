@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { rootDirectory } from '../src/config/index.js';
 
-const html = readFileSync(path.join(rootDirectory, 'frontend/index.html'), 'utf8');
+const html = readFileSync(path.join(rootDirectory, 'frontend/app.html'), 'utf8');
 const css = readFileSync(path.join(rootDirectory, 'frontend/assets/css/app.css'), 'utf8');
 const settingsCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/settings.css'), 'utf8');
 const js = readFileSync(path.join(rootDirectory, 'frontend/assets/js/app.js'), 'utf8');
@@ -145,16 +145,9 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /tradesGlossaryLabel\(labelText, glossaryTerm\)/);
     assert.match(css, /prefers-reduced-motion/);
   });
-  it('coordinates refresh in brokerage, dashboard, Close, Radar, render order', () => {
-    const refresh = js.slice(js.indexOf("$('#refresh-button').addEventListener"), js.indexOf('loadDashboard().catch'));
-    const tokens = [
-      "/api/v1/snaptrade/refresh", "/api/v1/wheel/dashboard", "/api/v1/position-management/scan",
-      'screenerController.scanAll()', 'renderDashboard(dashboard)',
-    ];
-    for (let index = 1; index < tokens.length; index += 1) {
-      assert.ok(refresh.indexOf(tokens[index - 1]) < refresh.indexOf(tokens[index]), `${tokens[index - 1]} should precede ${tokens[index]}`);
-    }
-    assert.match(refresh, /Failed:/);
+  it('removes the prominent combined refresh control', () => {
+    assert.doesNotMatch(html, /id="refresh-button"/);
+    assert.doesNotMatch(js, /\/api\/v1\/snaptrade\/refresh/);
   });
   it('keeps primary navigation to four clear destinations', () => {
     const navigation = html.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] ?? '';
@@ -185,8 +178,7 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /target\.stockPrice = entry\.result\.underlying_price/);
     assert.match(screenerJs, /target\.stockPrice = result\.underlying_price/);
     assert.match(screenerJs, /return \{ initialize, loadTargets, scanTarget, scanAll \}/);
-    assert.match(js, /await screenerController\.scanAll\(\)/);
-    assert.match(html, /id="refresh-button"[^>]+aria-label="Refresh prices, Close guidance, and Radar"/);
+    assert.doesNotMatch(html, /id="refresh-button"/);
     assert.match(screenerJs, /state\.loading\.has/);
     assert.match(screenerJs, /\/api\/v1\/screens\/instruments\?query=/);
     assert.match(screenerJs, /Select a verified instrument from the results/);

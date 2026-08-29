@@ -60,7 +60,7 @@ const GOAL_LEGS = {
   exit: ['coveredCall'],
   acquire: ['cashSecuredPut'],
 };
-const SYSTEM_RULES = {
+export const SYSTEM_RULES = {
   minDte: 7,
   maxDte: 45,
   minMoneyness: 0.8,
@@ -107,6 +107,10 @@ const BUILT_IN_GOAL_PROFILES = {
     closeAtProfitCapture: 0.85,
   } },
 };
+
+export function builtInSettingsDocument() {
+  return { schemaVersion: 2, goalProfiles: structuredClone(BUILT_IN_GOAL_PROFILES), tickerPlaybooks: {} };
+}
 
 const element = (tag, className, text) => {
   const node = document.createElement(tag);

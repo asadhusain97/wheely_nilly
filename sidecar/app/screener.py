@@ -3,11 +3,17 @@ import math
 import time
 from datetime import UTC, datetime
 
-from scipy.stats import norm
-
 from .models import ChainSnapshot, ExactContractsRequest, ScreenRequest
 
 CALCULATION_VERSION = "screener-2.2.0"
+
+
+def _normal_cdf(value: float) -> float:
+    return 0.5 * (1 + math.erf(value / math.sqrt(2)))
+
+
+def _normal_pdf(value: float) -> float:
+    return math.exp(-(value * value) / 2) / math.sqrt(2 * math.pi)
 
 
 def estimated_greeks(kind, spot, strike, years, volatility, rate, dividend):
@@ -16,9 +22,9 @@ def estimated_greeks(kind, spot, strike, years, volatility, rate, dividend):
     root_t = math.sqrt(years)
     d1 = (math.log(spot / strike) + (rate - dividend + volatility**2 / 2) * years) / (volatility * root_t)
     d2 = d1 - volatility * root_t
-    delta = math.exp(-dividend * years) * norm.cdf(d1) if kind == "call" else math.exp(-dividend * years) * (norm.cdf(d1) - 1)
-    theta = -(spot * math.exp(-dividend * years) * norm.pdf(d1) * volatility) / (2 * root_t)
-    theta += (-rate * strike * math.exp(-rate * years) * norm.cdf(d2) + dividend * spot * math.exp(-dividend * years) * norm.cdf(d1)) if kind == "call" else (rate * strike * math.exp(-rate * years) * norm.cdf(-d2) - dividend * spot * math.exp(-dividend * years) * norm.cdf(-d1))
+    delta = math.exp(-dividend * years) * _normal_cdf(d1) if kind == "call" else math.exp(-dividend * years) * (_normal_cdf(d1) - 1)
+    theta = -(spot * math.exp(-dividend * years) * _normal_pdf(d1) * volatility) / (2 * root_t)
+    theta += (-rate * strike * math.exp(-rate * years) * _normal_cdf(d2) + dividend * spot * math.exp(-dividend * years) * _normal_cdf(d1)) if kind == "call" else (rate * strike * math.exp(-rate * years) * _normal_cdf(-d2) - dividend * spot * math.exp(-dividend * years) * _normal_cdf(-d1))
     return delta, theta / 365
 
 

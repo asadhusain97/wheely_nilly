@@ -1,0 +1,38 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
+    },
+    "api/**/*.py": {
+      "maxDuration": 30,
+      "excludeFiles": "{sidecar/tests/**,backend/**,frontend/**,deploy/**,docker/**,data/**}"
+    }
+  },
+  "rewrites": [
+    { "source": "/app", "destination": "/app.html" },
+    { "source": "/api/auth/:path*", "destination": "/api/auth?path=:path*" },
+    { "source": "/api/brokerage/:path*", "destination": "/api/brokerage?path=:path*" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+      ]
+    }
+  ]
+}

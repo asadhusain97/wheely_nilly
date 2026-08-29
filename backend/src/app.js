@@ -67,6 +67,7 @@ export function createApp({ config, snaptrade, ingest, snapshots, derived, oppor
     createSnaptradeRouter({ snaptrade, ingest, snapshots, config }),
   );
 
+  app.get('/', (_request, response) => response.sendFile(path.join(frontendDirectory, 'app.html')));
   app.use(express.static(frontendDirectory));
 
   app.use((_request, response) => {

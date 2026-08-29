@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 
 import { toMinor } from '../lib/money.js';
+import { CALCULATION_VERSION, NORMALIZED_SCHEMA_VERSION } from './calculation-constants.js';
 
-export const NORMALIZED_SCHEMA_VERSION = 1;
-export const CALCULATION_VERSION = 'wheel-v2';
+export { CALCULATION_VERSION, NORMALIZED_SCHEMA_VERSION } from './calculation-constants.js';
 
 function hash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');

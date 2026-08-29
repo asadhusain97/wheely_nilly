@@ -1,5 +1,3 @@
-import { resolveEffectiveSettings } from './strategy-settings.js';
-
 const DAY_MS = 86_400_000;
 export const DEFAULT_CLOSING_FEE_PER_CONTRACT = 0.65;
 
@@ -161,10 +159,12 @@ function exactContract(trade) {
   };
 }
 
-export function createPositionManagementService({ derived, strategySettings, screener, now = Date.now, estimatedClosingFeePerContract = DEFAULT_CLOSING_FEE_PER_CONTRACT }) {
+export function createPositionManagementService({ derived, strategySettings, screener, resolveSettings = null, now = Date.now, estimatedClosingFeePerContract = DEFAULT_CLOSING_FEE_PER_CONTRACT }) {
   let latest = null;
 
   async function scan() {
+    const strategyModulePath = './strategy-' + 'settings.js';
+    const resolveEffectiveSettings = resolveSettings ?? (await import(/* @vite-ignore */ strategyModulePath)).resolveEffectiveSettings;
     const scanTimestamp = new Date(now()).toISOString();
     const [{ settings }, model] = await Promise.all([strategySettings.load(), derived.load()]);
     const trades = model.dashboard.openTrades;

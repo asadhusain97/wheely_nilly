@@ -2,8 +2,6 @@ import asyncio
 import math
 import re
 from datetime import UTC, date, datetime
-from urllib.parse import quote as url_quote
-from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -56,41 +54,6 @@ _US_YAHOO_EXCHANGES = {
     "ASE", "BTS", "NCM", "NGM", "NMS", "NYQ", "OBB", "OTC", "PCX", "PNK", "YHD",
 }
 
-_CBOE_TIMEZONE = ZoneInfo("America/New_York")
-_OCC_SYMBOL = re.compile(
-    r"^(?P<root>[A-Z0-9.]{1,6})(?P<expiration>\d{6})(?P<option_type>[CP])(?P<strike>\d{8})$"
-)
-
-
-def _cboe_datetime(value):
-    if not isinstance(value, str) or not value.strip():
-        return None
-    try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=_CBOE_TIMEZONE)
-        return parsed.astimezone(UTC)
-    except (OSError, OverflowError, TypeError, ValueError):
-        return None
-
-
-def _occ_contract(value):
-    symbol = str(value or "").replace(" ", "").upper()
-    match = _OCC_SYMBOL.fullmatch(symbol)
-    if not match:
-        return None
-    try:
-        expiration = datetime.strptime(match.group("expiration"), "%y%m%d").date()
-    except ValueError:
-        return None
-    return {
-        "symbol": symbol,
-        "option_type": "call" if match.group("option_type") == "C" else "put",
-        "expiration": expiration,
-        "strike": int(match.group("strike")) / 1000,
-    }
-
-
 class YFinanceProvider:
     """Yahoo market-data adapter. Blocking yfinance work stays off the event loop."""
 
@@ -103,6 +66,12 @@ class YFinanceProvider:
 
     async def fetch_chain(self, symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
         return await asyncio.to_thread(self._fetch, symbol, min_dte, max_dte)
+
+    async def fetch_quotes(self, symbols: list[str]) -> list[dict]:
+        return await asyncio.to_thread(self._fetch_quotes, symbols)
+
+    async def available_expirations(self, symbol: str) -> list[str]:
+        return await asyncio.to_thread(self._available_expirations, symbol)
 
     async def search_instruments(self, query: str, limit: int = 8) -> dict:
         if self.search_client is not None:
@@ -209,94 +178,65 @@ class YFinanceProvider:
             quotes=quotes,
         )
 
+    @staticmethod
+    def _available_expirations(symbol: str) -> list[str]:
+        import yfinance as yf
 
-class CboeProvider:
-    """Cboe delayed option-chain adapter."""
+        return list(yf.Ticker(symbol).options)
 
-    name = "cboe_delayed"
-    chain_url = "https://cdn.cboe.com/api/global/delayed_quotes/options/{symbol}.json"
+    @staticmethod
+    def _fetch_quotes(symbols: list[str]) -> list[dict]:
+        import yfinance as yf
 
-    def __init__(self, timeout_seconds: float = 12, chain_client=None):
-        self.timeout = timeout_seconds
-        self.chain_client = chain_client
-
-    async def fetch_chain(self, symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
-        if self.chain_client is not None:
-            return await self._fetch(self.chain_client, symbol, min_dte, max_dte)
-        async with httpx.AsyncClient(
-            timeout=self.timeout,
-            headers={"user-agent": "wheely-nilly/1.0", "accept": "application/json"},
-        ) as client:
-            return await self._fetch(client, symbol, min_dte, max_dte)
-
-    async def _fetch(self, client, symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
-        url = self.chain_url.format(symbol=url_quote(symbol.upper(), safe=""))
-        try:
-            response = await client.get(url)
-        except httpx.TimeoutException as error:
-            raise ProviderUnavailable(self.name, "timeout") from error
-        except httpx.HTTPError as error:
-            raise ProviderUnavailable(self.name, "network_error") from error
-        if response.status_code == 429:
-            raise ProviderUnavailable(self.name, "rate_limited")
-        if response.status_code >= 400:
-            raise ProviderUnavailable(self.name, "http_error")
-        try:
-            payload = response.json()
-        except ValueError as error:
-            raise ProviderUnavailable(self.name, "invalid_response") from error
-        data = payload.get("data") if isinstance(payload, dict) else None
-        records = data.get("options") if isinstance(data, dict) else None
-        underlying_price = _clean_float(data.get("current_price")) if isinstance(data, dict) else None
-        underlying_quote_time = _cboe_datetime(data.get("last_trade_time")) if isinstance(data, dict) else None
-        if not isinstance(records, list) or underlying_price is None or underlying_price <= 0 or underlying_quote_time is None:
-            raise ProviderUnavailable(self.name, "invalid_response")
-
-        now = datetime.now(UTC)
-        quotes = []
-        for record in records:
-            if not isinstance(record, dict):
-                continue
-            contract = _occ_contract(record.get("option"))
-            if contract is None:
-                continue
-            dte = (contract["expiration"] - now.date()).days
-            if not min_dte <= dte <= max_dte:
-                continue
-            quotes.append(OptionQuote(
-                **contract,
-                bid=_clean_float(record.get("bid")),
-                ask=_clean_float(record.get("ask")),
-                last=_clean_float(record.get("last_trade_price")),
-                volume=_clean_int(record.get("volume")),
-                open_interest=_clean_int(record.get("open_interest")),
-                implied_volatility=_clean_float(record.get("iv")),
-                quote_time=_cboe_datetime(record.get("last_trade_time")),
-            ))
-        return ChainSnapshot(
-            provider=self.name,
-            unofficial=False,
-            underlying_price=underlying_price,
-            underlying_quote_time=underlying_quote_time,
-            fetched_at=now,
-            quotes=quotes,
-        )
+        results = []
+        fetched_at = datetime.now(UTC)
+        for symbol in symbols:
+            try:
+                ticker = yf.Ticker(symbol)
+                price, quote_time = YFinanceProvider._price_from_ticker(ticker)
+                fast = ticker.fast_info
+                results.append({
+                    "symbol": symbol,
+                    "price": price,
+                    "bid": _clean_float(fast.get("bid")),
+                    "ask": _clean_float(fast.get("ask")),
+                    "quote_time": quote_time,
+                    "fetched_at": fetched_at,
+                    "provider": YFinanceProvider.name,
+                    "unofficial": True,
+                    "error": None,
+                })
+            except Exception as error:
+                results.append({
+                    "symbol": symbol,
+                    "price": None,
+                    "bid": None,
+                    "ask": None,
+                    "quote_time": None,
+                    "fetched_at": fetched_at,
+                    "provider": YFinanceProvider.name,
+                    "unofficial": True,
+                    "error": {"code": "PROVIDER_UNAVAILABLE", "message": f"Quote unavailable ({type(error).__name__})"},
+                })
+        return results
 
 
 class MarketDataProvider:
-    """Uses Cboe for option chains and Yahoo for instrument search and fallback."""
+    """Provider boundary for Wheely Nilly market data."""
 
-    name = CboeProvider.name
+    name = YFinanceProvider.name
 
-    def __init__(self, timeout_seconds: float = 12, cboe=None, yahoo=None):
-        self.cboe = cboe or CboeProvider(timeout_seconds=timeout_seconds)
+    def __init__(self, timeout_seconds: float = 12, yahoo=None):
         self.yahoo = yahoo or YFinanceProvider(timeout_seconds=timeout_seconds)
 
     async def fetch_chain(self, symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
-        try:
-            return await self.cboe.fetch_chain(symbol, min_dte, max_dte)
-        except ProviderUnavailable:
-            return await self.yahoo.fetch_chain(symbol, min_dte, max_dte)
+        return await self.yahoo.fetch_chain(symbol, min_dte, max_dte)
 
     async def search_instruments(self, query: str, limit: int = 8) -> dict:
         return await self.yahoo.search_instruments(query, limit)
+
+    async def fetch_quotes(self, symbols: list[str]) -> list[dict]:
+        return await self.yahoo.fetch_quotes(symbols)
+
+    async def available_expirations(self, symbol: str) -> list[str]:
+        return await self.yahoo.available_expirations(symbol)

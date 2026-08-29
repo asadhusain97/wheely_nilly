@@ -39,7 +39,6 @@ it('infers strategy from the goal and asks only when Earn Income is ambiguous', 
 
 it('uses plain scan metadata and summarizes no-match filters without counts', () => {
   assert.equal(providerName('yfinance'), 'Yahoo Finance');
-  assert.equal(providerName('cboe_delayed'), 'Cboe delayed');
   assert.equal(marketDateTime('2026-08-26T19:59:00Z'), 'Aug 26, 3:59 PM ET');
   assert.deepEqual(exclusionSummary({ period_return: 18, delta_low: 8, delta_high: 7, spread: 4 }), [
     'term return', 'delta range', 'bid-ask spread',

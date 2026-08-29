@@ -251,10 +251,10 @@ def test_exact_contract_endpoint_rejects_empty_and_malformed_batches():
     }]}).status_code == 422
 
 
-def test_health_reports_cboe_option_provider():
+def test_health_reports_yahoo_option_provider():
     response = TestClient(app).get("/health")
     assert response.status_code == 200
-    assert response.json()["provider"] == "cboe_delayed"
+    assert response.json()["provider"] == "yfinance"
 
 
 def test_instrument_lookup_rejects_untrusted_query_characters_before_provider_call():

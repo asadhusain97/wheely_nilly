@@ -15,6 +15,7 @@ const radarScoringJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js
 const radarScoringConfigJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/radar-scoring-config.js'), 'utf8');
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
 const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
+const onboardingTs = readFileSync(path.join(rootDirectory, 'frontend/src/onboarding.ts'), 'utf8');
 
 describe('responsive dashboard shell', () => {
   it('has semantic landmarks, labels, live regions, and keyboard navigation support', () => {
@@ -39,6 +40,15 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /<title>Wheely Nilly<\/title>/);
     assert.match(html, /class="brand-mark" src="\/assets\/images\/logo\.png"/);
     assert.match(html, /rel="icon"[^>]+href="\/assets\/images\/favicon\.png"/);
+  });
+  it('waits for the selected account and history before completing onboarding', () => {
+    assert.match(html, /data-onboarding-sync-status/);
+    assert.match(html, /data-onboarding-install-steps/);
+    assert.match(onboardingTs, /account\.referenceLabel/);
+    assert.match(onboardingTs, /!portfolioReady \|\| !historyReady \|\| syncFailed/);
+    assert.match(onboardingTs, /Loading trade history and booked results/);
+    assert.match(css, /\.onboarding footer button:disabled/);
+    assert.doesNotMatch(css, /\.onboarding>section\{[^}]*min-height:470px/);
   });
   it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
     for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {

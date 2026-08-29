@@ -20,6 +20,12 @@ export const payloadItems = (payload: unknown, key?: string): unknown[] => {
 const asRecord = (value: unknown): Record<string, any> => value && typeof value === "object" ? value as Record<string, any> : {};
 const finite = (value: unknown): number | null => Number.isFinite(Number(value)) ? Number(value) : null;
 const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;
+const referenceSuffix = (value: unknown): string | null => {
+  const candidate = typeof value === "number" ? String(value) : text(value);
+  if (!candidate) return null;
+  const compact = candidate.replace(/[^A-Za-z0-9]/g, "");
+  return compact ? compact.slice(-4).toUpperCase() : null;
+};
 
 export const parseOccSymbol = (raw: unknown) => {
   const symbol = String(raw ?? "").replace(/\s/g, "").toUpperCase();
@@ -51,12 +57,19 @@ const optionIdentity = (value: unknown) => {
 
 export const normalizeAccount = (value: unknown) => {
   const account = asRecord(value);
-  const number = text(account.number);
+  const numberSuffix = referenceSuffix(account.number ?? account.account_number ?? account.masked_number ?? account.number_suffix);
+  const institutionSuffix = referenceSuffix(account.institution_account_id ?? account.institutionAccountId);
+  const snapTradeSuffix = referenceSuffix(account.id);
   return {
     id: String(account.id ?? ""),
-    institution: text(account.institution_name ?? account.institution?.name),
-    name: text(account.name),
-    numberSuffix: number ? number.slice(-4) : null,
+    institution: text(account.institution_name ?? account.institution?.name ?? account.meta?.institution_name),
+    name: text(account.name ?? account.display_name),
+    numberSuffix,
+    referenceLabel: numberSuffix
+      ? `Account •••• ${numberSuffix}`
+      : institutionSuffix
+        ? `Institution ID •••• ${institutionSuffix}`
+        : `SnapTrade ID …${snapTradeSuffix ?? "unknown"}`,
     syncStatus: text(account.sync_status ?? account.status),
   };
 };
@@ -73,7 +86,7 @@ export const normalizePosition = (accountId: string, value: unknown) => {
     quantity: finite(position.units ?? position.quantity) ?? 0,
     price: finite(position.price),
     costBasis: finite(position.cost_basis),
-    currency: text(position.currency?.code ?? instrument.currency?.code) ?? "USD",
+    currency: text(position.currency?.code ?? position.currency ?? instrument.currency?.code ?? instrument.currency) ?? "USD",
     option,
   };
 };

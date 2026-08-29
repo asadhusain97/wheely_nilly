@@ -29,6 +29,13 @@ const optionContracts = (snapshot: BrokerageSnapshot | null) => [...new Map(
   (snapshot?.positions ?? []).flatMap((position) => position.option ? [[position.option.symbol, position.option] as const] : []),
 ).values()];
 const portfolioSymbols = (snapshot: BrokerageSnapshot | null) => [...new Set((snapshot?.positions ?? []).map((position) => position.option?.underlying ?? position.symbol).filter(Boolean))];
+const HISTORY_REFRESH_INTERVAL_MS = 24 * 60 * 60_000;
+export const historyImportKey = (accountId: string) => `historyImported:${accountId}`;
+export const historyImportIsDue = (value: unknown, now = Date.now()): boolean => {
+  if (!value || typeof value !== "object") return true;
+  const completedAt = Date.parse(String((value as { completedAt?: unknown }).completedAt ?? ""));
+  return !Number.isFinite(completedAt) || now - completedAt >= HISTORY_REFRESH_INTERVAL_MS;
+};
 
 const mergeEventLedger = async (events: BrokerageEvent[]): Promise<void> => {
   const existing = (await localRepository.get<BrokerageEvent[]>("eventLedger", "all").catch(() => null))?.value ?? [];
@@ -44,6 +51,7 @@ export async function initializeDataRefresh(): Promise<void> {
   let policy = storedPolicy ?? DEFAULT_REFRESH_POLICY;
   let marketUpdatedAt = (await localRepository.get<string>("refreshMetadata", "marketUpdatedAt").catch(() => null))?.value ?? null;
   let brokerageUpdatedAt = currentSnapshot?.fetchedAt ?? null;
+  let retryMode: "brokerage" | "history" = "brokerage";
 
   const marketStatus = document.querySelector<HTMLElement>("[data-market-freshness]");
   const brokerageStatus = document.querySelector<HTMLElement>("[data-brokerage-freshness]");
@@ -64,11 +72,12 @@ export async function initializeDataRefresh(): Promise<void> {
     if (brokerageAlert) brokerageAlert.hidden = true;
     if (retryAlignment) retryAlignment.hidden = true;
   };
-  const showBrokerageAlignment = (state: "reading" | "error", error?: unknown) => {
+  const showBrokerageAlignment = (state: "reading" | "history" | "error", error?: unknown) => {
     if (!brokerageAlert) return;
     brokerageAlert.hidden = false;
     if (brokerageAlertEyebrow) brokerageAlertEyebrow.textContent = "Brokerage alignment";
     if (state === "reading") {
+      retryMode = "brokerage";
       if (brokerageAlertTitle) brokerageAlertTitle.textContent = "Reading your selected account…";
       if (brokerageAlertCopy) brokerageAlertCopy.textContent = currentSnapshot
         ? "Your saved view remains available while SnapTrade responds."
@@ -76,13 +85,26 @@ export async function initializeDataRefresh(): Promise<void> {
       if (retryAlignment) retryAlignment.hidden = true;
       return;
     }
+    if (state === "history") {
+      retryMode = "history";
+      if (brokerageAlertTitle) brokerageAlertTitle.textContent = "Positions found. Loading trade history…";
+      if (brokerageAlertCopy) brokerageAlertCopy.textContent = "Booked profit, past trades, and opening contract details will appear when this finishes.";
+      if (retryAlignment) retryAlignment.hidden = true;
+      return;
+    }
     const requestError = error as { status?: number; code?: string; message?: string };
-    if (brokerageAlertTitle) brokerageAlertTitle.textContent = "We couldn’t align this account.";
-    if (brokerageAlertCopy) brokerageAlertCopy.textContent = requestError.status === 401
-      ? "SnapTrade access expired. Reconnect to continue."
-      : requestError.status === 409
-        ? "Choose an available brokerage account to continue."
-        : "SnapTrade is connected, but Wheely Nilly could not read the selected account. Your saved view is unchanged.";
+    const historyFailure = (requestError as { phase?: string }).phase === "history";
+    retryMode = historyFailure ? "history" : "brokerage";
+    if (brokerageAlertTitle) brokerageAlertTitle.textContent = historyFailure
+      ? "Positions loaded, but trade history did not."
+      : "We couldn’t align this account.";
+    if (brokerageAlertCopy) brokerageAlertCopy.textContent = historyFailure
+      ? "Booked results and opening contract details are incomplete. Try the history import again."
+      : requestError.status === 401
+        ? "SnapTrade access expired. Reconnect to continue."
+        : requestError.status === 409
+          ? "Choose an available brokerage account to continue."
+          : "SnapTrade is connected, but Wheely Nilly could not read the selected account. Your saved view is unchanged.";
     if (retryAlignment) retryAlignment.hidden = requestError.status === 401;
   };
 
@@ -120,23 +142,46 @@ export async function initializeDataRefresh(): Promise<void> {
     document.dispatchEvent(new CustomEvent("wheely-market-updated", { detail: { quotes: mergedQuotes, contracts: mergedContracts } }));
   };
 
-  const importHistory = async (snapshot: BrokerageSnapshot) => {
-    const complete = await localRepository.get<boolean>("refreshMetadata", "historyImported").catch(() => null);
-    if (complete?.value) return;
-    const events: BrokerageEvent[] = [];
-    for (const account of snapshot.accounts) {
-      let cursor: string | null = null;
-      do {
-        const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : `?accountId=${encodeURIComponent(account.id)}`;
-        const page: { events: BrokerageEvent[]; nextCursor: string | null } = await json(`/api/brokerage/history${suffix}`);
-        events.push(...page.events);
-        cursor = page.nextCursor;
-      } while (cursor);
-    }
-    const deduped = [...new Map(events.map((event) => [event.id, event])).values()];
-    await mergeEventLedger(deduped);
-    await localRepository.put("refreshMetadata", "historyImported", true);
-    document.dispatchEvent(new CustomEvent("wheely-history-updated"));
+  let historyRequest: Promise<void> | null = null;
+  const importHistory = (snapshot: BrokerageSnapshot): Promise<void> => {
+    if (historyRequest) return historyRequest;
+    historyRequest = (async () => {
+      const importStates = await Promise.all(snapshot.accounts.map((account) => localRepository
+        .get<unknown>("refreshMetadata", historyImportKey(account.id))
+        .catch(() => null)));
+      const accountsDue = snapshot.accounts.filter((_, index) => historyImportIsDue(importStates[index]?.value));
+      if (!accountsDue.length) {
+        hideBrokerageAlert();
+        document.dispatchEvent(new CustomEvent("wheely-history-updated"));
+        return;
+      }
+      showBrokerageAlignment("history");
+      document.dispatchEvent(new CustomEvent("wheely-history-loading"));
+      for (const account of accountsDue) {
+        const events: BrokerageEvent[] = [];
+        let cursor: string | null = null;
+        do {
+          const suffix = cursor ? `?cursor=${encodeURIComponent(cursor)}` : `?accountId=${encodeURIComponent(account.id)}`;
+          const page: { events: BrokerageEvent[]; nextCursor: string | null } = await json(`/api/brokerage/history${suffix}`);
+          events.push(...page.events);
+          cursor = page.nextCursor;
+        } while (cursor);
+        const deduped = [...new Map(events.map((event) => [event.id, event])).values()];
+        await mergeEventLedger(deduped);
+        await localRepository.put("refreshMetadata", historyImportKey(account.id), { completedAt: new Date().toISOString() });
+      }
+      hideBrokerageAlert();
+      document.dispatchEvent(new CustomEvent("wheely-history-updated"));
+    })().catch((error) => {
+      Object.assign(error as object, { phase: "history" });
+      showBrokerageAlignment("error", error);
+      if (brokerageStatus) brokerageStatus.textContent = "History update failed · positions saved";
+      document.dispatchEvent(new CustomEvent("wheely-refresh-error", { detail: { slice: "brokerage", phase: "history", error } }));
+      throw error;
+    }).finally(() => {
+      historyRequest = null;
+    });
+    return historyRequest;
   };
 
   const coordinator = new RefreshCoordinator({
@@ -147,11 +192,10 @@ export async function initializeDataRefresh(): Promise<void> {
       brokerageUpdatedAt = snapshot.fetchedAt;
       await localRepository.put("portfolioSnapshot", "current", snapshot);
       await mergeEventLedger(snapshot.recentOrders ?? []);
-      void importHistory(snapshot).catch(() => undefined);
-      hideBrokerageAlert();
       showBrokerageContent(true);
       renderFreshness();
       document.dispatchEvent(new CustomEvent("wheely-brokerage-updated", { detail: snapshot }));
+      void importHistory(snapshot).catch(() => undefined);
     },
     refreshBrokerage: (signal) => {
       if (!selectedAccountIds.length) {
@@ -193,22 +237,38 @@ export async function initializeDataRefresh(): Promise<void> {
   if (session.connected && selectedAccountIds.length) {
     if (!currentSnapshot) showBrokerageAlignment("reading");
     coordinator.start();
+    const snapshotMatchesSelection = currentSnapshot?.accounts.some((account) => selectedAccountIds.includes(account.id));
+    if (currentSnapshot && snapshotMatchesSelection) void importHistory(currentSnapshot).catch(() => undefined);
   } else {
     renderFreshness();
   }
 
-  document.addEventListener("wheely-account-selection-changed", (event) => {
+  document.addEventListener("wheely-account-selection-changed", async (event) => {
     const accountIds = (event as CustomEvent<{ accountIds?: string[] }>).detail?.accountIds ?? [];
-    selectedAccountIds = accountIds.filter((accountId) => typeof accountId === "string" && accountId.length > 0);
-    if (!selectedAccountIds.length) return;
+    const nextAccountIds = accountIds.filter((accountId) => typeof accountId === "string" && accountId.length > 0);
+    if (!nextAccountIds.length) return;
+    const currentAccountIds = currentSnapshot?.accounts.map((account) => account.id) ?? [];
+    const sameSnapshot = currentAccountIds.length === nextAccountIds.length
+      && currentAccountIds.every((accountId) => nextAccountIds.includes(accountId));
+    selectedAccountIds = nextAccountIds;
+    if (!sameSnapshot) {
+      await localRepository.clearFinancialData();
+      currentSnapshot = null;
+      marketUpdatedAt = null;
+      brokerageUpdatedAt = null;
+      showBrokerageContent(false);
+      renderFreshness();
+    }
     showBrokerageAlignment("reading");
     coordinator.start();
+    void coordinator.refreshBrokerage().catch(() => undefined);
   });
   retryAlignment?.addEventListener("click", async () => {
     retryAlignment.disabled = true;
-    showBrokerageAlignment("reading");
+    showBrokerageAlignment(retryMode === "history" ? "history" : "reading");
     try {
-      await coordinator.refreshBrokerage();
+      if (retryMode === "history" && currentSnapshot) await importHistory(currentSnapshot);
+      else await coordinator.refreshBrokerage();
     } catch {
       // The coordinator presents the safe alignment error.
     } finally {

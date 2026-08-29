@@ -1,4 +1,4 @@
-const CACHE_VERSION = "wheely-shell-v2";
+const CACHE_VERSION = "wheely-shell-v3";
 const APP_SHELL = [
   "/app.html",
   "/manifest.webmanifest",

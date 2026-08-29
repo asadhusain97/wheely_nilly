@@ -128,7 +128,8 @@ async function fetchHistoryPage(accessToken: string, accountId: string, offset: 
   try {
     const payload = await callTool(client, "AccountInformation_getAccountActivities", { accountId, offset, limit }) as any;
     const records = payloadItems(payload, "activities");
-    const total = Number(payload?.pagination?.total ?? offset + records.length);
+    const pagination = payload?.pagination ?? payload?.result?.pagination ?? payload?.data?.pagination;
+    const total = Number(pagination?.total ?? offset + records.length);
     return {
       events: records.map((value) => normalizeEvent(accountId, value, "activity")),
       nextCursor: records.length && offset + records.length < total ? `${accountId}:${offset + records.length}` : null,

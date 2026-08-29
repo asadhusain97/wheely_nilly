@@ -1,17 +1,13 @@
 import { localRepository } from "./storage";
 import type { BrokerageSnapshot, SafeError, WheelyNillyAccount } from "./types";
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
-}
-
 interface AccountCatalog {
   accounts: WheelyNillyAccount[];
   errors: Array<{ error: SafeError }>;
 }
 
 const steps = ["welcome", "accounts", "tickers", "install"] as const;
+const historyKey = (accountId: string) => `historyImported:${accountId}`;
 
 const json = async <T>(path: string): Promise<T> => {
   const response = await fetch(path, { headers: { accept: "application/json" } });
@@ -34,7 +30,7 @@ export async function initializeOnboarding(): Promise<void> {
     localRepository.get<boolean>("appSettings", "onboardingComplete").catch(() => null),
     localRepository.get<string[]>("appSettings", "selectedAccountIds").catch(() => null),
   ]);
-  const selectedAccountIds = selection?.value ?? [];
+  let selectedAccountIds = selection?.value ?? [];
   if (complete?.value && selectedAccountIds.length) return;
 
   const session = await fetch("/api/auth/session", { headers: { accept: "application/json" } })
@@ -43,19 +39,47 @@ export async function initializeOnboarding(): Promise<void> {
   if (!session.connected) return;
 
   let index = 0;
-  let installPrompt: BeforeInstallPromptEvent | null = null;
   let loadingAccounts = false;
+  let portfolioReady = false;
+  let historyReady = false;
+  let syncFailed = false;
   const next = root.querySelector<HTMLButtonElement>("[data-onboarding-next]")!;
   const back = root.querySelector<HTMLButtonElement>("[data-onboarding-back]")!;
   const progress = root.querySelector<HTMLElement>("[data-onboarding-progress]")!;
   const tickerList = root.querySelector<HTMLElement>("[data-onboarding-tickers]")!;
+  const syncStatus = root.querySelector<HTMLElement>("[data-onboarding-sync-status]")!;
   const accountList = root.querySelector<HTMLElement>("[data-onboarding-accounts]")!;
-  const installButton = root.querySelector<HTMLButtonElement>("[data-onboarding-install]")!;
   const installCopy = root.querySelector<HTMLElement>("[data-onboarding-install-copy]")!;
+  const installSteps = root.querySelector<HTMLOListElement>("[data-onboarding-install-steps]")!;
 
   const chosenAccountId = () => accountList.querySelector<HTMLInputElement>('input[name="brokerage-account"]:checked')?.value ?? null;
+  const selectedSnapshot = (snapshot: BrokerageSnapshot | null) => Boolean(snapshot
+    && selectedAccountIds.length === 1
+    && snapshot.accounts.some((account) => account.id === selectedAccountIds[0]));
+  const renderSyncStatus = () => {
+    syncStatus.classList.toggle("is-error", syncFailed);
+    syncStatus.textContent = syncFailed
+      ? "The account did not finish loading. Go back and try this account again."
+      : !portfolioReady
+        ? "Finding positions in the selected account…"
+        : !historyReady
+          ? "Positions found. Loading trade history and booked results…"
+          : "Portfolio and trade history are ready.";
+  };
   const updateNext = () => {
-    next.disabled = steps[index] === "accounts" && (loadingAccounts || !chosenAccountId());
+    const step = steps[index];
+    next.disabled = step === "accounts"
+      ? loadingAccounts || !chosenAccountId()
+      : step === "tickers"
+        ? !portfolioReady || !historyReady || syncFailed
+        : false;
+    next.textContent = step === "install"
+      ? "Open Radar"
+      : step === "tickers" && !portfolioReady
+        ? "Finding positions…"
+        : step === "tickers" && !historyReady
+          ? "Loading history…"
+          : "Continue";
   };
   const renderTickers = (snapshot: BrokerageSnapshot | null) => {
     const symbols = [...new Set((snapshot?.positions ?? [])
@@ -63,12 +87,40 @@ export async function initializeOnboarding(): Promise<void> {
       .filter(Boolean))].sort();
     tickerList.replaceChildren(...(symbols.length
       ? symbols.map((symbol) => Object.assign(document.createElement("span"), { textContent: symbol }))
-      : [Object.assign(document.createElement("span"), { textContent: "Waiting for the selected account to align…" })]));
+      : [Object.assign(document.createElement("span"), {
+        textContent: portfolioReady ? "No positions found in this account." : "Checking the selected account…",
+      })]));
   };
+
   const saved = await localRepository.get<BrokerageSnapshot>("portfolioSnapshot", "current").catch(() => null);
-  renderTickers(saved?.value ?? null);
+  if (selectedSnapshot(saved?.value ?? null)) {
+    portfolioReady = true;
+    historyReady = Boolean((await localRepository.get<unknown>("refreshMetadata", historyKey(selectedAccountIds[0])).catch(() => null))?.value);
+  }
+  renderTickers(portfolioReady ? saved?.value ?? null : null);
+  renderSyncStatus();
+
   document.addEventListener("wheely-brokerage-updated", (event) => {
-    renderTickers((event as CustomEvent<BrokerageSnapshot>).detail);
+    const snapshot = (event as CustomEvent<BrokerageSnapshot>).detail;
+    if (!selectedSnapshot(snapshot)) return;
+    portfolioReady = true;
+    syncFailed = false;
+    renderTickers(snapshot);
+    renderSyncStatus();
+    updateNext();
+  });
+  document.addEventListener("wheely-history-updated", () => {
+    historyReady = true;
+    syncFailed = false;
+    renderSyncStatus();
+    updateNext();
+  });
+  document.addEventListener("wheely-refresh-error", (event) => {
+    const detail = (event as CustomEvent<{ slice?: string }>).detail;
+    if (detail?.slice !== "brokerage") return;
+    syncFailed = true;
+    renderSyncStatus();
+    updateNext();
   });
 
   const render = () => {
@@ -77,7 +129,6 @@ export async function initializeOnboarding(): Promise<void> {
     });
     progress.textContent = `${index + 1} of ${steps.length}`;
     back.hidden = index === 0;
-    next.textContent = index === steps.length - 1 ? "Open Radar" : "Continue";
     updateNext();
   };
   const finish = async () => {
@@ -107,9 +158,8 @@ export async function initializeOnboarding(): Promise<void> {
         const title = Object.assign(document.createElement("strong"), {
           textContent: account.name ?? account.institution ?? "Brokerage account",
         });
-        const parts = [account.institution, account.numberSuffix ? `•••• ${account.numberSuffix}` : null].filter(Boolean);
         const detail = Object.assign(document.createElement("small"), {
-          textContent: parts.join(" · ") || "SnapTrade account",
+          textContent: [account.institution, account.referenceLabel].filter(Boolean).join(" · "),
         });
         const text = document.createElement("span");
         text.append(title, detail);
@@ -140,27 +190,29 @@ export async function initializeOnboarding(): Promise<void> {
     }
   };
 
-  window.addEventListener("beforeinstallprompt", (event) => {
-    event.preventDefault();
-    installPrompt = event as BeforeInstallPromptEvent;
-    installButton.hidden = false;
-  });
-  installButton.addEventListener("click", async () => {
-    if (!installPrompt) return;
-    await installPrompt.prompt();
-    await installPrompt.userChoice;
-    installPrompt = null;
-    installButton.hidden = true;
-  });
-  if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !matchMedia("(display-mode: standalone)").matches) {
-    installCopy.textContent = "In Safari, tap Share, then Add to Home Screen. Your saved portfolio will open even when you are offline.";
+  const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  if (isAppleMobile) {
+    installCopy.textContent = "Install from Safari so Wheely Nilly can open from your home screen with its saved snapshot.";
+    installSteps.innerHTML = "<li>Open this page in Safari.</li><li>Tap <strong>Share</strong>.</li><li>Choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</li>";
+  } else if (isAndroid) {
+    installCopy.textContent = "Install from Chrome so Wheely Nilly can open from your home screen with its saved snapshot.";
+    installSteps.innerHTML = "<li>Open Chrome's menu.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li><li>Tap <strong>Install</strong>.</li>";
   }
+
   next.addEventListener("click", async () => {
     if (steps[index] === "accounts") {
       const accountId = chosenAccountId();
       if (!accountId) return;
-      await localRepository.put("appSettings", "selectedAccountIds", [accountId]);
-      document.dispatchEvent(new CustomEvent("wheely-account-selection-changed", { detail: { accountIds: [accountId] } }));
+      selectedAccountIds = [accountId];
+      portfolioReady = false;
+      historyReady = false;
+      syncFailed = false;
+      renderTickers(null);
+      renderSyncStatus();
+      await localRepository.put("appSettings", "selectedAccountIds", selectedAccountIds);
+      document.dispatchEvent(new CustomEvent("wheely-account-selection-changed", { detail: { accountIds: selectedAccountIds } }));
     }
     if (index === steps.length - 1) await finish();
     else {

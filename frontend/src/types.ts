@@ -19,6 +19,7 @@ export interface WheelyNillyAccount {
   institution: string | null;
   name: string | null;
   numberSuffix: string | null;
+  referenceLabel: string;
   syncStatus: string | null;
 }
 

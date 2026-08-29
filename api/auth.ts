@@ -24,12 +24,22 @@ const sendError = (response: VercelResponse, status: number, code: string, messa
 };
 
 const routeName = (request: VercelRequest): string => String(request.query.path ?? request.url?.split("/api/auth/")[1]?.split("?")[0] ?? "session");
+const requestHost = (request: VercelRequest): string | null => {
+  const value = request.headers["x-forwarded-host"] ?? request.headers.host;
+  const host = Array.isArray(value) ? value[0] : value?.split(",")[0];
+  return host?.trim().toLowerCase() || null;
+};
 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
   response.setHeader("Cache-Control", "private, no-store");
   const route = routeName(request);
   try {
     if (route === "start" && request.method === "GET") {
+      const origin = appOrigin();
+      if (requestHost(request) && requestHost(request) !== new URL(origin).host.toLowerCase()) {
+        response.redirect(307, `${origin}/api/auth/start?returnTo=${encodeURIComponent(validReturnTo(request.query.returnTo))}`);
+        return;
+      }
       const metadata = await oauthMetadata();
       const clientId = await registerOAuthClient();
       const state = randomBase64Url(32);

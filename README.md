@@ -96,6 +96,8 @@ In **Project Settings > Environment Variables**, add these values for Production
 
 Keep the same `SESSION_SEAL_KEY` across production deployments. Changing it signs every user out, but it does not delete local portfolio data.
 
+`APP_ORIGIN` is the canonical authentication origin. Users may reach a Vercel alias, but the connection flow moves to this origin before setting its short-lived login cookie.
+
 Do not expose these as `VITE_` variables. Vite variables enter the browser bundle.
 
 Vercel may also detect variables referenced by the retained Raspberry Pi backend. Do not configure `SNAPTRADE_OAUTH_CLIENT_ID`, `SNAPTRADE_OAUTH_CLIENT_SECRET`, `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY`, `SNAPTRADE_ACCOUNT_IDS`, `OPPORTUNITY_SCAN_CRON`, `OPPORTUNITY_SCAN_TIMEZONE`, or `DASHBOARD_PUBLIC_URL` for the Vercel application. They are not used by the new deployment.

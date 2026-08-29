@@ -1,7 +1,7 @@
 import os
 from datetime import UTC, date, datetime
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from sidecar.app.models import ExactContractsRequest, ScreenRequest
@@ -22,6 +22,15 @@ app = FastAPI(title="Wheely Nilly market API", version="1.0.0")
 timeout_seconds = float(os.getenv("MARKET_TIMEOUT_SECONDS", "15"))
 provider = MarketDataProvider(timeout_seconds=timeout_seconds)
 service = ScreenerService(provider, ttl_seconds=120, timeout_seconds=timeout_seconds, max_concurrency=2)
+
+
+@app.middleware("http")
+async def restore_vercel_market_path(request: Request, call_next):
+    """Restore the nested API path after Vercel routes it to one Python function."""
+    route = request.query_params.get("route", "").strip("/")
+    if route and request.scope["path"].rstrip("/") == "/api/market":
+        request.scope["path"] = f"/api/market/{route}"
+    return await call_next(request)
 
 
 @app.get("/api/market/health")

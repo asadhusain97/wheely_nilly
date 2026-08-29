@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fbfbf9">
-  <meta name="description" content="Wheely Nilly is a local-first options wheel workspace.">
+  <meta name="description" content="Wheely Nilly reads your brokerage and helps you manage the options wheel. No trading access, no account, and no portfolio database.">
   <title>Wheely Nilly · Your options wheel copilot</title>
   <link rel="icon" type="image/png" href="/assets/images/favicon.png">
   <link rel="apple-touch-icon" href="/assets/images/logo.png">
@@ -14,76 +14,120 @@
 </head>
 <body>
   <a class="skip-link" href="#content">Skip to content</a>
+
   <header class="site-bar">
     <a class="site-brand" href="/" aria-label="Wheely Nilly home">
       <img src="/assets/images/logo.png" alt="">
       <span>Wheely Nilly</span>
     </a>
-    <a class="quiet-link" href="/app">Open app</a>
+    <span class="site-note">Built for the options wheel</span>
   </header>
 
   <main id="content">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow">The wheel, made legible</p>
-        <h1 id="hero-title">Your options wheel copilot.</h1>
-        <p class="hero-lede">See the positions you already own. Find covered calls and cash-secured puts that fit your rules. Know when an open contract deserves attention.</p>
-        <div class="hero-actions">
-          <a class="primary-action" href="/api/auth/start">Connect SnapTrade</a>
-          <a class="secondary-action" href="/app">Explore the app</a>
-        </div>
-        <p class="privacy-note">No Wheely Nilly account. Read-only brokerage access. Your strategy settings stay on this device.</p>
+        <p class="eyebrow">Your wheel, in one view</p>
+        <h1 id="hero-title">Know when to hold. Know when to close.</h1>
+        <p class="hero-lede">Wheely Nilly reads the positions you already own, checks current option data, and applies your rules to open contracts and the next trade.</p>
+        <a class="primary-action" href="/api/auth/start">Get started <span aria-hidden="true">→</span></a>
+        <p class="cta-note">Connects your brokerage through SnapTrade. Tested with Robinhood so far.</p>
       </div>
 
-      <div class="freshness-demo" aria-label="Example of a locally cached portfolio becoming current">
-        <div class="demo-topline"><span>Last view</span><strong>Ready now</strong></div>
-        <div class="demo-position">
-          <span class="ticker-mark">SMR</span>
-          <div><strong>Cash-secured put</strong><small>Sep 18 · $30 strike</small></div>
-          <b>9.0</b>
+      <figure class="product-proof product-proof-contracts">
+        <div class="screenshot-window">
+          <img src="/assets/images/app-open-contracts.png" alt="Wheely Nilly showing Hold and Close candidate guidance for two sample option contracts" width="812" height="1466">
         </div>
-        <div class="demo-position">
-          <span class="ticker-mark">RKLB</span>
-          <div><strong>Covered call</strong><small>Oct 16 · $55 strike</small></div>
-          <b>8.4</b>
-        </div>
-        <div class="freshness-rail">
-          <div><span class="status-dot is-market"></span><span>Market</span><strong data-market-status>Updating</strong></div>
-          <div><span class="status-dot is-brokerage"></span><span>Brokerage</span><strong>Last synced 21 min ago</strong></div>
-        </div>
-        <p>Cached positions appear first. Fresh prices arrive quietly.</p>
+        <figcaption><span>Open contracts</span><strong>A reason, a target, and the numbers behind it.</strong></figcaption>
+      </figure>
+    </section>
+
+    <section class="trust" aria-labelledby="trust-title">
+      <div class="trust-heading">
+        <p class="eyebrow">Before you connect</p>
+        <h2 id="trust-title">Read-only means it cannot trade.</h2>
+      </div>
+      <div class="trust-copy">
+        <p>Wheely Nilly asks SnapTrade for read-only access. It can read account balances, positions, and trade history. It cannot place, change, or cancel a trade.</p>
+        <p>You do not create a Wheely Nilly account. Portfolio snapshots, strategy settings, watchlists, and Radar results stay in your browser, not in a Wheely Nilly database.</p>
+        <a class="source-link" href="https://github.com/asadhusain97/wheely_nilly" target="_blank" rel="noopener noreferrer">Inspect the open-source code on GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+      <ul class="trust-facts" aria-label="Connection facts">
+        <li><span>Access</span><strong>Read only</strong></li>
+        <li><span>Trading</span><strong>Not possible</strong></li>
+        <li><span>App account</span><strong>Not required</strong></li>
+        <li><span>Source code</span><strong>Public</strong></li>
+      </ul>
+    </section>
+
+    <section class="evidence" aria-labelledby="evidence-title">
+      <div class="section-heading">
+        <p class="eyebrow">What you get</p>
+        <h2 id="evidence-title">Less tab switching. More useful context.</h2>
+        <p>The app keeps the decision beside the evidence. These are real Wheely Nilly screens using anonymous sample data.</p>
+      </div>
+
+      <div class="evidence-grid">
+        <article class="evidence-card is-guidance">
+          <div class="evidence-copy">
+            <span class="screen-label">Open contracts</span>
+            <h3>Manage the contracts already in motion.</h3>
+            <p>See premium captured, the close target you chose, estimated P&amp;L if closed, moneyness, and remaining economics in one place.</p>
+          </div>
+          <div class="evidence-crop evidence-crop-close">
+            <img src="/assets/images/app-open-contracts.png" alt="A sample covered call marked Close candidate after reaching its premium capture target" width="812" height="1466" loading="lazy">
+          </div>
+        </article>
+
+        <article class="evidence-card is-history">
+          <div class="evidence-copy">
+            <span class="screen-label">Wheel trades</span>
+            <h3>See what the wheel has actually booked.</h3>
+            <p>Closed contracts build a monthly P&amp;L history you can filter by ticker, with gains and losses kept visible.</p>
+          </div>
+          <div class="evidence-crop evidence-crop-chart">
+            <img src="/assets/images/app-wheel-performance.png" alt="Wheely Nilly monthly booked profit and loss chart using anonymous sample trades" width="812" height="616" loading="lazy">
+          </div>
+        </article>
       </div>
     </section>
 
-    <section class="steps" aria-labelledby="steps-title">
-      <div class="section-heading"><p>How it works</p><h2 id="steps-title">Three decisions. Then Radar does the sorting.</h2></div>
-      <ol>
-        <li><span>1</span><div><h3>Connect</h3><p>Authorize read-only access through SnapTrade. Brokerage credentials never enter Wheely Nilly.</p></div></li>
-        <li><span>2</span><div><h3>Personalize</h3><p>Choose how you run the wheel. Add ticker-specific rules only where they matter.</p></div></li>
-        <li><span>3</span><div><h3>Analyze</h3><p>Radar and Open Contracts evaluate opportunities while the app is open.</p></div></li>
+    <section class="how" aria-labelledby="how-title">
+      <div class="section-heading">
+        <p class="eyebrow">How it works</p>
+        <h2 id="how-title">Your brokerage supplies the facts. Your rules shape the answer.</h2>
+      </div>
+      <ol class="how-list">
+        <li>
+          <span class="step-number">1</span>
+          <div><h3>Connect your brokerage</h3><p>SnapTrade handles the secure connection and gives Wheely Nilly read-only access to the brokerage data you approve. The current flow has only been tested with Robinhood.</p></div>
+        </li>
+        <li>
+          <span class="step-number">2</span>
+          <div><h3>Refresh market data</h3><p>Wheely Nilly uses Yahoo Finance data through the open-source <code>yfinance</code> library for stock prices, option chains, and quotes. When a contract has implied volatility but no Greeks, the app estimates delta and theta. Yahoo data is unofficial and can be delayed, so confirm live prices with your broker.</p></div>
+        </li>
+        <li>
+          <span class="step-number">3</span>
+          <div><h3>Apply your wheel rules</h3><p>The app combines those inputs in your browser. It checks open contracts, ranks covered calls and cash-secured puts, and keeps your saved view available on this device.</p></div>
+        </li>
       </ol>
     </section>
 
-    <section class="watch-grid" aria-labelledby="watch-title">
-      <div class="section-heading"><p>What it watches</p><h2 id="watch-title">The useful parts of the position, in one place.</h2></div>
-      <article><span>CC</span><h3>Covered calls</h3><p>Find strikes that fit your exit intent, return target, and available shares.</p></article>
-      <article><span>CSP</span><h3>Cash-secured puts</h3><p>Compare premium, downside room, timing, and cash required.</p></article>
-      <article><span>OPEN</span><h3>Contract health</h3><p>Track premium capture, moneyness, liquidity, and closing economics.</p></article>
-      <article><span>RADAR</span><h3>Wheel opportunities</h3><p>Rank candidates against your own preferences instead of a generic scorecard.</p></article>
-    </section>
-
-    <section class="local-first" aria-labelledby="privacy-title">
-      <div class="privacy-orbit" aria-hidden="true"><span>Brokerage</span><b>W</b><span>This device</span></div>
-      <div><p class="eyebrow">Local-first by design</p><h2 id="privacy-title">Your portfolio isn't our database.</h2><p>Wheely Nilly fetches brokerage information when you use it. Your portfolio snapshot, wheel preferences, watchlists, and Radar results stay in your browser. Close the app and Wheely Nilly stops.</p></div>
-    </section>
-
-    <section class="install" aria-labelledby="install-title">
-      <div><p class="eyebrow">Keep it close</p><h2 id="install-title">Install Wheely Nilly like an app.</h2><p data-install-copy>Open your portfolio from your home screen. The latest saved view remains available even when you're offline.</p></div>
-      <button type="button" data-install hidden>Install Wheely Nilly</button>
-      <a href="/app" data-open-app>Open Wheely Nilly</a>
+    <section class="purpose" aria-labelledby="purpose-title">
+      <p class="eyebrow">Why this exists</p>
+      <div class="purpose-grid">
+        <h2 id="purpose-title">The wheel should not require a brokerage tab, an option chain, and a spreadsheet open at the same time.</h2>
+        <div>
+          <p>Wheely Nilly was built to answer the recurring questions that are easy to lose in that shuffle: what is open, how much premium has been captured, whether a contract has reached your close target, and which next trade fits the rules you already chose.</p>
+          <p>It is an analysis workspace, not an autopilot. The final decision and every trade stay with you.</p>
+        </div>
+      </div>
     </section>
   </main>
 
-  <footer><span>Wheely Nilly</span><p>Analysis only. No automated trading or investment advice.</p></footer>
+  <footer>
+    <a class="footer-brand" href="/"><img src="/assets/images/logo.png" alt=""><span>Wheely Nilly</span></a>
+    <p>Analysis only. No automated trading or investment advice.</p>
+    <a href="https://github.com/asadhusain97/wheely_nilly" target="_blank" rel="noopener noreferrer">Source code</a>
+  </footer>
 </body>
 </html>

@@ -1,26 +1,5 @@
 import crypto from "node:crypto";
 
-const API_ORIGIN = "https://api.snaptrade.com/api/v1";
-
-export class SnapTradeHttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.name = "SnapTradeHttpError";
-    this.status = status;
-  }
-}
-
-export const snapTradeRequest = async <T>(accessToken: string, path: string, init: RequestInit = {}): Promise<T> => {
-  const response = await fetch(`${API_ORIGIN}${path}`, {
-    ...init,
-    headers: { accept: "application/json", authorization: `Bearer ${accessToken}`, ...(init.headers ?? {}) },
-    signal: init.signal ?? AbortSignal.timeout(18_000),
-  });
-  if (!response.ok) throw new SnapTradeHttpError(response.status, `SnapTrade request failed with ${response.status}`);
-  return response.json() as Promise<T>;
-};
-
 export const payloadItems = (payload: unknown, key?: string): unknown[] => {
   if (Array.isArray(payload)) return payload;
   if (!payload || typeof payload !== "object") return [];

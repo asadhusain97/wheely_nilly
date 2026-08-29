@@ -5,12 +5,13 @@ import {
   clearAuth,
   clearCookie,
   exchangeCode,
-  oauthClient,
+  MCP_RESOURCE,
   oauthMetadata,
   pkceChallenge,
   randomBase64Url,
   readLogin,
   readSession,
+  registerOAuthClient,
   requireSameOrigin,
   revokeTokens,
   setLogin,
@@ -30,10 +31,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
   try {
     if (route === "start" && request.method === "GET") {
       const metadata = await oauthMetadata();
-      const { clientId } = oauthClient();
+      const clientId = await registerOAuthClient();
       const state = randomBase64Url(32);
       const codeVerifier = randomBase64Url(64);
-      setLogin(response, { state, codeVerifier, createdAt: Date.now(), returnTo: validReturnTo(request.query.returnTo) });
+      setLogin(response, { state, codeVerifier, clientId, createdAt: Date.now(), returnTo: validReturnTo(request.query.returnTo) });
       const url = new URL(metadata.authorization_endpoint);
       url.search = new URLSearchParams({
         response_type: "code",
@@ -43,6 +44,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         state,
         code_challenge: pkceChallenge(codeVerifier),
         code_challenge_method: "S256",
+        resource: MCP_RESOURCE,
       }).toString();
       response.redirect(302, url.toString());
       return;
@@ -63,7 +65,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         response.redirect(302, `${appOrigin()}/?oauth=missing_code`);
         return;
       }
-      setSession(response, await exchangeCode(request.query.code, login.codeVerifier));
+      setSession(response, await exchangeCode(request.query.code, login.codeVerifier, login.clientId));
       response.redirect(302, `${appOrigin()}${login.returnTo}${login.returnTo.includes("?") ? "&" : "?"}connected=1`);
       return;
     }
@@ -80,7 +82,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
         return;
       }
       const session = readSession(request);
-      if (session) await revokeTokens(session.refreshToken).catch(() => undefined);
+      if (session) await revokeTokens(session).catch(() => undefined);
       clearAuth(response);
       response.status(204).end();
       return;
@@ -88,7 +90,6 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     sendError(response, 404, "NOT_FOUND", "Route not found");
   } catch (error) {
-    const message = error instanceof Error && error.message.includes("not configured") ? "SnapTrade OAuth is not configured" : "SnapTrade authorization is unavailable";
-    sendError(response, 503, "AUTH_UNAVAILABLE", message);
+    sendError(response, 503, "AUTH_UNAVAILABLE", "SnapTrade authorization is unavailable");
   }
 }

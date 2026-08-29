@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import type { VercelRequest, VercelResponse } from "./vercel.js";
 
-const DISCOVERY_URL = "https://api.snaptrade.com/.well-known/oauth-authorization-server";
+const DISCOVERY_URL = "https://api.snaptrade.com/.well-known/oauth-authorization-server/mcp";
+export const MCP_RESOURCE = "https://mcp.snaptrade.com/mcp";
 const SESSION_COOKIE = "wheely_session";
 const LOGIN_COOKIE = "wheely_oauth_login";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
@@ -10,6 +11,7 @@ interface OAuthMetadata {
   authorization_endpoint: string;
   token_endpoint: string;
   revocation_endpoint: string;
+  registration_endpoint: string;
 }
 
 export interface OAuthTokens {
@@ -18,11 +20,13 @@ export interface OAuthTokens {
   expiresAt: number;
   scope: string;
   sub: unknown;
+  clientId: string;
 }
 
 export interface LoginState {
   state: string;
   codeVerifier: string;
+  clientId: string;
   createdAt: number;
   returnTo: string;
 }
@@ -89,8 +93,27 @@ export const unseal = <T>(value: string | undefined): T | null => {
   }
 };
 
-export const readSession = (request: VercelRequest): OAuthTokens | null => unseal<OAuthTokens>(cookieMap(request).get(SESSION_COOKIE));
-export const readLogin = (request: VercelRequest): LoginState | null => unseal<LoginState>(cookieMap(request).get(LOGIN_COOKIE));
+export const readSession = (request: VercelRequest): OAuthTokens | null => {
+  const session = unseal<OAuthTokens>(cookieMap(request).get(SESSION_COOKIE));
+  return session
+    && typeof session.accessToken === "string"
+    && typeof session.refreshToken === "string"
+    && typeof session.clientId === "string"
+    && Number.isFinite(session.expiresAt)
+    ? session
+    : null;
+};
+
+export const readLogin = (request: VercelRequest): LoginState | null => {
+  const login = unseal<LoginState>(cookieMap(request).get(LOGIN_COOKIE));
+  return login
+    && typeof login.state === "string"
+    && typeof login.codeVerifier === "string"
+    && typeof login.clientId === "string"
+    && Number.isFinite(login.createdAt)
+    ? login
+    : null;
+};
 
 export const setSession = (response: VercelResponse, tokens: OAuthTokens): void => {
   const value = seal(tokens);
@@ -112,71 +135,88 @@ export const oauthMetadata = async (): Promise<OAuthMetadata> => {
   const response = await fetch(DISCOVERY_URL, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
   if (!response.ok) throw new Error(`SnapTrade OAuth discovery failed with ${response.status}`);
   const value = await response.json() as OAuthMetadata;
-  if (!value.authorization_endpoint || !value.token_endpoint || !value.revocation_endpoint) throw new Error("SnapTrade OAuth discovery response is incomplete");
+  if (!value.authorization_endpoint || !value.token_endpoint || !value.revocation_endpoint || !value.registration_endpoint) throw new Error("SnapTrade MCP OAuth discovery response is incomplete");
   metadataCache = { value, expiresAt: Date.now() + 60 * 60 * 1000 };
   return value;
 };
 
-export const oauthClient = (): { clientId: string; clientSecret: string } => ({
-  clientId: requiredEnv("SNAPTRADE_OAUTH_CLIENT_ID"),
-  clientSecret: requiredEnv("SNAPTRADE_OAUTH_CLIENT_SECRET"),
-});
-
 export const appOrigin = (): string => new URL(requiredEnv("APP_ORIGIN")).origin;
 export const callbackUri = (): string => `${appOrigin()}/api/auth/callback`;
 
-const parseTokens = (payload: Record<string, unknown>): OAuthTokens => {
-  if (typeof payload.access_token !== "string" || typeof payload.refresh_token !== "string") throw new Error("SnapTrade token response is incomplete");
+export const registerOAuthClient = async (): Promise<string> => {
+  const metadata = await oauthMetadata();
+  const response = await fetch(metadata.registration_endpoint, {
+    method: "POST",
+    headers: { accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "Wheely Nilly",
+      client_uri: appOrigin(),
+      redirect_uris: [callbackUri()],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "none",
+    }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`SnapTrade MCP client registration failed with ${response.status}`);
+  const payload = await response.json() as Record<string, unknown>;
+  if (typeof payload.client_id !== "string" || !payload.client_id) throw new Error("SnapTrade MCP client registration response is incomplete");
+  if (payload.token_endpoint_auth_method && payload.token_endpoint_auth_method !== "none") throw new Error("SnapTrade MCP did not register a public OAuth client");
+  return payload.client_id;
+};
+
+const parseTokens = (payload: Record<string, unknown>, clientId: string, previousRefreshToken?: string): OAuthTokens => {
+  const refreshToken = typeof payload.refresh_token === "string" ? payload.refresh_token : previousRefreshToken;
+  if (typeof payload.access_token !== "string" || !refreshToken) throw new Error("SnapTrade token response is incomplete");
   const expiresIn = Number(payload.expires_in);
   return {
     accessToken: payload.access_token,
-    refreshToken: payload.refresh_token,
+    refreshToken,
     expiresAt: Date.now() + (Number.isFinite(expiresIn) ? expiresIn : 36_000) * 1000,
     scope: typeof payload.scope === "string" ? payload.scope : "read",
     sub: payload.sub ?? null,
+    clientId,
   };
 };
 
-const tokenRequest = async (body: URLSearchParams): Promise<OAuthTokens> => {
+const tokenRequest = async (body: URLSearchParams, clientId: string, previousRefreshToken?: string): Promise<OAuthTokens> => {
   const metadata = await oauthMetadata();
-  const { clientId, clientSecret } = oauthClient();
+  body.set("client_id", clientId);
+  body.set("resource", MCP_RESOURCE);
   const response = await fetch(metadata.token_endpoint, {
     method: "POST",
     headers: {
       accept: "application/json",
-      authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
       "content-type": "application/x-www-form-urlencoded",
     },
     body,
     signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) throw new Error(`SnapTrade token request failed with ${response.status}`);
-  return parseTokens(await response.json() as Record<string, unknown>);
+  return parseTokens(await response.json() as Record<string, unknown>, clientId, previousRefreshToken);
 };
 
-export const exchangeCode = (code: string, codeVerifier: string): Promise<OAuthTokens> => tokenRequest(new URLSearchParams({
+export const exchangeCode = (code: string, codeVerifier: string, clientId: string): Promise<OAuthTokens> => tokenRequest(new URLSearchParams({
   grant_type: "authorization_code",
   code,
   code_verifier: codeVerifier,
   redirect_uri: callbackUri(),
-}));
+}), clientId);
 
-export const refreshTokens = (refreshToken: string): Promise<OAuthTokens> => tokenRequest(new URLSearchParams({
+export const refreshTokens = (session: OAuthTokens): Promise<OAuthTokens> => tokenRequest(new URLSearchParams({
   grant_type: "refresh_token",
-  refresh_token: refreshToken,
-}));
+  refresh_token: session.refreshToken,
+}), session.clientId, session.refreshToken);
 
-export const revokeTokens = async (refreshToken: string): Promise<void> => {
+export const revokeTokens = async (session: OAuthTokens): Promise<void> => {
   const metadata = await oauthMetadata();
-  const { clientId, clientSecret } = oauthClient();
   await fetch(metadata.revocation_endpoint, {
     method: "POST",
     headers: {
       accept: "application/json",
-      authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
       "content-type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams({ token: refreshToken, token_type_hint: "refresh_token" }),
+    body: new URLSearchParams({ token: session.refreshToken, token_type_hint: "refresh_token", client_id: session.clientId }),
     signal: AbortSignal.timeout(8_000),
   });
 };
@@ -196,14 +236,14 @@ export const withAccessToken = async <T>(
   let session = readSession(request);
   if (!session) throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
   if (session.expiresAt - Date.now() < 5 * 60 * 1000) {
-    session = await refreshTokens(session.refreshToken);
+    session = await refreshTokens(session);
     setSession(response, session);
   }
   try {
     return await operation(session.accessToken);
   } catch (error) {
     if ((error as { status?: number }).status !== 401) throw error;
-    const refreshed = await refreshTokens(session.refreshToken);
+    const refreshed = await refreshTokens(session);
     setSession(response, refreshed);
     return operation(refreshed.accessToken);
   }

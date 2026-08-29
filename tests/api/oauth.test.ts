@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { before, describe, it } from "node:test";
-import { seal, unseal, validReturnTo } from "../../api/_lib/oauth";
+import { readSession, seal, unseal, validReturnTo } from "../../api/_lib/oauth";
 
 before(() => {
   process.env.SESSION_SEAL_KEY = crypto.randomBytes(32).toString("base64url");
@@ -21,5 +21,10 @@ describe("stateless OAuth session sealing", () => {
     assert.equal(validReturnTo("/app?connected=1"), "/app?connected=1");
     assert.equal(validReturnTo("https://example.com"), "/app");
     assert.equal(validReturnTo("//example.com"), "/app");
+  });
+
+  it("rejects sessions created by the retired static OAuth flow", () => {
+    const oldSession = seal({ accessToken: "access", refreshToken: "refresh", expiresAt: Date.now() + 60_000, scope: "read" });
+    assert.equal(readSession({ headers: { cookie: `wheely_session=${encodeURIComponent(oldSession)}` }, query: {} }), null);
   });
 });

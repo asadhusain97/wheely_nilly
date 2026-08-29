@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "./_lib/vercel.js";
 import { requireSameOrigin, withAccessToken } from "./_lib/oauth.js";
+import { SnapTradeMcpClient } from "./_lib/mcp.js";
 import {
   normalizeAccount,
   normalizeBalances,
@@ -7,7 +8,6 @@ import {
   normalizeEvent,
   normalizePosition,
   payloadItems,
-  snapTradeRequest,
 } from "./_lib/snaptrade.js";
 
 interface Failure {
@@ -29,53 +29,67 @@ const safeFailure = (accountId: string | null, endpoint: string, error: unknown)
 const pathName = (request: VercelRequest): string => String(request.query.path ?? request.url?.split("/api/brokerage/")[1]?.split("?")[0] ?? "snapshot");
 
 async function fetchSnapshot(accessToken: string) {
+  const client = new SnapTradeMcpClient(accessToken);
   const errors: Failure[] = [];
-  const [accountsResult, connectionsResult] = await Promise.allSettled([
-    snapTradeRequest<unknown>(accessToken, "/accounts"),
-    snapTradeRequest<unknown>(accessToken, "/authorizations"),
-  ]);
-  if (accountsResult.status === "rejected") throw accountsResult.reason;
-  if (connectionsResult.status === "rejected") errors.push(safeFailure(null, "connections", connectionsResult.reason));
-  const rawAccounts = payloadItems(accountsResult.value);
-  const accounts = rawAccounts.map(normalizeAccount).filter((account) => account.id);
-  const positions: ReturnType<typeof normalizePosition>[] = [];
-  const balances: ReturnType<typeof normalizeBalances> = [];
-  const recentOrders: ReturnType<typeof normalizeEvent>[] = [];
-  await Promise.all(accounts.map(async (account) => {
-    const results = await Promise.allSettled([
-      snapTradeRequest<unknown>(accessToken, `/accounts/${encodeURIComponent(account.id)}/positions/all`),
-      snapTradeRequest<unknown>(accessToken, `/accounts/${encodeURIComponent(account.id)}/balances`),
-      snapTradeRequest<unknown>(accessToken, `/accounts/${encodeURIComponent(account.id)}/recentOrders`),
-    ]);
-    const endpoints = ["positions", "balances", "recentOrders"];
-    results.forEach((result, index) => {
-      if (result.status === "rejected") errors.push(safeFailure(account.id, endpoints[index], result.reason));
+  try {
+    const rawConnections = payloadItems(await client.callTool("Connections_listBrokerageAuthorizations"));
+    const connections = rawConnections.map(normalizeConnection).filter((connection) => connection.id);
+    const accountResults = await Promise.allSettled(connections.map((connection) => client.callTool(
+      "Connections_listBrokerageAuthorizationAccounts",
+      { authorizationId: connection.id },
+    )));
+    const rawAccounts: unknown[] = [];
+    accountResults.forEach((result, index) => {
+      if (result.status === "fulfilled") rawAccounts.push(...payloadItems(result.value));
+      else errors.push(safeFailure(null, `accounts:${connections[index].id}`, result.reason));
     });
-    if (results[0].status === "fulfilled") positions.push(...payloadItems(results[0].value).map((value) => normalizePosition(account.id, value)));
-    if (results[1].status === "fulfilled") balances.push(...normalizeBalances(account.id, results[1].value));
-    if (results[2].status === "fulfilled") recentOrders.push(...payloadItems(results[2].value).map((value) => normalizeEvent(account.id, value, "order")));
-  }));
-  return {
-    schemaVersion: 1 as const,
-    fetchedAt: new Date().toISOString(),
-    accounts,
-    positions,
-    balances,
-    recentOrders,
-    connections: connectionsResult.status === "fulfilled" ? payloadItems(connectionsResult.value).map(normalizeConnection) : [],
-    errors,
-  };
+    const accounts = [...new Map(rawAccounts.map(normalizeAccount).filter((account) => account.id).map((account) => [account.id, account])).values()];
+    const positions: ReturnType<typeof normalizePosition>[] = [];
+    const balances: ReturnType<typeof normalizeBalances> = [];
+    const recentOrders: ReturnType<typeof normalizeEvent>[] = [];
+    await Promise.all(accounts.map(async (account) => {
+      const results = await Promise.allSettled([
+        client.callTool("AccountInformation_getAllAccountPositions", { accountId: account.id }),
+        client.callTool("AccountInformation_getUserAccountBalance", { accountId: account.id }),
+        client.callTool("AccountInformation_getUserAccountRecentOrdersV2", { accountId: account.id }),
+      ]);
+      const endpoints = ["positions", "balances", "recentOrders"];
+      results.forEach((result, index) => {
+        if (result.status === "rejected") errors.push(safeFailure(account.id, endpoints[index], result.reason));
+      });
+      if (results[0].status === "fulfilled") positions.push(...payloadItems(results[0].value).map((value) => normalizePosition(account.id, value)));
+      if (results[1].status === "fulfilled") balances.push(...normalizeBalances(account.id, results[1].value));
+      if (results[2].status === "fulfilled") recentOrders.push(...payloadItems(results[2].value, "orders").map((value) => normalizeEvent(account.id, value, "order")));
+    }));
+    return {
+      schemaVersion: 1 as const,
+      fetchedAt: new Date().toISOString(),
+      accounts,
+      positions,
+      balances,
+      recentOrders,
+      connections,
+      errors,
+    };
+  } finally {
+    await client.close();
+  }
 }
 
 async function fetchHistoryPage(accessToken: string, accountId: string, offset: number) {
+  const client = new SnapTradeMcpClient(accessToken);
   const limit = 1000;
-  const payload = await snapTradeRequest<any>(accessToken, `/accounts/${encodeURIComponent(accountId)}/activities?offset=${offset}&limit=${limit}`);
-  const records = payloadItems(payload);
-  const total = Number(payload?.pagination?.total ?? offset + records.length);
-  return {
-    events: records.map((value) => normalizeEvent(accountId, value, "activity")),
-    nextCursor: records.length && offset + records.length < total ? `${accountId}:${offset + records.length}` : null,
-  };
+  try {
+    const payload = await client.callTool("AccountInformation_getAccountActivities", { accountId, offset, limit }) as any;
+    const records = payloadItems(payload, "activities");
+    const total = Number(payload?.pagination?.total ?? offset + records.length);
+    return {
+      events: records.map((value) => normalizeEvent(accountId, value, "activity")),
+      nextCursor: records.length && offset + records.length < total ? `${accountId}:${offset + records.length}` : null,
+    };
+  } finally {
+    await client.close();
+  }
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {

@@ -13,7 +13,7 @@ wheelynilly.com
 │   ├── cached application shell
 │   └── client refresh coordinator
 └── /api
-    ├── TypeScript SnapTrade OAuth and brokerage bridge
+    ├── TypeScript SnapTrade Personal MCP OAuth and brokerage bridge
     └── Python Yahoo Finance market bridge
 ```
 
@@ -25,10 +25,10 @@ The previous Raspberry Pi server remains in `backend/` as a migration reference 
 
 - Node.js 22 or newer
 - Python 3.12 or newer
-- A SnapTrade OAuth application with the `read` scope
+- A free SnapTrade Personal account for brokerage testing
 - A Vercel account for deployment
 
-SnapTrade OAuth applications require a confidential client and PKCE. SnapTrade may need to enable OAuth for an eligible Commercial Pay-As-You-Go application. Confirm this in the SnapTrade dashboard or with SnapTrade support before relying on the public connection flow.
+Wheely Nilly uses SnapTrade's read-only Personal MCP connector. It dynamically registers a public OAuth client and uses authorization code flow with PKCE. You do not need a Commercial SnapTrade account, API key, OAuth client ID, or OAuth client secret.
 
 ## Local development
 
@@ -50,7 +50,7 @@ Generate a session seal key:
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Set `APP_ORIGIN=http://127.0.0.1:3000` and register this local callback with SnapTrade:
+Set `APP_ORIGIN=http://127.0.0.1:3000`. SnapTrade registers the exact callback dynamically when the connection starts:
 
 ```text
 http://127.0.0.1:3000/api/auth/callback
@@ -91,8 +91,6 @@ In **Project Settings > Environment Variables**, add these values for Production
 | Name | Value |
 | --- | --- |
 | `APP_ORIGIN` | `https://wheelynilly.com` |
-| `SNAPTRADE_OAUTH_CLIENT_ID` | OAuth client ID from SnapTrade |
-| `SNAPTRADE_OAUTH_CLIENT_SECRET` | OAuth client secret from SnapTrade |
 | `SESSION_SEAL_KEY` | One generated 32-byte base64url key |
 | `MARKET_TIMEOUT_SECONDS` | `15` |
 
@@ -100,18 +98,17 @@ Keep the same `SESSION_SEAL_KEY` across production deployments. Changing it sign
 
 Do not expose these as `VITE_` variables. Vite variables enter the browser bundle.
 
-Vercel may also detect variables referenced by the retained Raspberry Pi backend. Do not configure `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY`, `SNAPTRADE_ACCOUNT_IDS`, `OPPORTUNITY_SCAN_CRON`, `OPPORTUNITY_SCAN_TIMEZONE`, or `DASHBOARD_PUBLIC_URL` for the Vercel application. They are not used by the new deployment.
+Vercel may also detect variables referenced by the retained Raspberry Pi backend. Do not configure `SNAPTRADE_OAUTH_CLIENT_ID`, `SNAPTRADE_OAUTH_CLIENT_SECRET`, `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY`, `SNAPTRADE_ACCOUNT_IDS`, `OPPORTUNITY_SCAN_CRON`, `OPPORTUNITY_SCAN_TIMEZONE`, or `DASHBOARD_PUBLIC_URL` for the Vercel application. They are not used by the new deployment.
 
 ### 3. Configure SnapTrade
 
-In the SnapTrade OAuth application:
+No developer or Commercial SnapTrade configuration is required. Each user:
 
-- Add `https://wheelynilly.com/api/auth/callback` as an exact redirect URI.
-- Enable only the `read` scope.
-- Keep the app confidential.
-- Do not enable trading or webhook scopes for this release.
+- Creates or signs into a free SnapTrade Personal account.
+- Connects Robinhood or another supported brokerage in SnapTrade.
+- Approves Wheely Nilly's read-only access.
 
-Preview deployments have changing domains. Use a separate fixed preview domain and OAuth client if preview OAuth testing is required. Do not add wildcard callback URLs.
+SnapTrade receives the exact callback URL during dynamic client registration. Preview and local deployments therefore use their own `APP_ORIGIN` without wildcard callbacks.
 
 ### 4. Attach the domain
 
@@ -152,7 +149,8 @@ Settings contains an **Erase saved financial data** action. Disconnecting SnapTr
 ## Security and privacy
 
 - SnapTrade tokens live in encrypted, authenticated, HttpOnly cookies on the user's device.
-- OAuth uses authorization code flow, PKCE S256, state validation, rotating refresh tokens, and exact callback URLs.
+- OAuth uses dynamic public-client registration, PKCE S256, state validation, rotating refresh tokens, the `read` scope, and exact callback URLs.
+- Wheely Nilly never requests or receives a user's Personal `consumerKey`, SnapTrade user secret, or brokerage credentials.
 - API responses use `private, no-store`.
 - Server functions do not write portfolio data to disk or a database.
 - Production code does not log credentials or financial payloads.

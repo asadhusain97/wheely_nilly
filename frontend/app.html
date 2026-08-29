@@ -42,6 +42,12 @@
           <a href="/api/auth/start?returnTo=/app">Connect SnapTrade</a>
         </section>
 
+        <section class="connection-card" data-brokerage-alert hidden aria-labelledby="brokerage-alert-title">
+          <div><p data-brokerage-alert-eyebrow>Brokerage alignment</p><h2 id="brokerage-alert-title" data-brokerage-alert-title>Reading your selected account…</h2><small data-brokerage-alert-copy>Your saved view will stay available while SnapTrade responds.</small></div>
+          <button type="button" data-retry-alignment hidden>Try again</button>
+        </section>
+
+        <div data-brokerage-content hidden>
         <section class="performance-hero" aria-labelledby="booked-profit-label">
           <div class="profit-primary">
             <span class="hero-label" id="booked-profit-label">Booked profit</span>
@@ -115,6 +121,7 @@
           </div>
           <div class="trade-list" id="open-trade-list" aria-live="polite"></div>
         </section>
+        </div>
 
       </section>
 
@@ -942,16 +949,13 @@
         <div data-onboarding-step="welcome">
           <p class="onboarding-eyebrow">Connection ready</p>
           <h2 id="onboarding-title">Welcome to your wheel workspace.</h2>
-          <p>Wheely Nilly is importing your positions and available activity history. The copy stays in this browser.</p>
+          <p>SnapTrade is connected. Choose which brokerage account Wheely Nilly should read on this device.</p>
         </div>
-        <div data-onboarding-step="preference" hidden>
-          <p class="onboarding-eyebrow">A sensible starting point</p>
-          <h2>How do you usually run the wheel?</h2>
-          <div class="onboarding-choices">
-            <label><input type="radio" name="wheel-style" value="balanced" checked><span><strong>Balanced</strong><small>Mix premium with room for the stock to move.</small></span></label>
-            <label><input type="radio" name="wheel-style" value="conservative"><span><strong>Conservative</strong><small>Favor lower delta and more downside room.</small></span></label>
-            <label><input type="radio" name="wheel-style" value="income"><span><strong>Income focused</strong><small>Accept closer strikes for stronger premium.</small></span></label>
-          </div>
+        <div data-onboarding-step="accounts" hidden>
+          <p class="onboarding-eyebrow">Brokerage account</p>
+          <h2>Which account should Wheely Nilly read?</h2>
+          <p>Only the account you choose will feed Portfolio, Open Contracts, and Radar on this device.</p>
+          <div class="onboarding-choices" data-onboarding-accounts aria-live="polite"><p>Checking SnapTrade for accounts…</p></div>
         </div>
         <div data-onboarding-step="tickers" hidden>
           <p class="onboarding-eyebrow">Detected portfolio</p>

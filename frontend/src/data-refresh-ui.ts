@@ -5,9 +5,15 @@ import { buildLocalCloseResults, buildLocalTargets, scanAllLocalTargets } from "
 
 const json = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { ...init, headers: { accept: "application/json", ...(init?.headers ?? {}) } });
-  if (!response.ok) throw Object.assign(new Error(`Request failed with ${response.status}`), { status: response.status });
   if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
+  if (!response.ok) {
+    throw Object.assign(new Error(payload?.error?.message ?? `Request failed with ${response.status}`), {
+      status: response.status,
+      code: payload?.error?.code,
+    });
+  }
+  return payload as T;
 };
 
 const relativeTime = (iso: string | null): string => {
@@ -33,6 +39,7 @@ const mergeEventLedger = async (events: BrokerageEvent[]): Promise<void> => {
 
 export async function initializeDataRefresh(): Promise<void> {
   let currentSnapshot = (await localRepository.get<BrokerageSnapshot>("portfolioSnapshot", "current").catch(() => null))?.value ?? null;
+  let selectedAccountIds = (await localRepository.get<string[]>("appSettings", "selectedAccountIds").catch(() => null))?.value ?? [];
   const storedPolicy = (await localRepository.get<RefreshPolicy>("appSettings", "refreshPolicy").catch(() => null))?.value;
   let policy = storedPolicy ?? DEFAULT_REFRESH_POLICY;
   let marketUpdatedAt = (await localRepository.get<string>("refreshMetadata", "marketUpdatedAt").catch(() => null))?.value ?? null;
@@ -42,7 +49,44 @@ export async function initializeDataRefresh(): Promise<void> {
   const brokerageStatus = document.querySelector<HTMLElement>("[data-brokerage-freshness]");
   const brokerageLastSync = document.querySelector<HTMLElement>("[data-brokerage-last-sync]");
   const connectionCard = document.querySelector<HTMLElement>("[data-connection-card]");
+  const brokerageAlert = document.querySelector<HTMLElement>("[data-brokerage-alert]");
+  const brokerageAlertEyebrow = document.querySelector<HTMLElement>("[data-brokerage-alert-eyebrow]");
+  const brokerageAlertTitle = document.querySelector<HTMLElement>("[data-brokerage-alert-title]");
+  const brokerageAlertCopy = document.querySelector<HTMLElement>("[data-brokerage-alert-copy]");
+  const retryAlignment = document.querySelector<HTMLButtonElement>("[data-retry-alignment]");
+  const brokerageContent = document.querySelector<HTMLElement>("[data-brokerage-content]");
   const onlineState = document.querySelector<HTMLElement>("[data-online-state]");
+
+  const showBrokerageContent = (visible: boolean) => {
+    if (brokerageContent) brokerageContent.hidden = !visible;
+  };
+  const hideBrokerageAlert = () => {
+    if (brokerageAlert) brokerageAlert.hidden = true;
+    if (retryAlignment) retryAlignment.hidden = true;
+  };
+  const showBrokerageAlignment = (state: "reading" | "error", error?: unknown) => {
+    if (!brokerageAlert) return;
+    brokerageAlert.hidden = false;
+    if (brokerageAlertEyebrow) brokerageAlertEyebrow.textContent = "Brokerage alignment";
+    if (state === "reading") {
+      if (brokerageAlertTitle) brokerageAlertTitle.textContent = "Reading your selected account…";
+      if (brokerageAlertCopy) brokerageAlertCopy.textContent = currentSnapshot
+        ? "Your saved view remains available while SnapTrade responds."
+        : "This can take a moment. Portfolio data will appear as soon as SnapTrade responds.";
+      if (retryAlignment) retryAlignment.hidden = true;
+      return;
+    }
+    const requestError = error as { status?: number; code?: string; message?: string };
+    if (brokerageAlertTitle) brokerageAlertTitle.textContent = "We couldn’t align this account.";
+    if (brokerageAlertCopy) brokerageAlertCopy.textContent = requestError.status === 401
+      ? "SnapTrade access expired. Reconnect to continue."
+      : requestError.status === 409
+        ? "Choose an available brokerage account to continue."
+        : "SnapTrade is connected, but Wheely Nilly could not read the selected account. Your saved view is unchanged.";
+    if (retryAlignment) retryAlignment.hidden = requestError.status === 401;
+  };
+
+  showBrokerageContent(Boolean(currentSnapshot));
 
   const renderFreshness = () => {
     if (marketStatus) marketStatus.textContent = marketUpdatedAt ? relativeTime(marketUpdatedAt) : navigator.onLine ? "Waiting" : "Saved view";
@@ -104,10 +148,26 @@ export async function initializeDataRefresh(): Promise<void> {
       await localRepository.put("portfolioSnapshot", "current", snapshot);
       await mergeEventLedger(snapshot.recentOrders ?? []);
       void importHistory(snapshot).catch(() => undefined);
+      hideBrokerageAlert();
+      showBrokerageContent(true);
       renderFreshness();
       document.dispatchEvent(new CustomEvent("wheely-brokerage-updated", { detail: snapshot }));
     },
-    refreshBrokerage: (signal) => json<BrokerageSnapshot>("/api/brokerage/snapshot", { signal }),
+    refreshBrokerage: (signal) => {
+      if (!selectedAccountIds.length) {
+        return Promise.reject(Object.assign(new Error("Choose a brokerage account first"), {
+          status: 409,
+          code: "ACCOUNT_SELECTION_REQUIRED",
+        }));
+      }
+      showBrokerageAlignment("reading");
+      return json<BrokerageSnapshot>("/api/brokerage/refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ accountIds: selectedAccountIds }),
+        signal,
+      });
+    },
     refreshMarket: async (signal) => {
       const targets = await buildLocalTargets().catch(() => ({ targets: [] as Array<{ symbol: string }> }));
       const symbols = [...new Set([...portfolioSymbols(currentSnapshot), ...targets.targets.map((target) => target.symbol)])];
@@ -120,6 +180,7 @@ export async function initializeDataRefresh(): Promise<void> {
     onError: (slice, error) => {
       const node = slice === "market" ? marketStatus : brokerageStatus;
       if (node) node.textContent = navigator.onLine ? "Update failed · saved data" : "Offline · saved data";
+      if (slice === "brokerage") showBrokerageAlignment("error", error);
       document.dispatchEvent(new CustomEvent("wheely-refresh-error", { detail: { slice, error } }));
     },
   }, policy);
@@ -129,8 +190,31 @@ export async function initializeDataRefresh(): Promise<void> {
 
   const session = await json<{ connected: boolean }>("/api/auth/session").catch(() => ({ connected: false }));
   if (connectionCard) connectionCard.hidden = session.connected || Boolean(currentSnapshot);
-  if (session.connected) coordinator.start();
-  else renderFreshness();
+  if (session.connected && selectedAccountIds.length) {
+    if (!currentSnapshot) showBrokerageAlignment("reading");
+    coordinator.start();
+  } else {
+    renderFreshness();
+  }
+
+  document.addEventListener("wheely-account-selection-changed", (event) => {
+    const accountIds = (event as CustomEvent<{ accountIds?: string[] }>).detail?.accountIds ?? [];
+    selectedAccountIds = accountIds.filter((accountId) => typeof accountId === "string" && accountId.length > 0);
+    if (!selectedAccountIds.length) return;
+    showBrokerageAlignment("reading");
+    coordinator.start();
+  });
+  retryAlignment?.addEventListener("click", async () => {
+    retryAlignment.disabled = true;
+    showBrokerageAlignment("reading");
+    try {
+      await coordinator.refreshBrokerage();
+    } catch {
+      // The coordinator presents the safe alignment error.
+    } finally {
+      retryAlignment.disabled = false;
+    }
+  });
 
   const marketSelect = document.querySelector<HTMLSelectElement>("[data-market-interval]");
   const brokerageSelect = document.querySelector<HTMLSelectElement>("[data-brokerage-interval]");
@@ -174,7 +258,9 @@ export async function initializeDataRefresh(): Promise<void> {
   });
   window.addEventListener("online", () => {
     renderFreshness();
-    void json<{ connected: boolean }>("/api/auth/session").then((current) => { if (current.connected) coordinator.start(); }).catch(() => undefined);
+    void json<{ connected: boolean }>("/api/auth/session")
+      .then((current) => { if (current.connected && selectedAccountIds.length) coordinator.start(); })
+      .catch(() => undefined);
   });
   window.addEventListener("offline", renderFreshness);
   window.setInterval(renderFreshness, 15_000);

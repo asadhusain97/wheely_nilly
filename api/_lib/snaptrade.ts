@@ -5,8 +5,15 @@ export const payloadItems = (payload: unknown, key?: string): unknown[] => {
   if (!payload || typeof payload !== "object") return [];
   const record = payload as Record<string, unknown>;
   if (key && Array.isArray(record[key])) return record[key] as unknown[];
-  if (Array.isArray(record.data)) return record.data;
-  if (Array.isArray(record.results)) return record.results;
+  for (const candidate of ["data", "results", "result", "authorizations", "accounts", "positions", "balances", "orders", "activities"]) {
+    if (Array.isArray(record[candidate])) return record[candidate] as unknown[];
+  }
+  for (const candidate of ["data", "result"]) {
+    if (record[candidate] && typeof record[candidate] === "object") {
+      const nested = payloadItems(record[candidate], key);
+      if (nested.length) return nested;
+    }
+  }
   return [];
 };
 

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { extractToolPayload, SnapTradeMcpClient } from "../../api/_lib/mcp";
+import { payloadItems } from "../../api/_lib/snaptrade";
 
 const originalFetch = globalThis.fetch;
 
@@ -9,6 +10,13 @@ afterEach(() => {
 });
 
 describe("SnapTrade MCP client", () => {
+  it("unwraps the response containers used by MCP and SnapTrade", () => {
+    const accounts = [{ id: "account-1" }];
+    assert.deepEqual(payloadItems({ result: accounts }), accounts);
+    assert.deepEqual(payloadItems({ result: { data: { accounts } } }), accounts);
+    assert.deepEqual(payloadItems({ data: { results: accounts } }), accounts);
+  });
+
   it("prefers structured tool results", () => {
     assert.deepEqual(extractToolPayload({ structuredContent: { results: [{ id: "account-1" }] } }), { results: [{ id: "account-1" }] });
   });

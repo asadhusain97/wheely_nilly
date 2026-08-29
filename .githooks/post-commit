@@ -3,6 +3,6 @@ set -eu
 
 changed_files=$(git diff-tree --no-commit-id --name-only -r HEAD)
 
-if printf '%s\n' "$changed_files" | grep -Eq '^(backend|frontend|sidecar|docker|deploy)/|^(compose\.yaml|\.env\.example)$'; then
-  printf '\nWheely Nilly application code changed. Deploy this commit to piefive and verify https://piefive.tail4dcc39.ts.net:8443/\n\n'
+if printf '%s\n' "$changed_files" | grep -Eq '^(api|frontend)/|^(vercel\.json|package\.json|package-lock\.json)$'; then
+  printf '\nWheely Nilly application code changed. Push main to deploy the Vercel project.\n\n'
 fi

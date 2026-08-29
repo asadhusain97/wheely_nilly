@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { historyImportIsDue, historyImportKey } from "../src/data-refresh-ui";
+import { HISTORY_IMPORT_VERSION, historyImportIsDue, historyImportKey } from "../src/data-refresh-ui";
 
 describe("account history import metadata", () => {
   it("uses a separate marker for each brokerage account", () => {
@@ -11,7 +11,8 @@ describe("account history import metadata", () => {
   it("migrates stale boolean markers and refreshes completed imports daily", () => {
     const now = Date.parse("2026-08-29T18:00:00.000Z");
     assert.equal(historyImportIsDue(true, now), true);
-    assert.equal(historyImportIsDue({ completedAt: "2026-08-29T17:00:00.000Z" }, now), false);
-    assert.equal(historyImportIsDue({ completedAt: "2026-08-28T17:59:59.000Z" }, now), true);
+    assert.equal(historyImportIsDue({ completedAt: "2026-08-29T17:00:00.000Z" }, now), true);
+    assert.equal(historyImportIsDue({ version: HISTORY_IMPORT_VERSION, completedAt: "2026-08-29T17:00:00.000Z" }, now), false);
+    assert.equal(historyImportIsDue({ version: HISTORY_IMPORT_VERSION, completedAt: "2026-08-28T17:59:59.000Z" }, now), true);
   });
 });

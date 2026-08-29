@@ -83,7 +83,11 @@ describe('wheel performance dashboard', () => {
     assert.equal(ticker.bookedProfit, '160.00');
     assert.equal(ticker.returnRate, 0.017778);
     assert.equal(ticker.annualizedReturnRate, 0.449231);
-    assert.equal(ticker.capitalInvolved, '13000.00');
+    assert.equal(ticker.capitalInvolved, '9000.00');
+    assert.deepEqual(
+      { total: ticker.closedContracts, csps: ticker.closedCspContracts, ccs: ticker.closedCcContracts },
+      { total: 2, csps: 1, ccs: 1 },
+    );
     assert.equal(ticker.stockPrice, '43.21');
     assert.deepEqual(
       { total: ticker.openContracts, csps: ticker.openCspContracts, ccs: ticker.openCcContracts },

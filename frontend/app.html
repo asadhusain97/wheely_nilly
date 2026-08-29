@@ -127,8 +127,8 @@
 
       <section class="app-screen" id="cycles" data-screen="cycles" aria-labelledby="cycles-title" hidden>
         <header class="screen-header trades-header">
-          <p>One ticker at a time</p>
-          <h1 id="cycles-title">Wheel performance</h1><small>Tap a ticker to see its open and past contracts.</small>
+          <p>Closed contracts only</p>
+          <h1 id="cycles-title">Wheel performance</h1><small>Tap a ticker to see its completed contracts.</small>
         </header>
         <figure class="monthly-pnl-card" aria-labelledby="monthly-pnl-title">
           <figcaption class="monthly-pnl-heading">
@@ -166,11 +166,11 @@
                 <circle cx="7" cy="7" r="4.5"></circle>
                 <path d="m10.5 10.5 3 3"></path>
               </svg></span><input id="ticker-filter" type="search" placeholder="Ticker" autocomplete="off"></label>
-          <label class="ticker-activity"><span class="sr-only">Filter trade activity</span><select
+          <label class="ticker-activity"><span class="sr-only">Filter closed contract type</span><select
               id="ticker-status-filter">
               <option value="">All</option>
-              <option value="open">Open</option>
-              <option value="history">Past</option>
+              <option value="csp">CSP</option>
+              <option value="cc">CC</option>
             </select></label>
           <div class="ticker-order"><button class="ticker-sort-direction" id="ticker-sort-direction" type="button"
               aria-label="Sort descending. Tap to reverse." aria-pressed="false"><span id="ticker-sort-arrow"
@@ -969,9 +969,9 @@
           <h2>Add Wheely Nilly to your home screen.</h2>
           <p data-onboarding-install-copy>Use your browser's install controls. Your saved snapshot will then open in its own app window.</p>
           <ol class="onboarding-install-steps" data-onboarding-install-steps>
-            <li>Open the browser menu or Share menu.</li>
-            <li>Choose <strong>Install</strong> or <strong>Add to Home Screen</strong>.</li>
-            <li>Confirm, then open Wheely Nilly from your home screen or app list.</li>
+            <li><span>Open the browser menu or Share menu.</span></li>
+            <li><span>Choose <strong>Install</strong> or <strong>Add to Home Screen</strong>.</span></li>
+            <li><span>Confirm, then open Wheely Nilly from your home screen or app list.</span></li>
           </ol>
         </div>
         <footer><button type="button" data-onboarding-back hidden>Back</button><button type="button" data-onboarding-next>Continue</button></footer>

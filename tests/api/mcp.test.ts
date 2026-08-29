@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { extractToolPayload, SnapTradeMcpClient } from "../../api/_lib/mcp";
-import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems } from "../../api/_lib/snaptrade";
+import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems, payloadPagination } from "../../api/_lib/snaptrade";
 
 const originalFetch = globalThis.fetch;
 
@@ -15,6 +15,13 @@ describe("SnapTrade MCP client", () => {
     assert.deepEqual(payloadItems({ result: accounts }), accounts);
     assert.deepEqual(payloadItems({ result: { data: { accounts } } }), accounts);
     assert.deepEqual(payloadItems({ data: { results: accounts } }), accounts);
+  });
+
+  it("finds pagination beside deeply nested activity data", () => {
+    const pagination = { offset: 0, limit: 1000, total: 1254 };
+    const payload = { result: { data: { data: [{ id: "activity-1" }], pagination } } };
+    assert.deepEqual(payloadItems(payload, "activities"), [{ id: "activity-1" }]);
+    assert.deepEqual(payloadPagination(payload), pagination);
   });
 
   it("keeps masked account references so same-name accounts are distinguishable", () => {

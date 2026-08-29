@@ -127,7 +127,7 @@ function performanceRates(trades) {
   };
 }
 
-function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptions, equityBySymbol, stockPriceBySymbol }) {
+function buildTickerPerformance({ closedTrades, openTrades, holdings, stockPriceBySymbol }) {
   const symbols = new Set([
     ...closedTrades.map((trade) => trade.option.underlying),
     ...openTrades.map((trade) => trade.symbol),
@@ -137,18 +137,13 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptio
   return [...symbols].map((symbol) => {
     const tickerClosedTrades = closedTrades.filter((trade) => trade.option.underlying === symbol);
     const tickerOpenTrades = openTrades.filter((trade) => trade.symbol === symbol);
-    const tickerShortOptions = shortOptions.filter((position) => position.option.underlying === symbol);
-    const holding = equityBySymbol.get(symbol);
-    const completeShareLots = Math.floor(Math.max(0, Number(holding?.quantity ?? 0)) / 100);
-    const shareCapitalMinor = Number.isSafeInteger(holding?.brokerCostBasisMinor)
-      ? holding.brokerCostBasisMinor * completeShareLots * 100
-      : 0;
-    const cspCapitalParts = tickerShortOptions
-      .filter((position) => position.option.optionType === 'put')
-      .map((position) => collateralFor(position.option, Math.abs(position.quantity), equityBySymbol));
-    const cspCapitalMinor = sumMinor(cspCapitalParts);
     const rates = performanceRates(tickerClosedTrades);
     const bookedProfitMinor = sumMinor(tickerClosedTrades.map((trade) => trade.profitMinor));
+    const closedCollateralMinor = sumMinor(tickerClosedTrades.map((trade) => trade.collateralMinor));
+    const closedCspContracts = tickerClosedTrades.filter((trade) => trade.option.optionType === 'put')
+      .reduce((total, trade) => total + trade.quantity, 0);
+    const closedCcContracts = tickerClosedTrades.filter((trade) => trade.option.optionType === 'call')
+      .reduce((total, trade) => total + trade.quantity, 0);
     const openCspContracts = tickerOpenTrades.filter((trade) => trade.type === 'csp')
       .reduce((total, trade) => total + trade.contracts, 0);
     const openCcContracts = tickerOpenTrades.filter((trade) => trade.type === 'cc')
@@ -184,7 +179,10 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptio
       bookedProfit: fromMinor(bookedProfitMinor),
       returnRate: rates.returnRate,
       annualizedReturnRate: rates.annualizedReturnRate,
-      capitalInvolved: fromMinor(cspCapitalMinor + shareCapitalMinor),
+      capitalInvolved: fromMinor(closedCollateralMinor),
+      closedContracts: closedCspContracts + closedCcContracts,
+      closedCspContracts,
+      closedCcContracts,
       openContracts: openCspContracts + openCcContracts,
       openCspContracts,
       openCcContracts,
@@ -193,8 +191,7 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, shortOptio
       quality: {
         returnTradesIncluded: rates.qualified.length,
         returnTradesExcluded: tickerClosedTrades.length - rates.qualified.length,
-        capitalNeedsReview: (completeShareLots > 0 && !Number.isSafeInteger(holding?.brokerCostBasisMinor))
-          || cspCapitalParts.some((value) => !Number.isSafeInteger(value)),
+        capitalNeedsReview: tickerClosedTrades.some((trade) => !Number.isSafeInteger(trade.collateralMinor)),
       },
     };
   }).sort((a, b) => Number(b.openContracts > 0) - Number(a.openContracts > 0) || a.symbol.localeCompare(b.symbol));
@@ -258,8 +255,6 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
     closedTrades: closedTradesWithMetrics,
     openTrades,
     holdings,
-    shortOptions,
-    equityBySymbol,
     stockPriceBySymbol,
   });
 

@@ -74,7 +74,7 @@ export async function initializeOnboarding(): Promise<void> {
         ? !portfolioReady || !historyReady || syncFailed
         : false;
     next.textContent = step === "install"
-      ? "Open Radar"
+      ? "Open Home"
       : step === "tickers" && !portfolioReady
         ? "Finding positions…"
         : step === "tickers" && !historyReady
@@ -135,7 +135,7 @@ export async function initializeOnboarding(): Promise<void> {
     await localRepository.put("appSettings", "onboardingComplete", true);
     root.hidden = true;
     document.body.classList.remove("has-modal");
-    document.querySelector<HTMLButtonElement>('.bottom-nav button[data-target="screener"]')?.click();
+    document.querySelector<HTMLButtonElement>('.bottom-nav button[data-target="overview"]')?.click();
   };
 
   const loadAccounts = async (): Promise<void> => {
@@ -195,10 +195,10 @@ export async function initializeOnboarding(): Promise<void> {
   const isAndroid = /Android/.test(navigator.userAgent);
   if (isAppleMobile) {
     installCopy.textContent = "Install from Safari so Wheely Nilly can open from your home screen with its saved snapshot.";
-    installSteps.innerHTML = "<li>Open this page in Safari.</li><li>Tap <strong>Share</strong>.</li><li>Choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</li>";
+    installSteps.innerHTML = "<li><span>Open this page in Safari.</span></li><li><span>Tap <strong>Share</strong>.</span></li><li><span>Choose <strong>Add to Home Screen</strong>, then tap <strong>Add</strong>.</span></li>";
   } else if (isAndroid) {
     installCopy.textContent = "Install from Chrome so Wheely Nilly can open from your home screen with its saved snapshot.";
-    installSteps.innerHTML = "<li>Open Chrome's menu.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li><li>Tap <strong>Install</strong>.</li>";
+    installSteps.innerHTML = "<li><span>Open Chrome's menu.</span></li><li><span>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</span></li><li><span>Tap <strong>Install</strong>.</span></li>";
   }
 
   next.addEventListener("click", async () => {

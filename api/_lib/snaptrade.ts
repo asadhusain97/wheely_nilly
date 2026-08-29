@@ -17,6 +17,24 @@ export const payloadItems = (payload: unknown, key?: string): unknown[] => {
   return [];
 };
 
+export const payloadPagination = (payload: unknown): Record<string, unknown> | null => {
+  const queue: unknown[] = [payload];
+  const visited = new Set<object>();
+  while (queue.length) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object" || visited.has(candidate)) continue;
+    visited.add(candidate);
+    const record = candidate as Record<string, unknown>;
+    if (record.pagination && typeof record.pagination === "object") {
+      return record.pagination as Record<string, unknown>;
+    }
+    for (const key of ["data", "result", "structuredContent"]) {
+      if (record[key] && typeof record[key] === "object") queue.push(record[key]);
+    }
+  }
+  return null;
+};
+
 const asRecord = (value: unknown): Record<string, any> => value && typeof value === "object" ? value as Record<string, any> : {};
 const finite = (value: unknown): number | null => Number.isFinite(Number(value)) ? Number(value) : null;
 const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;

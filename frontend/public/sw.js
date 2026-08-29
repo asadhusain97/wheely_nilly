@@ -1,4 +1,4 @@
-const CACHE_VERSION = "wheely-shell-v3";
+const CACHE_VERSION = "wheely-shell-v4";
 const APP_SHELL = [
   "/app.html",
   "/manifest.webmanifest",
@@ -33,13 +33,15 @@ self.addEventListener("fetch", (event) => {
   if (request.mode === "navigate") {
     const isApp = url.pathname === "/app" || url.pathname === "/app.html";
     if (!isApp) return;
-    const cached = caches.match("/app.html");
-    const update = fetch("/app.html").then(async (response) => {
-      if (response.ok) await caches.open(CACHE_VERSION).then((cache) => cache.put("/app.html", response.clone()));
-      return response;
-    }).catch(() => null);
-    event.waitUntil(update.then(() => undefined));
-    event.respondWith(cached.then(async (saved) => saved || (await update) || Response.error()));
+    event.respondWith((async () => {
+      try {
+        const response = await fetch("/app.html", { cache: "no-cache" });
+        if (response.ok) await caches.open(CACHE_VERSION).then((cache) => cache.put("/app.html", response.clone()));
+        return response;
+      } catch {
+        return (await caches.match("/app.html")) || Response.error();
+      }
+    })());
     return;
   }
   const cached = caches.match(request);

@@ -16,6 +16,7 @@ const radarScoringConfigJs = readFileSync(path.join(rootDirectory, 'frontend/ass
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
 const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
 const onboardingTs = readFileSync(path.join(rootDirectory, 'frontend/src/onboarding.ts'), 'utf8');
+const serviceWorker = readFileSync(path.join(rootDirectory, 'frontend/public/sw.js'), 'utf8');
 
 describe('responsive dashboard shell', () => {
   it('has semantic landmarks, labels, live regions, and keyboard navigation support', () => {
@@ -47,8 +48,18 @@ describe('responsive dashboard shell', () => {
     assert.match(onboardingTs, /account\.referenceLabel/);
     assert.match(onboardingTs, /!portfolioReady \|\| !historyReady \|\| syncFailed/);
     assert.match(onboardingTs, /Loading trade history and booked results/);
+    assert.match(onboardingTs, /"Open Home"/);
+    assert.match(onboardingTs, /data-target="overview"/);
+    assert.doesNotMatch(onboardingTs, /"Open Radar"/);
+    assert.match(html, /onboarding-install-steps[\s\S]*?<li><span>Choose <strong>Install<\/strong>/);
+    assert.match(css, /\.onboarding-install-steps li>span\{min-width:0\}/);
     assert.match(css, /\.onboarding footer button:disabled/);
     assert.doesNotMatch(css, /\.onboarding>section\{[^}]*min-height:470px/);
+  });
+  it('loads the current app shell online and keeps the saved shell as an offline fallback', () => {
+    assert.match(serviceWorker, /fetch\("\/app\.html", \{ cache: "no-cache" \}\)/);
+    assert.match(serviceWorker, /caches\.match\("\/app\.html"\)/);
+    assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
   });
   it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
     for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {
@@ -457,11 +468,14 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /aria-pressed/);
     assert.match(js, /createElementNS/);
     assert.match(js, /sortTickerPerformance/);
-    assert.match(js, /tickerOpenedTimestamp/);
+    assert.match(js, /tickerClosedTimestamp/);
     assert.match(js, /tickerSort: 'date_desc'/);
     assert.match(js, /document\.createElement\(['"]details['"]\)/);
-    assert.match(js, /Open now/);
+    assert.doesNotMatch(js, /Open now/);
     assert.match(js, /Past contracts/);
+    assert.match(html, /Closed contracts only/);
+    assert.match(js, /ticker\.pastTrades\.length > 0/);
+    assert.match(js, /closedContractCountText/);
     for (const sort of ['date', 'pnl', 'capital', 'return']) {
       assert.match(html, new RegExp(`value="${sort}"`));
     }

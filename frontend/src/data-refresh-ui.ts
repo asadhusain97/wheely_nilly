@@ -30,10 +30,13 @@ const optionContracts = (snapshot: BrokerageSnapshot | null) => [...new Map(
 ).values()];
 const portfolioSymbols = (snapshot: BrokerageSnapshot | null) => [...new Set((snapshot?.positions ?? []).map((position) => position.option?.underlying ?? position.symbol).filter(Boolean))];
 const HISTORY_REFRESH_INTERVAL_MS = 24 * 60 * 60_000;
+export const HISTORY_IMPORT_VERSION = 2;
 export const historyImportKey = (accountId: string) => `historyImported:${accountId}`;
 export const historyImportIsDue = (value: unknown, now = Date.now()): boolean => {
   if (!value || typeof value !== "object") return true;
-  const completedAt = Date.parse(String((value as { completedAt?: unknown }).completedAt ?? ""));
+  const marker = value as { version?: unknown; completedAt?: unknown };
+  if (marker.version !== HISTORY_IMPORT_VERSION) return true;
+  const completedAt = Date.parse(String(marker.completedAt ?? ""));
   return !Number.isFinite(completedAt) || now - completedAt >= HISTORY_REFRESH_INTERVAL_MS;
 };
 
@@ -168,7 +171,10 @@ export async function initializeDataRefresh(): Promise<void> {
         } while (cursor);
         const deduped = [...new Map(events.map((event) => [event.id, event])).values()];
         await mergeEventLedger(deduped);
-        await localRepository.put("refreshMetadata", historyImportKey(account.id), { completedAt: new Date().toISOString() });
+        await localRepository.put("refreshMetadata", historyImportKey(account.id), {
+          version: HISTORY_IMPORT_VERSION,
+          completedAt: new Date().toISOString(),
+        });
       }
       hideBrokerageAlert();
       document.dispatchEvent(new CustomEvent("wheely-history-updated"));

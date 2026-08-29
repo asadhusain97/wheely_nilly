@@ -275,11 +275,11 @@ function dteLabel(dte) {
   return `${dte} DTE`;
 }
 
-function contractCountText(ticker) {
-  if (!ticker.openContracts) return 'No open contracts';
+function closedContractCountText(ticker) {
+  if (!ticker.closedContracts) return 'No closed contracts';
   const parts = [];
-  if (ticker.openCspContracts) parts.push(`${quantity(ticker.openCspContracts)} CSP`);
-  if (ticker.openCcContracts) parts.push(`${quantity(ticker.openCcContracts)} CC`);
+  if (ticker.closedCspContracts) parts.push(`${quantity(ticker.closedCspContracts)} CSP`);
+  if (ticker.closedCcContracts) parts.push(`${quantity(ticker.closedCcContracts)} CC`);
   return parts.join(' · ');
 }
 
@@ -626,21 +626,6 @@ function tickerKpi(name, value, term, detail) {
   return item;
 }
 
-function tickerOpenTradeRow(trade) {
-  const row = el('article', 'ticker-open-row');
-  const identity = el('div', 'ticker-contract-identity');
-  identity.append(
-    el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
-    stack(`${marketPrice(trade.strike)} strike`, `${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
-  );
-  const value = stack(money(trade.collateral), trade.type === 'csp' ? 'Cash secured' : 'Shares committed', 'ticker-contract-value');
-  const note = el('small', 'ticker-contract-note');
-  appendLabeledAmount(note, trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received', 'Premium received');
-  if (trade.needsReview) note.append(' · Check data');
-  row.append(identity, value, note);
-  return row;
-}
-
 function closeActionText(action) {
   return { buy_to_close: 'Bought back', expiration: 'Expired', assignment: 'Assigned' }[action] ?? label(action);
 }
@@ -683,17 +668,6 @@ function tickerPastTradeRow(trade) {
 
 function tickerDetail(ticker) {
   const detail = el('div', 'ticker-detail');
-  const openSection = el('section', 'ticker-detail-section');
-  const openHeader = el('div', 'ticker-detail-title');
-  openHeader.append(el('h3', '', 'Open now'), el('span', '', `${ticker.openContracts} contract${ticker.openContracts === 1 ? '' : 's'}`));
-  const openList = el('div', 'ticker-open-list');
-  if (ticker.openTrades.length) {
-    for (const trade of ticker.openTrades) openList.append(tickerOpenTradeRow(trade));
-  } else {
-    emptyCard(openList, 'No short option contracts are open for this ticker.');
-  }
-  openSection.append(openHeader, openList);
-
   const historySection = el('section', 'ticker-detail-section history-section');
   const historyHeader = el('div', 'ticker-detail-title');
   historyHeader.append(el('h3', '', 'Past contracts'), el('span', '', `${ticker.pastTrades.length} closed`));
@@ -707,7 +681,7 @@ function tickerDetail(ticker) {
     emptyCard(empty, 'No closed contracts have been matched yet.');
     historySection.append(empty);
   }
-  detail.append(openSection, historySection);
+  detail.append(historySection);
   return detail;
 }
 
@@ -720,7 +694,7 @@ function tickerCard(ticker) {
   const nameCopy = el('div', 'ticker-name-copy');
   const symbolLine = el('div', 'ticker-symbol-line');
   symbolLine.append(el('strong', '', ticker.symbol), stockPriceTag(ticker.stockPrice));
-  nameCopy.append(symbolLine, el('small', '', contractCountText(ticker)));
+  nameCopy.append(symbolLine, el('small', '', closedContractCountText(ticker)));
   name.append(
     el('span', 'ticker-monogram', ticker.symbol.slice(0, 2)),
     nameCopy,
@@ -750,20 +724,16 @@ function tickerCard(ticker) {
   return card;
 }
 
-function tickerOpenedTimestamp(ticker, status = '') {
-  const trades = status === 'open'
-    ? (ticker.openTrades ?? [])
-    : status === 'history'
-      ? (ticker.pastTrades ?? [])
-      : [...(ticker.openTrades ?? []), ...(ticker.pastTrades ?? [])];
-  const timestamps = trades.map((trade) => Date.parse(trade.openedAt)).filter(Number.isFinite);
+function tickerClosedTimestamp(ticker, contractType = '') {
+  const trades = (ticker.pastTrades ?? []).filter((trade) => !contractType || trade.type === contractType);
+  const timestamps = trades.map((trade) => Date.parse(trade.closedAt)).filter(Number.isFinite);
   return timestamps.length ? Math.max(...timestamps) : null;
 }
 
-function sortTickerPerformance(tickers, status = '') {
+function sortTickerPerformance(tickers, contractType = '') {
   const [field, direction] = state.tickerSort.split('_');
   const valueFor = (ticker) => {
-    if (field === 'date') return tickerOpenedTimestamp(ticker, status);
+    if (field === 'date') return tickerClosedTimestamp(ticker, contractType);
     if (field === 'pnl') return Number(ticker.bookedProfit);
     if (field === 'capital') return Number(ticker.capitalInvolved);
     if (field === 'return') return ticker.returnRate == null ? null : Number(ticker.returnRate);
@@ -798,12 +768,13 @@ function toggleTickerSortDirection() {
 function renderTickerTrades() {
   const allTickers = state.dashboard?.tickerPerformance ?? [];
   const query = $('#ticker-filter').value.trim().toUpperCase();
-  const status = $('#ticker-status-filter').value;
+  const contractType = $('#ticker-status-filter').value;
   const direction = state.tickerSort.split('_')[1] ?? 'desc';
   state.tickerSort = `${$('#ticker-sort').value}_${direction}`;
   syncTickerSortDirection();
-  const tickers = sortTickerPerformance(allTickers.filter((ticker) => (!query || ticker.symbol.includes(query))
-    && (!status || (status === 'open' ? ticker.openContracts > 0 : ticker.pastTrades.length > 0))), status);
+  const tickers = sortTickerPerformance(allTickers.filter((ticker) => ticker.pastTrades.length > 0
+    && (!query || ticker.symbol.includes(query))
+    && (!contractType || ticker.pastTrades.some((trade) => trade.type === contractType))), contractType);
   const container = $('#ticker-list');
   container.replaceChildren();
   if (!tickers.length) {

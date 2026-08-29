@@ -7,6 +7,7 @@ import {
   normalizeConnection,
   normalizeEvent,
   normalizePosition,
+  payloadPagination,
   payloadItems,
 } from "./_lib/snaptrade.js";
 
@@ -128,11 +129,15 @@ async function fetchHistoryPage(accessToken: string, accountId: string, offset: 
   try {
     const payload = await callTool(client, "AccountInformation_getAccountActivities", { accountId, offset, limit }) as any;
     const records = payloadItems(payload, "activities");
-    const pagination = payload?.pagination ?? payload?.result?.pagination ?? payload?.data?.pagination;
-    const total = Number(pagination?.total ?? offset + records.length);
+    const pagination = payloadPagination(payload);
+    const returnedOffset = Number(pagination?.offset);
+    const pageOffset = Number.isInteger(returnedOffset) && returnedOffset >= 0 ? returnedOffset : offset;
+    const nextOffset = pageOffset + records.length;
+    const total = Number(pagination?.total);
+    const hasMore = records.length > 0 && (Number.isFinite(total) ? nextOffset < total : records.length === limit);
     return {
       events: records.map((value) => normalizeEvent(accountId, value, "activity")),
-      nextCursor: records.length && offset + records.length < total ? `${accountId}:${offset + records.length}` : null,
+      nextCursor: hasMore ? `${accountId}:${nextOffset}` : null,
     };
   } finally {
     await client.close();

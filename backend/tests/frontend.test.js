@@ -64,8 +64,10 @@ describe('responsive dashboard shell', () => {
     assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
   });
   it('can clear browser state and rerun account setup without disconnecting SnapTrade', () => {
-    assert.match(html, /data-reset-setup>Run setup again/);
+    assert.match(html, /data-reset-setup><span>Run setup again<\/span>/);
     assert.match(html, /Choose a different brokerage account/);
+    assert.match(html, /data-refresh-brokerage/);
+    assert.doesNotMatch(html, /data-market-interval|data-brokerage-interval|data-disconnect|data-erase-local/);
     assert.match(dataRefreshTs, /\[data-reset-setup\]/);
     assert.match(dataRefreshTs, /localRepository\.clearAllData\(\)/);
     assert.match(storageTs, /async clearAllData\(\)/);
@@ -174,6 +176,10 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /Moneyness = strike price ÷ stock price × 100%/);
     assert.match(js, /tradesGlossaryLabel\(labelText, glossaryTerm\)/);
     assert.match(css, /prefers-reduced-motion/);
+    assert.match(js, /closeMetricsStatus: 'loading'/);
+    assert.match(js, /const metricsMissing = !management/);
+    assert.match(js, /contract-metrics-loading/);
+    assert.match(css, /\.trade-card\.is-metrics-loading/);
   });
   it('removes the prominent combined refresh control', () => {
     assert.doesNotMatch(html, /id="refresh-button"/);

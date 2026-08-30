@@ -16,6 +16,7 @@ function loadScreenedTickers() {
 const state = {
   dashboard: null,
   closeByContract: new Map(),
+  closeMetricsStatus: 'loading',
   tickerSort: 'date_desc',
   monthlyTicker: null,
   monthlyDetail: null,
@@ -794,18 +795,29 @@ function renderOpenTrades(dashboard) {
   }
   for (const trade of dashboard.openTrades) {
     const management = state.closeByContract.get(trade.contractSymbol);
-    const card = el('article', 'trade-card');
-    const details = contractDetails(trade, management);
+    const metricsMissing = !management;
+    const metricsFailed = metricsMissing && state.closeMetricsStatus === 'error';
+    const card = el('article', `trade-card${metricsMissing ? ' is-metrics-loading' : ''}`);
+    if (metricsMissing && !metricsFailed) card.setAttribute('aria-busy', 'true');
     card.setAttribute('aria-label', `${trade.symbol} ${trade.type.toUpperCase()} open contract`);
-    card.append(
-      contractHeader(trade),
-      recommendationSummary(management),
-      positionState(management),
-      economicsSummary(management),
-      premiumCaptureProgress(management),
-      details.footer,
-      details.panel,
-    );
+    card.append(contractHeader(trade));
+    if (metricsMissing) {
+      const pending = el('div', `contract-metrics-loading${metricsFailed ? ' is-error' : ''}`);
+      pending.setAttribute('role', 'status');
+      pending.append(el('span', '', metricsFailed ? 'Metrics unavailable' : 'Loading metrics'));
+      if (!metricsFailed) pending.append(el('i'), el('i'), el('i'));
+      card.append(pending);
+    } else {
+      const details = contractDetails(trade, management);
+      card.append(
+        recommendationSummary(management),
+        positionState(management),
+        economicsSummary(management),
+        premiumCaptureProgress(management),
+        details.footer,
+        details.panel,
+      );
+    }
     container.append(card);
   }
 }
@@ -1029,6 +1041,9 @@ function contractDetails(trade, management) {
 }
 
 function renderDashboard(dashboard) {
+  for (const region of document.querySelectorAll('[data-dashboard-metrics]')) {
+    region.removeAttribute('aria-busy');
+  }
   const { kpis, quality } = dashboard;
   const booked = $('#booked-profit');
   booked.textContent = money(kpis.bookedProfit, { sign: true });
@@ -1062,17 +1077,26 @@ function renderDashboard(dashboard) {
 }
 
 async function loadDashboard() {
+  state.closeMetricsStatus = 'loading';
+  state.closeByContract = new Map();
+  const closeRequest = json('/api/v1/position-management')
+    .then((value) => ({ value, error: null }))
+    .catch((error) => ({ value: null, error }));
   const dashboard = await json('/api/v1/wheel/dashboard');
   state.dashboard = dashboard;
   strategySettingsController.refresh();
   setFreshness(dashboard.freshness);
   renderDashboard(dashboard);
   try {
-    const closeBatch = await json('/api/v1/position-management');
+    const closeResult = await closeRequest;
+    if (closeResult.error) throw closeResult.error;
+    const closeBatch = closeResult.value;
     state.closeByContract = new Map(closeBatch.results.map((item) => [item.contract.contractSymbol, item]));
+    state.closeMetricsStatus = 'ready';
     renderOpenTrades(dashboard);
   } catch {
-    // Dashboard positions stay visible with explicit uncalculated Close details.
+    state.closeMetricsStatus = 'error';
+    renderOpenTrades(dashboard);
   }
 }
 

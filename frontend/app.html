@@ -26,8 +26,8 @@
         <div><strong>Wheely Nilly</strong></div>
       </div>
       <div class="freshness-status" aria-live="polite">
-        <span><i data-market-dot></i>Market <strong data-market-freshness>Saved view</strong></span>
-        <span><i data-brokerage-dot></i>Brokerage <strong data-brokerage-freshness>Checking</strong></span>
+        <span><i data-market-dot></i><span>Market</span> <strong data-market-freshness>Saved</strong></span>
+        <span><i data-brokerage-dot></i><span>Brokerage</span> <strong data-brokerage-freshness>Checking</strong></span>
       </div>
     </header>
 
@@ -48,7 +48,7 @@
         </section>
 
         <div data-brokerage-content hidden>
-        <section class="performance-hero" aria-labelledby="booked-profit-label">
+        <section class="performance-hero" data-dashboard-metrics aria-busy="true" aria-labelledby="booked-profit-label">
           <div class="profit-primary">
             <span class="hero-label" id="booked-profit-label">Booked profit</span>
             <strong class="hero-total" id="booked-profit">—</strong>
@@ -64,7 +64,7 @@
           <p class="quality-line" id="calculation-quality">Calculating trade history…</p>
         </section>
 
-        <dl class="kpi-grid">
+        <dl class="kpi-grid" data-dashboard-metrics aria-busy="true">
           <div class="kpi-wide">
             <dt>Wheel capital</dt>
             <dd id="wheel-capital">—</dd><small id="wheel-capital-detail">Cash-secured puts + 100-share lots</small>
@@ -86,7 +86,7 @@
               <h2 id="efficiency-title">Efficiency</h2>
             </div>
           </div>
-          <dl class="efficiency-grid">
+          <dl class="efficiency-grid" data-dashboard-metrics aria-busy="true">
             <div>
               <dt id="capital-velocity-label">Capital velocity</dt>
               <dd id="capital-velocity">—</dd><small>Per $1k / 30 days</small>
@@ -119,7 +119,7 @@
               <h2 id="open-trades-title">Open contracts</h2>
             </div><span id="open-trade-count" class="section-count">—</span>
           </div>
-          <div class="trade-list" id="open-trade-list" aria-live="polite"></div>
+          <div class="trade-list" id="open-trade-list" aria-live="polite"><p class="empty-card is-loading">Loading contracts and metrics…</p></div>
         </section>
         </div>
 
@@ -275,13 +275,9 @@
             <div class="ticker-capsules" id="ticker-playbook-list"></div>
           </section>
         </div>
-        <section class="data-refresh-settings" aria-labelledby="data-refresh-title">
-          <header><div><p>Data & refresh</p><h2 id="data-refresh-title">Freshness</h2></div><span data-online-state>Online</span></header>
-          <label><span>Market data<small>Only while Wheely Nilly is visible</small></span><select data-market-interval><option value="60000">Every minute</option><option value="120000" selected>Every 2 minutes</option><option value="300000">Every 5 minutes</option></select></label>
-          <label><span>Brokerage<small>Shared by every screen</small></span><select data-brokerage-interval><option value="900000">Every 15 minutes</option><option value="1800000" selected>Every 30 minutes</option><option value="3600000">Every 60 minutes</option><option value="open">On app open only</option><option value="manual">Manual only</option></select></label>
-          <div class="manual-refresh-row"><div><span>Last synced</span><strong data-brokerage-last-sync>Not yet</strong></div><button type="button" data-refresh-brokerage>Refresh brokerage now</button></div>
-          <div class="setup-reset-row"><div><strong>Selected account</strong><small>Choose a different brokerage account and run the setup from the beginning.</small></div><button type="button" data-reset-setup>Run setup again</button></div>
-          <div class="disconnect-row"><p>Disconnecting removes SnapTrade access. Saved portfolio data stays on this device until you erase it.</p><button type="button" data-disconnect>Disconnect SnapTrade</button><button type="button" data-erase-local>Erase saved financial data</button></div>
+        <section class="data-refresh-settings" aria-label="Brokerage data actions">
+          <button class="settings-data-action is-primary" type="button" data-refresh-brokerage><span>Refresh brokerage</span><small>Get the latest positions and balances</small></button>
+          <button class="settings-data-action" type="button" data-reset-setup><span>Run setup again</span><small>Choose a different brokerage account</small></button>
         </section>
         <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
         <aside class="settings-support" aria-label="Support Wheely Nilly">

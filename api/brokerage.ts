@@ -9,6 +9,7 @@ import {
   normalizePosition,
   payloadPagination,
   payloadItems,
+  payloadRecord,
 } from "./_lib/snaptrade.js";
 
 interface Failure {
@@ -62,7 +63,19 @@ async function fetchAccountCatalog(client: SnapTradeMcpClient, errors: Failure[]
   if (accountResults.length && accountResults.every((result) => result.status === "rejected") && firstFailure?.status === "rejected") {
     throw firstFailure.reason;
   }
-  const accounts = [...new Map(rawAccounts.map(normalizeAccount).filter((account) => account.id).map((account) => [account.id, account])).values()];
+  const accountDetails = await Promise.allSettled(rawAccounts.map((rawAccount) => {
+    const account = normalizeAccount(rawAccount);
+    return account.id && !account.numberSuffix
+      ? callTool(client, "AccountInformation_getUserAccountDetails", { accountId: account.id })
+      : Promise.resolve(null);
+  }));
+  const accounts = [...new Map(rawAccounts.map((rawAccount, index) => {
+    const detailResult = accountDetails[index];
+    const detail = detailResult.status === "fulfilled" ? payloadRecord(detailResult.value) : {};
+    const account = normalizeAccount({ ...(rawAccount as Record<string, unknown>), ...detail });
+    if (detailResult.status === "rejected") errors.push(safeFailure(account.id || null, `accountDetails:${account.id}`, detailResult.reason));
+    return account;
+  }).filter((account) => account.id).map((account) => [account.id, account])).values()];
   return { accounts, connections };
 }
 

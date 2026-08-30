@@ -51,7 +51,7 @@ export async function initializeDataRefresh(): Promise<void> {
   let currentSnapshot = (await localRepository.get<BrokerageSnapshot>("portfolioSnapshot", "current").catch(() => null))?.value ?? null;
   let selectedAccountIds = (await localRepository.get<string[]>("appSettings", "selectedAccountIds").catch(() => null))?.value ?? [];
   const storedPolicy = (await localRepository.get<RefreshPolicy>("appSettings", "refreshPolicy").catch(() => null))?.value;
-  let policy = storedPolicy ?? DEFAULT_REFRESH_POLICY;
+  const policy = storedPolicy ?? DEFAULT_REFRESH_POLICY;
   let marketUpdatedAt = (await localRepository.get<string>("refreshMetadata", "marketUpdatedAt").catch(() => null))?.value ?? null;
   let brokerageUpdatedAt = currentSnapshot?.fetchedAt ?? null;
   let retryMode: "brokerage" | "history" = "brokerage";
@@ -59,7 +59,6 @@ export async function initializeDataRefresh(): Promise<void> {
 
   const marketStatus = document.querySelector<HTMLElement>("[data-market-freshness]");
   const brokerageStatus = document.querySelector<HTMLElement>("[data-brokerage-freshness]");
-  const brokerageLastSync = document.querySelector<HTMLElement>("[data-brokerage-last-sync]");
   const connectionCard = document.querySelector<HTMLElement>("[data-connection-card]");
   const brokerageAlert = document.querySelector<HTMLElement>("[data-brokerage-alert]");
   const brokerageAlertEyebrow = document.querySelector<HTMLElement>("[data-brokerage-alert-eyebrow]");
@@ -67,7 +66,6 @@ export async function initializeDataRefresh(): Promise<void> {
   const brokerageAlertCopy = document.querySelector<HTMLElement>("[data-brokerage-alert-copy]");
   const retryAlignment = document.querySelector<HTMLButtonElement>("[data-retry-alignment]");
   const brokerageContent = document.querySelector<HTMLElement>("[data-brokerage-content]");
-  const onlineState = document.querySelector<HTMLElement>("[data-online-state]");
 
   const showBrokerageContent = (visible: boolean) => {
     if (brokerageContent) brokerageContent.hidden = !visible;
@@ -115,10 +113,8 @@ export async function initializeDataRefresh(): Promise<void> {
   showBrokerageContent(Boolean(currentSnapshot));
 
   const renderFreshness = () => {
-    if (marketStatus) marketStatus.textContent = marketUpdatedAt ? relativeTime(marketUpdatedAt) : navigator.onLine ? "Waiting" : "Saved view";
+    if (marketStatus) marketStatus.textContent = marketUpdatedAt ? relativeTime(marketUpdatedAt) : navigator.onLine ? "Waiting" : "Saved";
     if (brokerageStatus) brokerageStatus.textContent = brokerageUpdatedAt ? relativeTime(brokerageUpdatedAt) : "Not synced";
-    if (brokerageLastSync) brokerageLastSync.textContent = relativeTime(brokerageUpdatedAt);
-    if (onlineState) onlineState.textContent = navigator.onLine ? "Online" : "Offline · showing saved data";
   };
 
   const fetchMarket = async (symbols: string[], contracts = optionContracts(currentSnapshot), signal?: AbortSignal) => {
@@ -305,45 +301,17 @@ export async function initializeDataRefresh(): Promise<void> {
     }
   });
 
-  const marketSelect = document.querySelector<HTMLSelectElement>("[data-market-interval]");
-  const brokerageSelect = document.querySelector<HTMLSelectElement>("[data-brokerage-interval]");
-  if (marketSelect) marketSelect.value = String(policy.marketIntervalMs);
-  if (brokerageSelect) brokerageSelect.value = policy.brokerageIntervalMs === null ? policy.refreshBrokerageOnOpen ? "open" : "manual" : String(policy.brokerageIntervalMs);
-
-  const savePolicy = async () => {
-    const brokerageValue = brokerageSelect?.value ?? "1800000";
-    policy = {
-      ...policy,
-      marketIntervalMs: Number(marketSelect?.value ?? 120000) as RefreshPolicy["marketIntervalMs"],
-      brokerageIntervalMs: /^\d+$/.test(brokerageValue) ? Number(brokerageValue) as RefreshPolicy["brokerageIntervalMs"] : null,
-      refreshBrokerageOnOpen: brokerageValue !== "manual",
-    };
-    await localRepository.put("appSettings", "refreshPolicy", policy);
-    coordinator.stop();
-    location.reload();
-  };
-  marketSelect?.addEventListener("change", () => void savePolicy());
-  brokerageSelect?.addEventListener("change", () => void savePolicy());
-
   document.querySelector<HTMLButtonElement>("[data-refresh-brokerage]")?.addEventListener("click", async (event) => {
     const button = event.currentTarget as HTMLButtonElement;
+    const label = button.querySelector<HTMLElement>("span");
     button.disabled = true;
-    button.textContent = "Syncing…";
+    if (label) label.textContent = "Refreshing…";
     try { await coordinator.refreshBrokerage({ manual: true }); }
     catch { if (brokerageStatus) brokerageStatus.textContent = "Try again in a few minutes"; }
-    finally { button.disabled = false; button.textContent = "Refresh brokerage now"; }
-  });
-
-  document.querySelector<HTMLButtonElement>("[data-disconnect]")?.addEventListener("click", async () => {
-    if (!window.confirm("Disconnect SnapTrade? Your saved snapshot will stay on this device.")) return;
-    await json("/api/auth/disconnect", { method: "POST" });
-    coordinator.stop();
-    location.assign("/");
-  });
-  document.querySelector<HTMLButtonElement>("[data-erase-local]")?.addEventListener("click", async () => {
-    if (!window.confirm("Erase the saved portfolio, market cache, Radar results, and refresh history from this browser?")) return;
-    await localRepository.clearFinancialData();
-    location.reload();
+    finally {
+      button.disabled = false;
+      if (label) label.textContent = "Refresh brokerage";
+    }
   });
   document.querySelector<HTMLButtonElement>("[data-reset-setup]")?.addEventListener("click", async () => {
     if (!window.confirm("Run setup again? This clears saved portfolio data, trade history, Radar results, and strategy choices from this browser. SnapTrade stays connected.")) return;

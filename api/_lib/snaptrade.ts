@@ -35,6 +35,24 @@ export const payloadPagination = (payload: unknown): Record<string, unknown> | n
   return null;
 };
 
+export const payloadRecord = (payload: unknown): Record<string, unknown> => {
+  const queue: unknown[] = [payload];
+  const visited = new Set<object>();
+  while (queue.length) {
+    const candidate = queue.shift();
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) || visited.has(candidate)) continue;
+    visited.add(candidate);
+    const record = candidate as Record<string, unknown>;
+    if (["id", "number", "account_number", "accountNumber", "institution_name", "institutionName"].some((key) => key in record)) {
+      return record;
+    }
+    for (const key of ["account", "data", "result", "structuredContent"]) {
+      if (record[key] && typeof record[key] === "object") queue.push(record[key]);
+    }
+  }
+  return {};
+};
+
 const asRecord = (value: unknown): Record<string, any> => value && typeof value === "object" ? value as Record<string, any> : {};
 const finite = (value: unknown): number | null => Number.isFinite(Number(value)) ? Number(value) : null;
 const text = (value: unknown): string | null => typeof value === "string" && value.trim() ? value.trim() : null;
@@ -77,17 +95,26 @@ const optionIdentity = (value: unknown) => {
 
 export const normalizeAccount = (value: unknown) => {
   const account = asRecord(value);
-  const numberSuffix = referenceSuffix(account.number ?? account.account_number ?? account.masked_number ?? account.number_suffix);
-  const transactions = asRecord(account.sync_status?.transactions);
+  const numberSuffix = referenceSuffix(
+    account.number
+    ?? account.account_number
+    ?? account.accountNumber
+    ?? account.masked_number
+    ?? account.maskedNumber
+    ?? account.number_suffix
+    ?? account.numberSuffix,
+  );
+  const syncStatus = account.sync_status ?? account.syncStatus;
+  const transactions = asRecord(syncStatus?.transactions);
   return {
     id: String(account.id ?? ""),
-    institution: text(account.institution_name ?? account.institution?.name ?? account.meta?.institution_name),
-    name: text(account.name ?? account.display_name),
+    institution: text(account.institution_name ?? account.institutionName ?? account.institution?.name ?? account.meta?.institution_name),
+    name: text(account.name ?? account.display_name ?? account.displayName),
     numberSuffix,
     referenceLabel: numberSuffix
       ? `Account •••• ${numberSuffix}`
       : "Account number unavailable",
-    syncStatus: text(account.sync_status ?? account.status),
+    syncStatus: text(syncStatus) ?? text(account.status),
     transactionSyncComplete: optionalBoolean(transactions.initial_sync_completed),
   };
 };

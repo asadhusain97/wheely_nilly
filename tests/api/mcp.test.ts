@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 import { extractToolPayload, SnapTradeMcpClient } from "../../api/_lib/mcp";
-import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems, payloadPagination } from "../../api/_lib/snaptrade";
+import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems, payloadPagination, payloadRecord } from "../../api/_lib/snaptrade";
 
 const originalFetch = globalThis.fetch;
 
@@ -39,6 +39,17 @@ describe("SnapTrade MCP client", () => {
       syncStatus: null,
       transactionSyncComplete: null,
     });
+  });
+
+  it("unwraps account details and accepts connector-style camel case fields", () => {
+    const detail = payloadRecord({ structuredContent: { result: { account: {
+      id: "account-1",
+      displayName: "Robinhood Individual",
+      institutionName: "Robinhood",
+      accountNumber: "****2087",
+    } } } });
+
+    assert.equal(normalizeAccount(detail).referenceLabel, "Account •••• 2087");
   });
 
   it("does not present provider identifiers as brokerage account numbers", () => {

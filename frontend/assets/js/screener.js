@@ -178,13 +178,12 @@ function trashIcon() {
   return svg;
 }
 
-function detailRow(label, value, term, note = '') {
+function detailRow(label, value, term) {
   if (value == null || value === '—') return null;
   const row = node('div', 'candidate-detail-row');
   const metricName = node('dt');
   metricName.append(glossaryLabel(label, term));
   row.append(metricName, node('dd', '', value));
-  if (note) row.append(node('small', '', note));
   return row;
 }
 
@@ -262,12 +261,11 @@ function candidateCard(viewModel) {
   const detail = node('div', 'candidate-detail');
   const sections = [
     whyTrade(viewModel.reasons),
-    detailSection('Execution', [
+    detailSection('Contract metrics', [
       detailRow('Bid / ask', candidate.bid == null || candidate.ask == null ? null : `${marketPrice(candidate.bid)} / ${marketPrice(candidate.ask)}`, 'Bid-ask prices'),
       detailRow('Spread', viewModel.execution.factors.spread.value == null ? null : percentagePoints(viewModel.execution.factors.spread.value, 2), 'Bid-ask spread'),
       detailRow('Market activity', candidate.open_interest == null || candidate.volume == null ? null : `${number(candidate.open_interest, 0)} OI · ${number(candidate.volume, 0)} volume`, 'Open interest / volume'),
-    ]),
-    detailSection('Additional detail', [
+      detailRow('Estimated fees', candidate.estimated_fees == null ? null : money(candidate.estimated_fees, 2), 'Estimated fee'),
       detailRow('Capital required', money(viewModel.reward.capitalRequired), 'Capital at risk'),
       detailRow('Annualized return', percentagePoints(viewModel.reward.annualizedReturn, 1), 'Annualized return'),
       detailRow('Implied volatility', candidate.implied_volatility == null ? null : percent(candidate.implied_volatility), 'Implied volatility'),

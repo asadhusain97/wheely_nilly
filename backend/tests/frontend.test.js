@@ -178,12 +178,15 @@ describe('responsive dashboard shell', () => {
     for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Underlying price', 'Bid / ask', 'Delta', 'Implied volatility']) {
       assert.match(detailsSource, new RegExp(term.replace('/', '\\/')));
     }
+    assert.doesNotMatch(detailsSource, /At the current ask|Shares committed|Cash secured/);
+    assert.match(detailsSource, /filter\(Boolean\)\.join\(' · '\)/);
     for (const duplicate of ['Profit if closed', 'Premium captured', 'Earned per day', 'Strike price', 'Position state', 'Strike distance', 'Moneyness', 'Expiration', 'DTE', 'Days held', 'Theta / day', 'Extrinsic per day', 'Remaining annualized return', 'Open interest / volume']) {
       assert.doesNotMatch(detailsSource, new RegExp(duplicate.replace('/', '\\/')));
     }
     assert.match(js, /Market data \$\{refreshed\}/);
     assert.doesNotMatch(detailsSource, /Cboe delayed|Yahoo Finance/);
-    assert.match(css, /\.contract-detail-grid\{[^}]*gap:10px 20px/);
+    assert.match(css, /\.contract-detail-grid\{[^}]*gap:0 20px[^}]*border-top:1px solid var\(--soft-line\)/);
+    assert.match(css, /\.close-metric dd\{[^}]*font-size:12px[^}]*font-weight:740/);
     assert.match(css, /\.position-check-row\{[^}]*grid-template-columns:25px minmax\(0,1fr\)/);
     assert.match(css, /\.position-check-row\.is-warning \.position-check-mark\{[^}]*var\(--warning\)/);
     assert.match(css, /\.recommendation-summary\.is-close \.recommendation-label\{color:var\(--green\)\}/);
@@ -260,7 +263,8 @@ describe('responsive dashboard shell', () => {
     }
     assert.match(candidateCardSource, /summary\.append\(header, reward, signals, fit, disclosure\)/);
     assert.match(candidateCardSource, /whyTrade\(viewModel\.reasons\)/);
-    assert.ok(candidateCardSource.indexOf("detailSection('Execution'") < candidateCardSource.indexOf("detailSection('Additional detail'"));
+    assert.match(candidateCardSource, /detailSection\('Contract metrics'/);
+    assert.doesNotMatch(candidateCardSource, /detailSection\('Execution'|detailSection\('Additional detail'/);
     for (const hiddenUntilExpanded of ['Theta per day', 'Annualized return', 'Implied volatility', 'Bid / ask', 'Spread', 'Market activity']) {
       assert.ok(candidateCardSource.indexOf(hiddenUntilExpanded) > candidateCardSource.indexOf("const detail = node('div', 'candidate-detail')"));
     }
@@ -269,13 +273,15 @@ describe('responsive dashboard shell', () => {
     }
     assert.match(candidateCardSource, /detailRow\('Bid \/ ask'/);
     assert.match(candidateCardSource, /detailRow\('Market activity'/);
+    assert.match(candidateCardSource, /detailRow\('Estimated fees'[\s\S]*?candidate\.estimated_fees/);
     assert.match(candidateCardSource, /glossaryLabel\('ROC', 'Return on capital'\)/);
     assert.match(screenerJs, /metricName\.append\(glossaryLabel\(label, term\)\);[\s\S]*?node\('dd', '', value\)/);
     assert.match(screenerJs, /document\.createTextNode\(`\$\{rules\.minDte\}–\$\{rules\.maxDte\} `\)[\s\S]*?glossaryLabel\('DTE', 'DTE range'\)/);
     assert.match(screenerJs, /document\.createTextNode\(`≥ \$\{percent\(rules\.minPeriodReturn\)\} `\)[\s\S]*?glossaryLabel\('term return', 'Minimum return'\)/);
-    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Bid-ask spread', 'Open interest / volume', 'Implied volatility', 'Theta per day', 'Annualized return']) {
+    for (const term of ['Net contract credit', 'Return on capital', 'DTE range', 'Target delta range', 'Minimum return', 'Delta', 'Bid-ask spread', 'Open interest / volume', 'Estimated fee', 'Implied volatility', 'Theta per day', 'Annualized return']) {
       assert.match(screenerJs, new RegExp(term.replace(/[|/]/g, '\\$&')));
     }
+    assert.match(screenerCss, /\.candidate-detail-row dd \{[^}]*font-size: 12px[^}]*font-weight: 740/);
     assert.match(screenerJs, /prepareRadarCandidates\(result\)/);
     for (const fn of ['calculateLiquidity', 'calculateReturnMetrics', 'calculateStrikeDistance', 'calculateDeltaFit', 'calculateDteFit', 'generateTradeReasons', 'generateTradeWarnings']) {
       assert.match(radarScoringJs, new RegExp(`function ${fn}`));

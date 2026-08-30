@@ -948,13 +948,12 @@ function premiumCaptureProgress(management) {
   return progress;
 }
 
-function detailMetric(labelText, value, glossaryTerm = labelText, qualifier = '') {
+function detailMetric(labelText, value, glossaryTerm = labelText) {
   if (value == null) return null;
   const item = el('div', 'close-metric');
   const term = el('dt');
   term.append(glossaryTerm ? tradesGlossaryLabel(labelText, glossaryTerm) : document.createTextNode(labelText));
   item.append(term, el('dd', '', value));
-  if (qualifier) item.append(el('small', '', qualifier));
   return item;
 }
 
@@ -1104,8 +1103,8 @@ function contractDetails(trade, management) {
 
   const economics = detailGroup('Trade', [
     detailMetric('Premium received', trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received'),
-    detailMetric('Buyback estimate', metrics?.estimatedBuybackDebit == null ? null : money(metrics.estimatedBuybackDebit), 'Buyback debit', 'At the current ask'),
-    detailMetric('Collateral', trade.collateral == null ? null : money(trade.collateral), 'Collateral', trade.type === 'csp' ? 'Cash secured' : 'Shares committed'),
+    detailMetric('Buyback estimate', metrics?.estimatedBuybackDebit == null ? null : money(metrics.estimatedBuybackDebit), 'Buyback debit'),
+    detailMetric('Collateral', trade.collateral == null ? null : money(trade.collateral), 'Collateral'),
     detailMetric('Breakeven price', metrics?.breakevenPrice == null ? null : marketPrice(metrics.breakevenPrice), 'Breakeven'),
   ]);
   const market = detailGroup('Market', [
@@ -1114,9 +1113,11 @@ function contractDetails(trade, management) {
       'Bid / ask',
       metrics?.bidPerShare == null && metrics?.askPerShare == null
         ? null
-        : `${metrics?.bidPerShare == null ? 'Unavailable' : marketPrice(metrics.bidPerShare)} / ${metrics?.askPerShare == null ? 'Unavailable' : marketPrice(metrics.askPerShare)}`,
+        : [
+          `${metrics?.bidPerShare == null ? 'Unavailable' : marketPrice(metrics.bidPerShare)} / ${metrics?.askPerShare == null ? 'Unavailable' : marketPrice(metrics.askPerShare)}`,
+          metrics?.spreadPercent == null ? null : `${percent(metrics.spreadPercent, { sign: false })} spread`,
+        ].filter(Boolean).join(' · '),
       'Bid-ask spread',
-      metrics?.spreadPercent == null ? '' : `${percent(metrics.spreadPercent, { sign: false })} spread`,
     ),
     detailMetric('Delta', metrics?.delta == null ? null : decimal(metrics.delta, 3), 'Delta'),
     detailMetric('Implied volatility', metrics?.impliedVolatility == null ? null : percent(metrics.impliedVolatility, { sign: false }), 'Implied volatility'),

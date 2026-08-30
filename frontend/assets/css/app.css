@@ -286,11 +286,10 @@ main{padding:0 12px calc(var(--tabbar) + env(safe-area-inset-bottom) + 18px)}.ap
 .contract-detail-group{padding-top:12px}
 .contract-detail-group+.contract-detail-group{margin-top:8px;border-top:1px solid var(--soft-line)}
 .contract-detail-group h4{margin:0 0 10px;color:var(--body);font-size:10px;letter-spacing:-.1px}
-.contract-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:0}
-.close-metric{min-width:0}
+.contract-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 20px;margin:0;border-top:1px solid var(--soft-line)}
+.close-metric{min-width:0;display:grid;gap:3px;padding:9px 0;border-bottom:1px solid var(--soft-line)}
 .close-metric dt{color:var(--mute);font-size:8px;line-height:1.25}
-.close-metric dd{margin:4px 0 0;overflow-wrap:anywhere;color:var(--body);font-size:10px;font-weight:700;line-height:1.35;font-variant-numeric:tabular-nums}
-.close-metric small{display:block;margin-top:3px;color:var(--ash);font-size:8px;line-height:1.35}
+.close-metric dd{margin:0;overflow-wrap:anywhere;color:var(--body);font-size:12px;font-weight:740;line-height:1.35;font-variant-numeric:tabular-nums}
 .contract-data-note{margin:16px 0 0;padding-top:12px;border-top:1px solid var(--soft-line);color:var(--warning);font-size:8px;line-height:1.4}
 .empty-card{margin:0;padding:18px;border:1px dashed var(--line);border-radius:16px;background:rgba(255,255,255,.45);color:var(--mute);font-size:10px;line-height:1.4;text-align:center}
 

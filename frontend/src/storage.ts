@@ -84,8 +84,15 @@ export class LocalRepository {
   }
 
   async clearFinancialData(): Promise<void> {
+    await this.#clearDomains(["portfolioSnapshot", "eventLedger", "marketCache", "radarCache", "refreshMetadata"]);
+  }
+
+  async clearAllData(): Promise<void> {
+    await this.#clearDomains([...STORAGE_DOMAINS]);
+  }
+
+  async #clearDomains(domains: StorageDomain[]): Promise<void> {
     const database = await this.#open();
-    const domains: StorageDomain[] = ["portfolioSnapshot", "eventLedger", "marketCache", "radarCache", "refreshMetadata"];
     await Promise.all(domains.map((domain) => new Promise<void>((resolve, reject) => {
       const request = database.transaction(domain, "readwrite").objectStore(domain).clear();
       request.onsuccess = () => resolve();

@@ -45,6 +45,8 @@ const referenceSuffix = (value: unknown): string | null => {
   return compact ? compact.slice(-4).toUpperCase() : null;
 };
 
+const optionalBoolean = (value: unknown): boolean | null => typeof value === "boolean" ? value : null;
+
 export const parseOccSymbol = (raw: unknown) => {
   const symbol = String(raw ?? "").replace(/\s/g, "").toUpperCase();
   const match = /^([A-Z0-9.]{1,6})(\d{6})([CP])(\d{8})$/.exec(symbol);
@@ -76,8 +78,7 @@ const optionIdentity = (value: unknown) => {
 export const normalizeAccount = (value: unknown) => {
   const account = asRecord(value);
   const numberSuffix = referenceSuffix(account.number ?? account.account_number ?? account.masked_number ?? account.number_suffix);
-  const institutionSuffix = referenceSuffix(account.institution_account_id ?? account.institutionAccountId);
-  const snapTradeSuffix = referenceSuffix(account.id);
+  const transactions = asRecord(account.sync_status?.transactions);
   return {
     id: String(account.id ?? ""),
     institution: text(account.institution_name ?? account.institution?.name ?? account.meta?.institution_name),
@@ -85,10 +86,9 @@ export const normalizeAccount = (value: unknown) => {
     numberSuffix,
     referenceLabel: numberSuffix
       ? `Account •••• ${numberSuffix}`
-      : institutionSuffix
-        ? `Institution ID •••• ${institutionSuffix}`
-        : `SnapTrade ID …${snapTradeSuffix ?? "unknown"}`,
+      : "Account number unavailable",
     syncStatus: text(account.sync_status ?? account.status),
+    transactionSyncComplete: optionalBoolean(transactions.initial_sync_completed),
   };
 };
 
@@ -124,13 +124,17 @@ export const normalizeEvent = (accountId: string, value: unknown, sourceType: "a
   const option = optionIdentity(item.option_symbol ?? item.symbol);
   const sourceId = text(item.id ?? item.external_reference_id ?? item.brokerage_order_id) ?? crypto.createHash("sha256").update(JSON.stringify(item)).digest("hex").slice(0, 24);
   const rawAction = String(item.option_type ?? item.action ?? item.type ?? "unknown").toLowerCase();
+  const signedQuantity = finite(item.units ?? item.quantity ?? item.filled_quantity);
+  const amount = finite(item.amount);
   const action = rawAction.includes("sell_to_open") || rawAction === "sell_open" || (rawAction === "sell" && option) ? "sell_to_open"
     : rawAction.includes("buy_to_close") || rawAction === "buy_close" || (rawAction === "buy" && option) ? "buy_to_close"
       : rawAction.includes("assign") ? "assignment"
         : rawAction.includes("expir") ? "expiration"
           : rawAction === "sell" ? "sell_shares"
             : rawAction === "buy" ? "buy_shares"
-              : rawAction;
+              : option && !rawAction.includes("buy_to_open") && !rawAction.includes("sell_to_close") && ((amount ?? 0) > 0 || (signedQuantity ?? 0) < 0) ? "sell_to_open"
+                : option && !rawAction.includes("buy_to_open") && !rawAction.includes("sell_to_close") && ((amount ?? 0) < 0 || (signedQuantity ?? 0) > 0) ? "buy_to_close"
+                  : rawAction;
   const occurredAt = text(item.trade_date ?? item.settlement_date ?? item.time_executed ?? item.time_placed) ?? new Date().toISOString();
   return {
     id: `snaptrade:${sourceType}:${accountId}:${sourceId}`,
@@ -140,9 +144,9 @@ export const normalizeEvent = (accountId: string, value: unknown, sourceType: "a
     action,
     symbol: option?.underlying ?? text(item.symbol?.symbol ?? item.symbol),
     option,
-    quantity: Math.abs(finite(item.units ?? item.quantity ?? item.filled_quantity) ?? 0),
+    quantity: Math.abs(signedQuantity ?? 0),
     priceMinor: finite(item.price ?? item.execution_price) === null ? null : Math.round(Number(item.price ?? item.execution_price) * 100),
-    amountMinor: finite(item.amount) === null ? null : Math.round(Number(item.amount) * 100),
+    amountMinor: amount === null ? null : Math.round(amount * 100),
     feeMinor: finite(item.fee) === null ? null : Math.round(Math.abs(Number(item.fee)) * 100),
     authoritative: sourceType === "activity",
     needsReview: Boolean(!option && rawAction.includes("option")),

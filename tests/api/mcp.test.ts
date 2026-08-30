@@ -37,27 +37,32 @@ describe("SnapTrade MCP client", () => {
       numberSuffix: "8443",
       referenceLabel: "Account •••• 8443",
       syncStatus: null,
+      transactionSyncComplete: null,
     });
   });
 
-  it("labels a safe fallback when a brokerage account number is withheld", () => {
-    const institutionReference = normalizeAccount({
+  it("does not present provider identifiers as brokerage account numbers", () => {
+    const account = normalizeAccount({
       id: "917c8734-8470-4a3e-a18f-57c3f2ee6631",
       name: "Robinhood Individual",
       institution_name: "Robinhood",
       number: null,
       institution_account_id: "54953432",
     });
-    const snapTradeReference = normalizeAccount({
-      id: "917c8734-8470-4a3e-a18f-57c3f2ee6631",
-      name: "Robinhood Individual",
-      institution_name: "Robinhood",
-      number: null,
-      institution_account_id: null,
+
+    assert.equal(account.numberSuffix, null);
+    assert.equal(account.referenceLabel, "Account number unavailable");
+  });
+
+  it("carries the brokerage transaction-sync state into the selected account", () => {
+    const account = normalizeAccount({
+      id: "account-1",
+      number: "Q6542138443",
+      sync_status: { transactions: { initial_sync_completed: false } },
     });
 
-    assert.equal(institutionReference.referenceLabel, "Institution ID •••• 3432");
-    assert.equal(snapTradeReference.referenceLabel, "SnapTrade ID …6631");
+    assert.equal(account.numberSuffix, "8443");
+    assert.equal(account.transactionSyncComplete, false);
   });
 
   it("normalizes unified option positions and matching historical activity", () => {
@@ -95,6 +100,33 @@ describe("SnapTrade MCP client", () => {
     assert.equal(activity.action, "sell_to_open");
     assert.equal(activity.option?.symbol, position.option?.symbol);
     assert.equal(activity.amountMinor, 9000);
+  });
+
+  it("uses SnapTrade cash-flow and unit direction for uncategorized option activity", () => {
+    const optionSymbol = {
+      ticker: "RKLB  260918P00075000",
+      option_type: "PUT",
+      strike_price: 75,
+      expiration_date: "2026-09-18",
+      underlying_symbol: { symbol: "RKLB" },
+    };
+    const open = normalizeEvent("account-1", {
+      id: "open",
+      type: "OPTIONTRADE",
+      option_symbol: optionSymbol,
+      units: -1,
+      amount: 250,
+    }, "activity");
+    const close = normalizeEvent("account-1", {
+      id: "close",
+      type: "OPTIONTRADE",
+      option_symbol: optionSymbol,
+      units: 1,
+      amount: -75,
+    }, "activity");
+
+    assert.equal(open.action, "sell_to_open");
+    assert.equal(close.action, "buy_to_close");
   });
 
   it("prefers structured tool results", () => {

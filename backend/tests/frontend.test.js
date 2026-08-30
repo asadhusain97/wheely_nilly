@@ -16,6 +16,8 @@ const radarScoringConfigJs = readFileSync(path.join(rootDirectory, 'frontend/ass
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
 const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
 const onboardingTs = readFileSync(path.join(rootDirectory, 'frontend/src/onboarding.ts'), 'utf8');
+const dataRefreshTs = readFileSync(path.join(rootDirectory, 'frontend/src/data-refresh-ui.ts'), 'utf8');
+const storageTs = readFileSync(path.join(rootDirectory, 'frontend/src/storage.ts'), 'utf8');
 const serviceWorker = readFileSync(path.join(rootDirectory, 'frontend/public/sw.js'), 'utf8');
 
 describe('responsive dashboard shell', () => {
@@ -60,6 +62,13 @@ describe('responsive dashboard shell', () => {
     assert.match(serviceWorker, /fetch\("\/app\.html", \{ cache: "no-cache" \}\)/);
     assert.match(serviceWorker, /caches\.match\("\/app\.html"\)/);
     assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
+  });
+  it('can clear browser state and rerun account setup without disconnecting SnapTrade', () => {
+    assert.match(html, /data-reset-setup>Run setup again/);
+    assert.match(html, /Choose a different brokerage account/);
+    assert.match(dataRefreshTs, /\[data-reset-setup\]/);
+    assert.match(dataRefreshTs, /localRepository\.clearAllData\(\)/);
+    assert.match(storageTs, /async clearAllData\(\)/);
   });
   it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
     for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {

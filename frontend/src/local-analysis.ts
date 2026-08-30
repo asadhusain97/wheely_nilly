@@ -24,7 +24,7 @@ const normalizedEvent = (event: BrokerageEvent) => ({
   netCashMinor: event.amountMinor === null ? null : event.amountMinor - (event.feeMinor ?? 0),
 });
 
-function scope(normalized: any) {
+export function scopeLocalAccount(normalized: any) {
   const scores = new Map<string, { options: number; events: number; lots: number }>();
   const score = (id: string) => {
     if (!scores.has(id)) scores.set(id, { options: 0, events: 0, lots: 0 });
@@ -49,7 +49,7 @@ function scope(normalized: any) {
   });
   return {
     ...normalized,
-    events: normalized.events.filter((event: any) => event.accountId === accountId && symbols.has(event.underlying)),
+    events: normalized.events.filter((event: any) => event.accountId === accountId && (event.option || symbols.has(event.underlying))),
     positions: accountPositions.filter((position: any) => symbols.has(position.option?.underlying ?? position.symbol)),
     holdings,
     optionPositions,
@@ -80,7 +80,7 @@ export async function buildLocalModel() {
     .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
   const accountId = snapshot?.accounts[0]?.id ?? "local";
   const quotes = (marketRecord?.value.quotes ?? []).map((quote) => ({ accountId, symbol: quote.symbol, lastTradePriceMinor: minor(quote.price), bidPriceMinor: minor(quote.bid), askPriceMinor: minor(quote.ask), asOf: quote.quoteTime ?? quote.fetchedAt }));
-  const normalized = scope({
+  const normalized = scopeLocalAccount({
     schemaVersion: 1,
     calculationVersion: "wheel-v2",
     positions,

@@ -21,6 +21,7 @@ export interface WheelyNillyAccount {
   numberSuffix: string | null;
   referenceLabel: string;
   syncStatus: string | null;
+  transactionSyncComplete: boolean | null;
 }
 
 export interface OptionIdentity {

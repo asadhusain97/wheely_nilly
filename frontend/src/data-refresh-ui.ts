@@ -30,7 +30,7 @@ const optionContracts = (snapshot: BrokerageSnapshot | null) => [...new Map(
 ).values()];
 const portfolioSymbols = (snapshot: BrokerageSnapshot | null) => [...new Set((snapshot?.positions ?? []).map((position) => position.option?.underlying ?? position.symbol).filter(Boolean))];
 const HISTORY_REFRESH_INTERVAL_MS = 24 * 60 * 60_000;
-export const HISTORY_IMPORT_VERSION = 2;
+export const HISTORY_IMPORT_VERSION = 3;
 export const historyImportKey = (accountId: string) => `historyImported:${accountId}`;
 export const historyImportIsDue = (value: unknown, now = Date.now()): boolean => {
   if (!value || typeof value !== "object") return true;
@@ -55,6 +55,7 @@ export async function initializeDataRefresh(): Promise<void> {
   let marketUpdatedAt = (await localRepository.get<string>("refreshMetadata", "marketUpdatedAt").catch(() => null))?.value ?? null;
   let brokerageUpdatedAt = currentSnapshot?.fetchedAt ?? null;
   let retryMode: "brokerage" | "history" = "brokerage";
+  let historyRetryTimer: number | null = null;
 
   const marketStatus = document.querySelector<HTMLElement>("[data-market-freshness]");
   const brokerageStatus = document.querySelector<HTMLElement>("[data-brokerage-freshness]");
@@ -160,6 +161,7 @@ export async function initializeDataRefresh(): Promise<void> {
       }
       showBrokerageAlignment("history");
       document.dispatchEvent(new CustomEvent("wheely-history-loading"));
+      let transactionSyncPending = false;
       for (const account of accountsDue) {
         const events: BrokerageEvent[] = [];
         let cursor: string | null = null;
@@ -171,10 +173,27 @@ export async function initializeDataRefresh(): Promise<void> {
         } while (cursor);
         const deduped = [...new Map(events.map((event) => [event.id, event])).values()];
         await mergeEventLedger(deduped);
+        if (account.transactionSyncComplete === false) {
+          transactionSyncPending = true;
+          continue;
+        }
         await localRepository.put("refreshMetadata", historyImportKey(account.id), {
           version: HISTORY_IMPORT_VERSION,
           completedAt: new Date().toISOString(),
         });
+      }
+      if (transactionSyncPending) {
+        if (historyRetryTimer === null) {
+          historyRetryTimer = window.setTimeout(() => {
+            historyRetryTimer = null;
+            void coordinator.refreshBrokerage().catch(() => undefined);
+          }, 30_000);
+        }
+        return;
+      }
+      if (historyRetryTimer !== null) {
+        window.clearTimeout(historyRetryTimer);
+        historyRetryTimer = null;
       }
       hideBrokerageAlert();
       document.dispatchEvent(new CustomEvent("wheely-history-updated"));
@@ -258,6 +277,10 @@ export async function initializeDataRefresh(): Promise<void> {
       && currentAccountIds.every((accountId) => nextAccountIds.includes(accountId));
     selectedAccountIds = nextAccountIds;
     if (!sameSnapshot) {
+      if (historyRetryTimer !== null) {
+        window.clearTimeout(historyRetryTimer);
+        historyRetryTimer = null;
+      }
       await localRepository.clearFinancialData();
       currentSnapshot = null;
       marketUpdatedAt = null;
@@ -320,6 +343,15 @@ export async function initializeDataRefresh(): Promise<void> {
   document.querySelector<HTMLButtonElement>("[data-erase-local]")?.addEventListener("click", async () => {
     if (!window.confirm("Erase the saved portfolio, market cache, Radar results, and refresh history from this browser?")) return;
     await localRepository.clearFinancialData();
+    location.reload();
+  });
+  document.querySelector<HTMLButtonElement>("[data-reset-setup]")?.addEventListener("click", async () => {
+    if (!window.confirm("Run setup again? This clears saved portfolio data, trade history, Radar results, and strategy choices from this browser. SnapTrade stays connected.")) return;
+    coordinator.stop();
+    if (historyRetryTimer !== null) window.clearTimeout(historyRetryTimer);
+    await localRepository.clearAllData();
+    globalThis.localStorage?.removeItem("wheely-nilly.screened-tickers.v1");
+    globalThis.localStorage?.removeItem("wheely-nilly.radar-scan-results.v1");
     location.reload();
   });
   window.addEventListener("online", () => {

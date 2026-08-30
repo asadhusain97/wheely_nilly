@@ -12,7 +12,7 @@ Wheely Nilly is a local-first workspace for managing the options wheel. It reads
 
 The wheel strategy usually starts with a cash-secured put. If assignment leaves you owning the shares, the next leg is a covered call. Wheely Nilly keeps the positions, rules, and results for that cycle in one place.
 
-- See open contracts and guidance tied to your saved profit-capture target.
+- See open contracts, goal-aware roll review, and broker-ready replacement targets when a position needs attention.
 - Track booked wheel profit and loss by month and ticker.
 - Scan covered calls and cash-secured puts with Radar.
 - Save different goals and rules for each ticker and strategy leg.

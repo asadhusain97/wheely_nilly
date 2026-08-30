@@ -1,5 +1,5 @@
 import { localRepository, type StorageDomain } from "./storage";
-import { buildLocalModel, buildLocalTargets, scanAllLocalTargets, scanLocalTarget } from "./local-analysis";
+import { buildLocalModel, buildLocalRollResults, buildLocalTargets, scanAllLocalTargets, scanLocalTarget } from "./local-analysis";
 import { builtInSettingsDocument } from "../assets/js/settings.js";
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
@@ -61,6 +61,17 @@ export function installLocalFirstFetch(): void {
     }
     if (request.method === "POST" && url.pathname === "/api/v1/screens/scan-all") {
       return Response.json(await scanAllLocalTargets(nativeFetch));
+    }
+    if (request.method === "POST" && url.pathname === "/api/v1/position-management/rolls") {
+      try {
+        const body = await request.json() as { contractSymbol?: unknown };
+        if (typeof body.contractSymbol !== "string" || !/^[A-Z0-9.]{1,6}\d{6}[CP]\d{8}$/.test(body.contractSymbol)) {
+          return Response.json({ error: { code: "INVALID_CONTRACT", message: "Choose a valid open contract" } }, { status: 400 });
+        }
+        return Response.json(await buildLocalRollResults(nativeFetch, body.contractSymbol));
+      } catch (error) {
+        return Response.json({ error: { code: "ROLL_SCAN_FAILED", message: error instanceof Error ? error.message : "Roll quotes unavailable" } }, { status: (error as { status?: number }).status ?? 502 });
+      }
     }
     if (request.method !== "GET") return nativeFetch(request);
     const domain = cacheDomain(url);

@@ -15,6 +15,11 @@ const radarScoringJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js
 const radarScoringConfigJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/radar-scoring-config.js'), 'utf8');
 const screenerCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/screener.css'), 'utf8');
 const goalSelectorCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/goal-selector.css'), 'utf8');
+const rollsCss = readFileSync(path.join(rootDirectory, 'frontend/assets/css/rolls.css'), 'utf8');
+const rollsJs = readFileSync(path.join(rootDirectory, 'frontend/assets/js/rolls.js'), 'utf8');
+const rollAnalysisTs = readFileSync(path.join(rootDirectory, 'frontend/src/roll-analysis.ts'), 'utf8');
+const localAnalysisTs = readFileSync(path.join(rootDirectory, 'frontend/src/local-analysis.ts'), 'utf8');
+const localFirstFetchTs = readFileSync(path.join(rootDirectory, 'frontend/src/local-first-fetch.ts'), 'utf8');
 const onboardingTs = readFileSync(path.join(rootDirectory, 'frontend/src/onboarding.ts'), 'utf8');
 const dataRefreshTs = readFileSync(path.join(rootDirectory, 'frontend/src/data-refresh-ui.ts'), 'utf8');
 const storageTs = readFileSync(path.join(rootDirectory, 'frontend/src/storage.ts'), 'utf8');
@@ -129,7 +134,7 @@ describe('responsive dashboard shell', () => {
       assert.match(js, new RegExp(`function ${component}`));
     }
     const cardSource = js.slice(js.indexOf('function renderOpenTrades'), js.indexOf('function renderDashboard'));
-    const hierarchy = ['contractHeader(trade)', 'recommendationSummary(management)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
+    const hierarchy = ['contractHeader(trade, management)', 'recommendationSummary(management, rollReview)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
     for (let index = 1; index < hierarchy.length; index += 1) {
       assert.ok(cardSource.indexOf(hierarchy[index - 1]) < cardSource.indexOf(hierarchy[index]));
     }
@@ -173,7 +178,7 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /current buyback estimate is above the opening credit/);
     assert.match(js, /executionWarning/);
     assert.match(js, /calculateLiquidity/);
-    assert.match(detailsSource, /positionCheck\(trade, management, updateTime\)/);
+    assert.match(detailsSource, /positionCheck\(trade, management, updateTime, rollReview\)/);
     assert.ok(detailsSource.indexOf("detailGroup('Trade'") < detailsSource.indexOf("detailGroup('Market'"));
     for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Underlying price', 'Bid / ask', 'Delta', 'Implied volatility']) {
       assert.match(detailsSource, new RegExp(term.replace('/', '\\/')));
@@ -198,6 +203,34 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /const metricsMissing = !management/);
     assert.match(js, /contract-metrics-loading/);
     assert.match(css, /\.trade-card\.is-metrics-loading/);
+  });
+  it('keeps goal-aware roll review on Home and reveals broker-ready choices only when needed', () => {
+    assert.match(html, /href="\/assets\/css\/rolls\.css"/);
+    assert.match(html, /id="roll-dialog"[^>]+hidden/);
+    assert.match(html, /class="roll-sheet" role="dialog" aria-modal="true"/);
+    assert.match(html, /aria-labelledby="roll-title"/);
+    assert.match(html, /aria-describedby="roll-description"/);
+    assert.match(js, /deriveRollReview\(\{ trade, management \}\)/);
+    assert.match(js, /rollController\.action\(trade, rollReview\)/);
+    assert.match(js, /contract-goal goal-tone/);
+    assert.match(js, /rollReview\?\.state === 'assignmentAligned'/);
+    assert.match(rollsJs, /if \(review\.state !== 'review'\) return null/);
+    assert.match(rollsJs, /See roll choices/);
+    assert.match(rollsJs, /\/api\/v1\/position-management\/rolls/);
+    assert.match(rollsJs, /At your broker, look for/);
+    assert.match(rollsJs, /Copy roll plan/);
+    assert.match(rollsJs, /does not place or prepare an order/);
+    assert.match(rollsJs, /event\.key === 'Escape'/);
+    assert.match(rollsJs, /trapFocus/);
+    assert.doesNotMatch(rollsJs, /showScreen|screener|\/api\/v1\/screens/);
+    assert.match(rollAnalysisTs, /naturalRollCash = roundMoney\(newOpenCredit - closeDebit\)/);
+    assert.match(rollAnalysisTs, /currentAsk \* multiplier \* quantity/);
+    assert.match(rollAnalysisTs, /candidate\.expiration\) <= utcDay\(trade\.expiration\)/);
+    assert.match(localAnalysisTs, /fetcher\("\/api\/market\/rolls"/);
+    assert.match(localFirstFetchTs, /url\.pathname === "\/api\/v1\/position-management\/rolls"/);
+    assert.match(rollsCss, /\.roll-sheet \{/);
+    assert.match(rollsCss, /max-height: 92dvh/);
+    assert.match(rollsCss, /prefers-reduced-motion/);
   });
   it('removes the prominent combined refresh control', () => {
     assert.doesNotMatch(html, /id="refresh-button"/);

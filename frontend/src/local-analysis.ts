@@ -3,6 +3,7 @@ import { localRepository } from "./storage";
 import type { BrokerageEvent, BrokerageSnapshot, MarketQuote, WheelyNillyPosition } from "./types";
 import { builtInSettingsDocument, SYSTEM_RULES } from "../assets/js/settings.js";
 import { calculateCloseResult } from "../../backend/src/services/position-management.js";
+import { buildRollSearchProfile, calculateAndRankRollCandidates, GOAL_LABELS } from "./roll-analysis";
 
 const minor = (value: number | null): number | null => value === null || !Number.isFinite(value) ? null : Math.round(value * 100);
 
@@ -229,4 +230,72 @@ export async function buildLocalCloseResults(contractResults: any[]) {
     };
   });
   return { scanTimestamp, quoteScanTimestamp: scanTimestamp, positionGeneratedAt: model.generatedAt, results, failures: results.filter((item: any) => !item.close.available).length };
+}
+
+export async function buildLocalRollResults(fetcher: typeof fetch, contractSymbol: string) {
+  const [model, settingsRecord] = await Promise.all([
+    buildLocalModel(),
+    localRepository.get<any>("tickerStrategies", "document").catch(() => null),
+  ]);
+  const trade = model.dashboard.openTrades.find((item: any) => item.contractSymbol === contractSymbol);
+  if (!trade) throw Object.assign(new Error("This contract is no longer open"), { status: 409 });
+  const settings = settingsRecord?.value ?? builtInSettingsDocument();
+  const leg = trade.type === "csp" ? "cashSecuredPut" : "coveredCall";
+  const effective = effectiveSettings(settings, trade.symbol, leg);
+  const profile = buildRollSearchProfile(effective);
+  if (!effective.goal || !profile) throw Object.assign(new Error("Choose a ticker goal before evaluating a roll"), { status: 400 });
+  const rules = effective.rules;
+  const request = {
+    current_contract: {
+      contract_symbol: trade.contractSymbol,
+      symbol: trade.symbol,
+      option_type: trade.type === "csp" ? "put" : "call",
+      expiration: trade.expiration,
+      strike: trade.strike,
+    },
+    min_dte: rules.minDte,
+    max_dte: rules.maxDte,
+    min_moneyness: rules.minMoneyness,
+    max_moneyness: rules.maxMoneyness,
+    min_open_interest: rules.minOpenInterest,
+    min_volume: rules.minVolume,
+    max_spread_percent: rules.maxSpreadPercent,
+    target_delta_min: rules.targetDeltaMin,
+    target_delta_max: rules.targetDeltaMax,
+    min_period_return: rules.minPeriodReturn,
+    allow_itm_calls: leg === "coveredCall" && effective.goal === "exit",
+    limit: 20,
+  };
+  const response = await fetcher("/api/market/rolls", {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(request),
+  });
+  const market = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = market?.detail;
+    throw Object.assign(new Error(detail?.message ?? detail?.code ?? "Roll quotes unavailable"), { status: response.status });
+  }
+  const management = { effectiveSettings: effective };
+  const candidates = market.current_quote?.available
+    ? calculateAndRankRollCandidates({ trade, management, currentQuote: market.current_quote, candidates: market.candidates ?? [] })
+    : [];
+  return {
+    contractSymbol: trade.contractSymbol,
+    symbol: trade.symbol,
+    strategy: trade.type,
+    quantity: Math.abs(Number(trade.contracts)),
+    currentStrike: trade.strike,
+    currentExpiration: trade.expiration,
+    goal: effective.goal,
+    goalLabel: GOAL_LABELS[effective.goal as keyof typeof GOAL_LABELS],
+    searchProfile: profile,
+    provider: market.provider,
+    quoteTimestamp: market.quote_timestamp,
+    fetchedAt: market.fetched_at,
+    underlyingPrice: market.underlying_price,
+    currentQuote: market.current_quote,
+    candidates,
+    exclusions: market.exclusions ?? {},
+  };
 }

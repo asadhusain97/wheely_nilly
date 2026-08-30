@@ -79,6 +79,36 @@ class ExactContract(BaseModel):
     strike: float = Field(gt=0)
 
 
+class RollRequest(BaseModel):
+    current_contract: ExactContract
+    min_dte: int = Field(default=7, ge=1, le=365)
+    max_dte: int = Field(default=45, ge=1, le=730)
+    min_moneyness: float = Field(default=0.80, gt=0, le=2)
+    max_moneyness: float = Field(default=1.20, gt=0, le=3)
+    min_open_interest: int = Field(default=10, ge=0)
+    min_volume: int = Field(default=0, ge=0)
+    max_spread_percent: float = Field(default=0.20, gt=0, le=1)
+    target_delta_min: float | None = Field(default=None, ge=0, le=1)
+    target_delta_max: float | None = Field(default=0.35, ge=0, le=1)
+    min_period_return: float = Field(default=0, ge=0, le=10)
+    allow_itm_calls: bool = False
+    max_quote_age_seconds: int = Field(default=900, ge=1, le=86400)
+    estimated_fee_per_contract: float = Field(default=0.65, ge=0, le=100)
+    risk_free_rate: float = Field(default=0.045, ge=-0.1, le=0.5)
+    dividend_yield: float = Field(default=0, ge=0, le=0.5)
+    limit: int = Field(default=20, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def validate_ranges(self):
+        if self.min_dte > self.max_dte or self.min_moneyness > self.max_moneyness:
+            raise ValueError("minimum bounds must not exceed maximum bounds")
+        if self.target_delta_min is not None and self.target_delta_max is not None and self.target_delta_min > self.target_delta_max:
+            raise ValueError("target_delta_min must not exceed target_delta_max")
+        if self.current_contract.option_type == "put" and self.allow_itm_calls:
+            raise ValueError("allow_itm_calls applies only to calls")
+        return self
+
+
 class ExactContractsRequest(BaseModel):
     contracts: list[ExactContract] = Field(min_length=1, max_length=500)
     risk_free_rate: float = Field(default=0.045, ge=-0.1, le=0.5)

@@ -2,7 +2,7 @@ import os
 
 from fastapi import FastAPI, HTTPException, Query
 
-from .models import ExactContractsRequest, ScreenRequest
+from .models import ExactContractsRequest, RollRequest, ScreenRequest
 from .providers import MarketDataProvider
 from .screener import CALCULATION_VERSION, ScreenerService
 
@@ -40,3 +40,11 @@ async def create_screen(request: ScreenRequest):
 @app.post("/v1/contracts/quotes")
 async def quote_exact_contracts(request: ExactContractsRequest):
     return await service.quote_contracts(request)
+
+
+@app.post("/v1/rolls")
+async def find_rolls(request: RollRequest):
+    try:
+        return await service.roll(request)
+    except Exception as error:
+        raise HTTPException(status_code=503, detail={"code": "PROVIDER_UNAVAILABLE", "message": f"Roll quotes unavailable ({type(error).__name__})"}) from error

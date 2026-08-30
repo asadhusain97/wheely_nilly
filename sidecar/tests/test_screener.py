@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.models import ChainSnapshot, ExactContract, ExactContractsRequest, OptionQuote, ScreenRequest
+from app.models import ChainSnapshot, ExactContract, ExactContractsRequest, OptionQuote, RollRequest, ScreenRequest
 from app.screener import ScreenerService, estimated_greeks, screen
 
 NOW = datetime(2026, 8, 23, 16, tzinfo=UTC)
@@ -82,6 +82,78 @@ def test_exact_contract_batch_preserves_symbol_level_provider_failure():
     assert result["results"][0]["available"] is True
     assert result["results"][1]["available"] is False
     assert "provider unavailable" in result["results"][1]["unavailable_reason"]
+
+
+def test_roll_scan_uses_one_snapshot_and_returns_only_later_matching_contracts():
+    today = datetime.now(UTC).date()
+    current_expiration = today + timedelta(days=5)
+    replacement_expiration = today + timedelta(days=32)
+    current_symbol = f"XYZ{current_expiration:%y%m%d}C00100000"
+    same_expiration_symbol = f"XYZ{current_expiration:%y%m%d}C00105000"
+    replacement_symbol = f"XYZ{replacement_expiration:%y%m%d}C00110000"
+    now = datetime.now(UTC)
+    quotes = [
+        OptionQuote(symbol=current_symbol, option_type="call", expiration=current_expiration, strike=100,
+                    bid=3.8, ask=4, volume=100, open_interest=500, implied_volatility=.3, quote_time=now),
+        OptionQuote(symbol=same_expiration_symbol, option_type="call", expiration=current_expiration, strike=105,
+                    bid=1.8, ask=2, volume=100, open_interest=500, implied_volatility=.3, quote_time=now),
+        OptionQuote(symbol=replacement_symbol, option_type="call", expiration=replacement_expiration, strike=110,
+                    bid=4.5, ask=4.7, volume=100, open_interest=500, implied_volatility=.3, quote_time=now),
+    ]
+
+    class StaticProvider:
+        def __init__(self):
+            self.calls = []
+
+        async def fetch_chain(self, symbol, min_dte, max_dte):
+            self.calls.append((symbol, min_dte, max_dte))
+            return ChainSnapshot(provider="fixture", underlying_price=100, underlying_quote_time=now,
+                                 fetched_at=now, quotes=quotes)
+
+    provider = StaticProvider()
+    result = asyncio.run(ScreenerService(provider).roll(RollRequest(
+        current_contract=ExactContract(contract_symbol=current_symbol, symbol="XYZ", option_type="call",
+                                       expiration=current_expiration, strike=100),
+        min_dte=30, max_dte=60, min_moneyness=1.05, max_moneyness=1.25,
+        target_delta_min=.08, target_delta_max=.25, min_period_return=0,
+    )))
+
+    assert len(provider.calls) == 1
+    assert result["current_quote"]["contract_symbol"] == current_symbol
+    assert result["current_quote"]["ask"] == 4
+    assert result["current_quote"]["available"] is True
+    assert [candidate["contract_symbol"] for candidate in result["candidates"]] == [replacement_symbol]
+    assert result["quote_timestamp"] == now
+
+
+def test_roll_scan_refuses_stale_current_buyback_quote():
+    today = datetime.now(UTC).date()
+    current_expiration = today + timedelta(days=5)
+    replacement_expiration = today + timedelta(days=32)
+    current_symbol = f"XYZ{current_expiration:%y%m%d}C00100000"
+    now = datetime.now(UTC)
+
+    class StaticProvider:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            return ChainSnapshot(provider="fixture", underlying_price=100, underlying_quote_time=now,
+                                 fetched_at=now, quotes=[
+                OptionQuote(symbol=current_symbol, option_type="call", expiration=current_expiration, strike=100,
+                            bid=3.8, ask=4, volume=100, open_interest=500, implied_volatility=.3,
+                            quote_time=now - timedelta(hours=1)),
+                OptionQuote(symbol=f"XYZ{replacement_expiration:%y%m%d}C00110000", option_type="call",
+                            expiration=replacement_expiration, strike=110, bid=4.5, ask=4.7, volume=100,
+                            open_interest=500, implied_volatility=.3, quote_time=now),
+            ])
+
+    result = asyncio.run(ScreenerService(StaticProvider()).roll(RollRequest(
+        current_contract=ExactContract(contract_symbol=current_symbol, symbol="XYZ", option_type="call",
+                                       expiration=current_expiration, strike=100),
+        min_dte=30, max_dte=60, min_moneyness=1.05, max_moneyness=1.25,
+        target_delta_min=.08, target_delta_max=.25, min_period_return=0, max_quote_age_seconds=900,
+    )))
+
+    assert result["current_quote"]["available"] is False
+    assert result["current_quote"]["unavailable_reason"] == "exact current contract quote is stale"
 
 
 def test_known_put_metrics_and_estimated_greeks():

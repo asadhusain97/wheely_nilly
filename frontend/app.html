@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/assets/css/settings.css">
   <link rel="stylesheet" href="/assets/css/screener.css">
   <link rel="stylesheet" href="/assets/css/goal-selector.css">
+  <link rel="stylesheet" href="/assets/css/rolls.css">
   <script type="module" src="/src/app-bootstrap.ts"></script>
   <script type="module" src="/assets/js/app.js"></script>
 </head>
@@ -366,6 +367,24 @@
           <p class="monitor-add-error" id="monitor-add-error" role="alert" hidden></p>
           <button class="monitor-add-submit" id="monitor-add-submit" type="submit" disabled>Add to Radar</button>
         </form>
+      </section>
+    </div>
+
+    <div class="roll-overlay" id="roll-dialog" hidden>
+      <button class="roll-backdrop" type="button" data-roll-close tabindex="-1" aria-label="Close roll choices"></button>
+      <section class="roll-sheet" role="dialog" aria-modal="true" aria-labelledby="roll-title"
+        aria-describedby="roll-description" tabindex="-1">
+        <header class="roll-sheet-header">
+          <div>
+            <p id="roll-description">Compare later contracts for this position</p>
+            <h2 id="roll-title">Roll contract</h2>
+          </div>
+          <button class="roll-close" type="button" data-roll-close aria-label="Close roll choices">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"></path></svg>
+          </button>
+        </header>
+        <p class="sr-only" id="roll-status" role="status" aria-live="polite"></p>
+        <div class="roll-sheet-body" id="roll-sheet-body"></div>
       </section>
     </div>
 

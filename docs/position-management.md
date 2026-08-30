@@ -1,12 +1,45 @@
-# Position management and binary Close guidance
+# Position management, Close guidance, and roll review
 
 The home page evaluates every derived open short call and put in place. It does not build a second position list or match opening lots again. The backend uses the dashboard's existing open-trade projection, including its aggregate opening net credit and earliest matched opening date.
 
-Close is guidance only. The card explains the calculation and never places or prepares an order. Roll calculations are outside this contract and the card does not imply that roll guidance exists.
+Close and roll guidance are analysis only. The card explains the current decision and never places or prepares an order. Roll review stays on Home because it manages an existing contract; Radar remains dedicated to finding a new wheel trade.
 
-The collapsed card is a decision summary. Its order is contract identity, recommendation, position state, three economics metrics, premium-capture progress, and a centered disclosure chevron. Identity includes ticker, strategy, strike, option type, expiration, DTE, and quantity. The existing binary Close result maps to `Hold` when the target is not met, `Close candidate` when it is met, and `Review now` when the required inputs are unavailable. The visible reason always states the actual premium capture and configured target, or the backend's unavailable reason.
+The collapsed card is a decision summary. Its order is contract identity and saved goal, recommendation, an optional roll action, two economics metrics, premium-capture progress, and a centered disclosure chevron. Identity includes ticker, strategy, strike, option type, expiration, DTE, quantity, and goal. The binary Close result maps to `Hold` when the target is not met, `Close candidate` when it is met, and `Review now` when the required inputs are unavailable. A goal-aware roll state can replace that label only when a roll condition is active. The visible reason states why the decision applies.
 
-The economics row promotes estimated P/L if closed, premium captured, and earned per day. A progress bar marks the effective `closeAtProfitCapture` setting and turns green only when the existing Close signal passes. ITM receives an amber attention treatment; OTM and raw values remain neutral. The expanded area does not repeat collapsed values. It contains two balanced groups. Trade shows premium received, buyback estimate, collateral, and breakeven. Market shows the underlying price, bid/ask with spread context, delta, and implied volatility. The last refresh time sits at the bottom. Empty optional metrics are omitted. Metric labels continue to open the glossary where a matching term exists.
+The economics row promotes estimated P/L if closed and earned per day. A progress bar marks the effective `closeAtProfitCapture` setting and turns green only when the existing Close signal passes. The expanded area does not repeat collapsed values. It starts with profit-target, assignment-risk, exit-liquidity, and conditional roll-decision interpretations, followed by two balanced audit groups. Trade shows premium received, buyback estimate, collateral, and breakeven. Market shows the underlying price, bid/ask with spread context, delta, and implied volatility. Empty optional metrics are omitted. Metric labels continue to open the glossary where a matching term exists.
+
+## Goal-aware roll review
+
+Roll conditions are derived locally from the current position, its exact-contract metrics, and the effective ticker goal. A normal `Hold` or `Close candidate` does not gain extra controls. `See roll choices` appears only for `review`:
+
+- **Keep Shares:** review a covered call when assignment conflicts with the goal and the call is ITM or above the saved delta ceiling. Candidate preference is up and out within the saved contract range.
+- **Earn Income:** review when the profit target is met or expiration is near. Candidate preference stays near the saved delta and DTE targets, then favors a better conservative credit.
+- **Plan Exit:** let an aligned ITM covered call proceed. If an OTM call nears expiration, review lower or later calls that preserve any saved minimum effective sale price.
+- **Plan Entry:** let an aligned ITM put proceed. If an OTM put nears expiration, review a later put near spot that preserves any saved maximum effective purchase price.
+
+“Let assignment work” is a positive management decision, not a roll prompt. The current assignment already matches the ticker goal, so the interface does not create work for the user.
+
+The near-expiration window is the smaller of 10 days and the goal's saved minimum DTE. Roll review can also activate earlier when delta and assignment intent conflict. A credit alone never activates or validates a roll.
+
+## Roll choices and broker handoff
+
+Opening the Home sheet requests the exact current contract and later candidate expirations in one chain snapshot. The browser keeps the opening credit, position size, goal, and price guard local. The market bridge receives only the technical contract identity and screening limits.
+
+Candidates must expire after the current contract and pass the saved DTE, moneyness, delta, liquidity, quote-age, and return rules. A usable, fresh ask is required for the current buyback. The shortlist contains at most three goal-ranked replacements. It does not redirect to Radar.
+
+The primary estimate is deliberately conservative:
+
+```text
+closeDebit = current ask × multiplier × contracts + closing fees
+newOpenCredit = replacement bid × multiplier × contracts − opening fees
+naturalRollCash = newOpenCredit − closeDebit
+cumulativeOptionCash = original opening credit + naturalRollCash
+
+CC effective sale price = replacement strike + cumulativeOptionCash per share
+CSP effective purchase price = replacement strike − cumulativeOptionCash per share
+```
+
+The sheet shows the current and replacement contracts, estimated net credit or debit, added days, and effective assignment price. Midpoint, liquidity, and quote context stay behind “Show how this was chosen.” “Copy roll plan” creates a two-leg text handoff for the broker. The user must confirm both contracts, a net limit price, fees, buying-power effects, and live quotes with the broker.
 
 ## Binary rule
 
@@ -70,6 +103,8 @@ Each result contains:
 - Effective goal, rules, price guard, enabled state, and per-field `sourceMap`.
 - `close.available`, nullable binary `close.signal`, numeric `close.metrics`, and `unavailableReason`.
 - A stable conditions list with actual value, configured value, pass status, source, and a `decisive` marker. Only `premiumCapture` is decisive.
+
+In the local-first browser path, `POST /api/v1/position-management/rolls` accepts one open OCC contract symbol. It resolves the position and settings from IndexedDB, calls `POST /api/market/rolls` for one sanitized market snapshot, and calculates cumulative roll economics locally.
 
 ## Refresh and scheduling
 

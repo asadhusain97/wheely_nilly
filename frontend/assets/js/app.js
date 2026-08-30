@@ -3,6 +3,8 @@ import { calculateLiquidity } from './radar-scoring.js';
 import { resolveRadarScoringConfig } from './radar-scoring-config.js';
 import { createScreenerController } from './screener.js';
 import { createStrategySettingsController } from './settings.js';
+import { createRollController } from './rolls.js';
+import { deriveRollReview, GOAL_LABELS } from '../../src/roll-analysis.ts';
 
 const SCREENED_TICKERS_KEY = 'wheely-nilly.screened-tickers.v1';
 
@@ -186,6 +188,7 @@ const strategySettingsController = createStrategySettingsController({
   ],
 });
 strategySettingsController.initialize();
+const rollController = createRollController({ request: json, notify: toast });
 const screenerController = createScreenerController({
   request: json,
   notify: toast,
@@ -802,7 +805,7 @@ function renderOpenTrades(dashboard) {
     const card = el('article', `trade-card${metricsMissing ? ' is-metrics-loading' : ''}`);
     if (metricsMissing && !metricsFailed) card.setAttribute('aria-busy', 'true');
     card.setAttribute('aria-label', `${trade.symbol} ${trade.type.toUpperCase()} open contract`);
-    card.append(contractHeader(trade));
+    card.append(contractHeader(trade, management));
     if (metricsMissing) {
       const pending = el('div', `contract-metrics-loading${metricsFailed ? ' is-error' : ''}`);
       pending.setAttribute('role', 'status');
@@ -810,9 +813,12 @@ function renderOpenTrades(dashboard) {
       if (!metricsFailed) pending.append(el('i'), el('i'), el('i'));
       card.append(pending);
     } else {
-      const details = contractDetails(trade, management);
+      const rollReview = deriveRollReview({ trade, management });
+      const details = contractDetails(trade, management, rollReview);
+      const rollAction = rollController.action(trade, rollReview);
       card.append(
-        recommendationSummary(management),
+        recommendationSummary(management, rollReview),
+        ...[rollAction].filter(Boolean),
         economicsSummary(management),
         premiumCaptureProgress(management),
         details.footer,
@@ -823,7 +829,7 @@ function renderOpenTrades(dashboard) {
   }
 }
 
-function contractHeader(trade) {
+function contractHeader(trade, management = null) {
   const header = el('header', 'contract-header');
   const title = el('div', 'contract-title');
   const identity = el('div', 'contract-identity');
@@ -831,6 +837,12 @@ function contractHeader(trade) {
     el('h3', '', trade.symbol),
     el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
   );
+  const goal = management?.effectiveSettings?.goal;
+  if (goal && GOAL_LABELS[goal]) {
+    const goalChip = el('span', 'contract-goal goal-tone', GOAL_LABELS[goal]);
+    goalChip.dataset.goal = goal;
+    identity.append(goalChip);
+  }
   const optionType = trade.type === 'csp' ? 'Put' : 'Call';
   title.append(
     identity,
@@ -846,7 +858,7 @@ function contractHeader(trade) {
   return header;
 }
 
-function recommendationPresentation(management) {
+function recommendationPresentation(management, rollReview) {
   const close = management?.close;
   if (!close?.available) {
     return {
@@ -854,6 +866,12 @@ function recommendationPresentation(management) {
       tone: 'review',
       reason: close?.unavailableReason ?? 'Close guidance has not been calculated yet.',
     };
+  }
+  if (rollReview?.state === 'review') {
+    return { label: rollReview.label, tone: 'roll', reason: rollReview.reason };
+  }
+  if (rollReview?.state === 'assignmentAligned') {
+    return { label: rollReview.label, tone: 'assignment', reason: rollReview.reason };
   }
   const capture = percent(close.metrics.premiumCapture, { sign: false });
   const target = percent(management.effectiveSettings.rules.closeAtProfitCapture, { sign: false });
@@ -869,9 +887,10 @@ function recommendationPresentation(management) {
     : { label: 'Hold', tone: 'hold', reason: `${capture} of premium captured; your close target is ${target}.${assignmentNote}` };
 }
 
-function recommendationSummary(management) {
-  const recommendation = recommendationPresentation(management);
+function recommendationSummary(management, rollReview) {
+  const recommendation = recommendationPresentation(management, rollReview);
   const summary = el('section', `recommendation-summary is-${recommendation.tone}`);
+  if (rollReview?.goal) summary.dataset.goal = rollReview.goal;
   const heading = el('div', 'recommendation-heading');
   heading.append(
     el('span', 'recommendation-eyebrow', 'Recommendation'),
@@ -1055,7 +1074,16 @@ function exitLiquidityCheck(trade, management) {
   return positionCheckRow('Exit liquidity', `${rating} liquidity. ${detail}. ${guidance}`, tone);
 }
 
-function positionCheck(trade, management, updateTime) {
+function rollDecisionCheck(rollReview) {
+  if (!['review', 'assignmentAligned'].includes(rollReview?.state)) return null;
+  return positionCheckRow(
+    'Roll decision',
+    rollReview.reason,
+    rollReview.state === 'assignmentAligned' ? 'positive' : 'warning',
+  );
+}
+
+function positionCheck(trade, management, updateTime, rollReview) {
   const section = el('section', 'position-check');
   const heading = el('div', 'position-check-heading');
   const refreshed = refreshTime(updateTime);
@@ -1068,12 +1096,13 @@ function positionCheck(trade, management, updateTime) {
     profitTargetCheck(management),
     assignmentRiskCheck(trade, management),
     exitLiquidityCheck(trade, management),
+    ...[rollDecisionCheck(rollReview)].filter(Boolean),
   );
   section.append(heading, rows);
   return section;
 }
 
-function contractDetails(trade, management) {
+function contractDetails(trade, management, rollReview) {
   const metrics = management?.close?.metrics;
   const footer = el('div', 'contract-details-footer');
   const updateTime = management?.quoteTimestamps?.contract
@@ -1122,7 +1151,7 @@ function contractDetails(trade, management) {
     detailMetric('Delta', metrics?.delta == null ? null : decimal(metrics.delta, 3), 'Delta'),
     detailMetric('Implied volatility', metrics?.impliedVolatility == null ? null : percent(metrics.impliedVolatility, { sign: false }), 'Implied volatility'),
   ]);
-  panel.append(positionCheck(trade, management, updateTime), ...[economics, market].filter(Boolean));
+  panel.append(positionCheck(trade, management, updateTime, rollReview), ...[economics, market].filter(Boolean));
   if (trade.needsReview) {
     panel.append(el('p', 'contract-data-note', 'Some opening-position data needs review.'));
   }

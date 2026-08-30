@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from sidecar.app.models import ExactContractsRequest, ScreenRequest
+from sidecar.app.models import ExactContractsRequest, RollRequest, ScreenRequest
 from sidecar.app.providers import MarketDataProvider, ProviderUnavailable
 from sidecar.app.screener import ScreenerService
 
@@ -72,6 +72,14 @@ async def chain(request: ChainRequest):
 @app.post("/api/market/contracts")
 async def contracts(request: ExactContractsRequest):
     return await service.quote_contracts(request)
+
+
+@app.post("/api/market/rolls")
+async def rolls(request: RollRequest):
+    try:
+        return await service.roll(request)
+    except ProviderUnavailable as error:
+        raise HTTPException(status_code=503, detail={"code": "PROVIDER_UNAVAILABLE", "message": str(error)}) from error
 
 
 @app.post("/api/market/screens")

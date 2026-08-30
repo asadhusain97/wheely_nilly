@@ -1,0 +1,518 @@
+/* Home-only roll review: quiet on the card, focused in the decision sheet. */
+.contract-goal {
+  min-width: max-content;
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--goal-color) 16%, transparent);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: color-mix(in srgb, var(--goal-color) 8%, var(--canvas));
+  font-size: 7px;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.recommendation-summary.is-roll .recommendation-label {
+  color: var(--warning);
+}
+
+.recommendation-summary.is-roll .recommendation-label::before {
+  background: var(--warning);
+  box-shadow: 0 0 0 4px #fff3df;
+}
+
+.recommendation-summary.is-assignment .recommendation-label {
+  color: var(--green);
+}
+
+.recommendation-summary.is-assignment .recommendation-label::before {
+  background: var(--green);
+}
+
+.roll-review-action {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 0 2px;
+}
+
+.roll-review-action button {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 14px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.roll-review-action button:active,
+.roll-copy:active {
+  transform: scale(.98);
+}
+
+.roll-overlay {
+  position: fixed;
+  z-index: 48;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+}
+
+.roll-overlay[hidden] {
+  display: none;
+}
+
+.roll-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: rgba(17, 17, 15, .42);
+  opacity: 0;
+  cursor: default;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  transition: opacity .22s ease;
+}
+
+.roll-sheet {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  min-width: 0;
+  max-width: 100vw;
+  max-height: 92dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(17, 17, 15, .12);
+  border-bottom: 0;
+  border-radius: 26px 26px 0 0;
+  background: var(--wash);
+  box-shadow: 0 -18px 50px rgba(17, 17, 15, .2);
+  outline: 0;
+  transform: translateY(104%);
+  transition: transform .25s cubic-bezier(.22, .8, .3, 1);
+}
+
+.roll-overlay.is-open .roll-backdrop {
+  opacity: 1;
+}
+
+.roll-overlay.is-open .roll-sheet {
+  transform: translateY(0);
+}
+
+.roll-sheet-header {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.roll-sheet-header p {
+  margin: 0 0 3px;
+  color: var(--mute);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.roll-sheet-header h2 {
+  margin: 0;
+  font-size: 23px;
+  letter-spacing: -.7px;
+}
+
+.roll-close {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--body);
+  cursor: pointer;
+}
+
+.roll-close .ui-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.roll-sheet-body {
+  min-width: 0;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 11px;
+  padding: 13px 13px max(20px, env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.roll-section-eyebrow {
+  margin: 0;
+  color: var(--mute);
+  font-size: 8px;
+  font-weight: 790;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.roll-search-profile,
+.roll-selection,
+.roll-alternatives,
+.roll-audit,
+.roll-empty {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--canvas);
+}
+
+.roll-search-profile {
+  padding: 12px;
+}
+
+.roll-search-grid {
+  display: grid;
+  grid-template-columns: 1.15fr .85fr .8fr;
+  gap: 1px;
+  overflow: hidden;
+  margin: 9px 0 0;
+  border: 1px solid var(--soft-line);
+  border-radius: 11px;
+  background: var(--soft-line);
+}
+
+.roll-search-grid > div {
+  min-width: 0;
+  padding: 9px;
+  background: var(--wash);
+}
+
+.roll-search-grid dt,
+.roll-economics dt,
+.roll-audit-grid dt {
+  color: var(--mute);
+  font-size: 7px;
+  line-height: 1.25;
+}
+
+.roll-search-grid dd,
+.roll-economics dd,
+.roll-audit-grid dd {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+
+.roll-price-guard {
+  margin: 9px 1px 0;
+  color: var(--body);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.roll-selection {
+  overflow: hidden;
+}
+
+.roll-swap-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
+  padding: 11px;
+  background: linear-gradient(135deg, #f0f0eb, var(--wash));
+}
+
+.roll-contract-block {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 70px;
+  padding: 10px;
+  border: 1px solid var(--soft-line);
+  border-radius: 12px;
+  background: var(--canvas);
+}
+
+.roll-contract-label {
+  color: var(--ash);
+  font-size: 7px;
+  font-weight: 780;
+  text-transform: uppercase;
+}
+
+.roll-contract-block strong {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roll-contract-block small {
+  color: var(--mute);
+  font-size: 8px;
+  line-height: 1.3;
+}
+
+.roll-swap-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--mute);
+  font-size: 18px;
+}
+
+.roll-economics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border-top: 1px solid var(--soft-line);
+  background: var(--soft-line);
+}
+
+.roll-economics > div {
+  min-width: 0;
+  padding: 10px;
+  background: var(--canvas);
+}
+
+.roll-economics dd {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.roll-economics .is-credit dd {
+  color: var(--green);
+}
+
+.roll-economics .is-debit dd,
+.roll-candidate-outcome.is-debit strong {
+  color: var(--warning);
+}
+
+.roll-fit-summary {
+  margin: 0;
+  padding: 11px;
+  border-top: 1px solid var(--soft-line);
+  color: var(--body);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.roll-alternatives {
+  padding: 11px;
+}
+
+.roll-candidate-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.roll-candidate {
+  width: 100%;
+  min-height: 55px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--soft-line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: var(--wash);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.roll-candidate:active {
+  background: var(--card);
+}
+
+.roll-candidate-identity,
+.roll-candidate-outcome {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.roll-candidate-identity strong,
+.roll-candidate-outcome strong {
+  font-size: 10px;
+}
+
+.roll-candidate-identity small,
+.roll-candidate-outcome small {
+  color: var(--mute);
+  font-size: 7px;
+}
+
+.roll-candidate-outcome {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.roll-audit {
+  overflow: hidden;
+}
+
+.roll-audit summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--mute);
+  font-size: 8px;
+  font-weight: 740;
+  cursor: pointer;
+}
+
+.roll-audit[open] summary {
+  border-bottom: 1px solid var(--soft-line);
+  color: var(--body);
+}
+
+.roll-audit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+  margin: 0;
+  padding: 5px 12px;
+}
+
+.roll-audit-grid > div {
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--soft-line);
+}
+
+.roll-audit-note {
+  margin: 0;
+  padding: 9px 12px 11px;
+  color: var(--ash);
+  font-size: 7px;
+  line-height: 1.45;
+}
+
+.roll-copy {
+  min-height: 46px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--ink);
+  color: #fff;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.roll-readonly-note {
+  margin: -3px 5px 0;
+  color: var(--mute);
+  font-size: 8px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.roll-empty {
+  padding: 17px 14px;
+}
+
+.roll-empty strong {
+  display: block;
+  font-size: 12px;
+}
+
+.roll-empty p {
+  margin: 6px 0 0;
+  color: var(--mute);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.roll-empty.is-warning {
+  border-color: #ecd7ae;
+  background: #fffaf1;
+}
+
+.roll-loading {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--mute);
+  font-size: 9px;
+}
+
+.roll-loading span {
+  margin-right: 4px;
+}
+
+.roll-loading i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ash);
+  animation: roll-pulse .9s ease-in-out infinite alternate;
+}
+
+.roll-loading i:last-child {
+  animation-delay: .2s;
+}
+
+@keyframes roll-pulse {
+  to { opacity: .25; transform: translateY(-2px); }
+}
+
+@media (min-width: 700px) {
+  .roll-sheet {
+    width: min(calc(100% - 40px), 560px);
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(17, 17, 15, .12);
+    border-radius: 26px;
+  }
+}
+
+@media (max-width: 420px) {
+  .roll-search-grid { grid-template-columns: 1fr 1fr; }
+  .roll-search-grid > div:first-child { grid-column: 1 / -1; }
+  .roll-swap-rail { grid-template-columns: minmax(0, 1fr) 22px minmax(0, 1fr); gap: 3px; padding: 8px; }
+  .roll-contract-block { padding: 8px; }
+  .roll-economics { grid-template-columns: 1fr 1fr; }
+  .roll-economics > div:last-child { grid-column: 1 / -1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roll-sheet,
+  .roll-backdrop { transition: none; }
+  .roll-loading i { animation: none; }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .roll-backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

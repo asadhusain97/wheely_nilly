@@ -3,7 +3,7 @@ import math
 import time
 from datetime import UTC, datetime
 
-from .models import ChainSnapshot, ExactContractsRequest, ScreenRequest
+from .models import ChainSnapshot, ExactContractsRequest, RollRequest, ScreenRequest
 
 CALCULATION_VERSION = "screener-2.2.0"
 
@@ -166,6 +166,71 @@ class ScreenerService:
             "cache": {"hit": cache_hit, "age_seconds": cache_age},
             "assumptions": {"executable_price": "midpoint only when spread threshold passes; otherwise excluded", "contract_multiplier": 100, "fees": "estimated fee is subtracted from gross contract credit", "annualization": "simple return * 365 / DTE", "put_denominator": "strike collateral less net contract credit", "call_breakeven": "broker cost basis when available, otherwise current underlying price, less net credit per share; never used as a sale-price gate", "risk_free_rate": request.risk_free_rate, "dividend_yield": request.dividend_yield},
             "candidates": candidates, "exclusions": exclusions, "duration_ms": round((time.monotonic() - started) * 1000, 2)}
+
+    async def roll(self, request: RollRequest):
+        started, now = time.monotonic(), datetime.now(UTC)
+        current = request.current_contract
+        current_dte = max(0, (current.expiration - now.date()).days)
+        snapshot, cache_hit, cache_age = await self._snapshot(
+            current.symbol, min(current_dte, request.min_dte), max(current_dte, request.max_dte), now,
+        )
+        current_quote = next((quote for quote in snapshot.quotes
+            if quote.symbol.replace(" ", "").upper() == current.contract_symbol.replace(" ", "").upper()), None)
+        quote_reference_time = snapshot.underlying_quote_time.astimezone(UTC) if snapshot.underlying_quote_time else now
+        current_quote_age = math.inf if current_quote is None or current_quote.quote_time is None else max(
+            0, (quote_reference_time - current_quote.quote_time.astimezone(UTC)).total_seconds(),
+        )
+        current_payload = {
+            "available": current_quote is not None and current_quote.ask is not None and current_quote.ask > 0
+                and (current_quote.bid is None or current_quote.ask >= current_quote.bid)
+                and current_quote_age <= request.max_quote_age_seconds,
+            "contract_symbol": current.contract_symbol,
+            "bid": current_quote.bid if current_quote else None,
+            "ask": current_quote.ask if current_quote else None,
+            "quote_time": current_quote.quote_time if current_quote else None,
+            "quote_age_seconds": None if math.isinf(current_quote_age) else current_quote_age,
+        }
+        if current_quote is None:
+            current_payload["unavailable_reason"] = "exact current contract quote not found"
+        elif current_quote_age > request.max_quote_age_seconds:
+            current_payload["unavailable_reason"] = "exact current contract quote is stale"
+        elif not current_payload["available"]:
+            current_payload["unavailable_reason"] = "exact current contract has no usable ask"
+        leg = "covered_call" if current.option_type == "call" else "cash_secured_put"
+        candidate_request = ScreenRequest(
+            symbol=current.symbol, leg=leg, min_dte=request.min_dte, max_dte=request.max_dte,
+            min_moneyness=request.min_moneyness, max_moneyness=request.max_moneyness,
+            min_open_interest=request.min_open_interest, min_volume=request.min_volume,
+            max_spread_percent=request.max_spread_percent, target_delta_min=request.target_delta_min,
+            target_delta_max=request.target_delta_max, cash_available=1_000_000_000,
+            covered_shares=1_000_000, estimated_fee_per_contract=request.estimated_fee_per_contract,
+            risk_free_rate=request.risk_free_rate, dividend_yield=request.dividend_yield,
+            max_quote_age_seconds=request.max_quote_age_seconds, min_period_return=request.min_period_return,
+            allow_itm_calls=request.allow_itm_calls, limit=100,
+        )
+        later_snapshot = snapshot.model_copy(update={"quotes": [
+            quote for quote in snapshot.quotes
+            if quote.symbol.replace(" ", "").upper() != current.contract_symbol.replace(" ", "").upper()
+            and quote.expiration > current.expiration
+        ]})
+        candidates, exclusions = screen(later_snapshot, candidate_request, now)
+        candidates = candidates[:request.limit]
+        return {
+            "schema_version": 1,
+            "calculation_version": CALCULATION_VERSION,
+            "symbol": current.symbol,
+            "leg": leg,
+            "provider": snapshot.provider,
+            "provider_unofficial": snapshot.unofficial,
+            "underlying_price": snapshot.underlying_price,
+            "quote_timestamp": snapshot.underlying_quote_time,
+            "fetched_at": snapshot.fetched_at,
+            "cache": {"hit": cache_hit, "age_seconds": cache_age},
+            "current_quote": current_payload,
+            "candidates": candidates,
+            "exclusions": exclusions,
+            "duration_ms": round((time.monotonic() - started) * 1000, 2),
+        }
 
     async def quote_contracts(self, request: ExactContractsRequest):
         started, now = time.monotonic(), datetime.now(UTC)

@@ -19,3 +19,9 @@ def test_vercel_rewrite_restores_nested_market_route():
         "status": "ok",
         "provider": "yfinance",
     }
+
+
+def test_vercel_rewrite_reaches_roll_validation_without_market_call():
+    response = TestClient(app).post("/api/market?route=rolls", json={})
+
+    assert response.status_code == 422

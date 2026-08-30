@@ -169,20 +169,31 @@ export async function initializeOnboarding(): Promise<void> {
       });
       accountList.replaceChildren(...choices);
     } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : "SnapTrade is connected, but Wheely Nilly could not read the account list yet.";
+      const requestError = error as { status?: number; code?: string; message?: string };
+      const authorizationExpired = requestError.status === 401 || requestError.code === "AUTH_REQUIRED";
+      const message = authorizationExpired
+        ? "SnapTrade access expired. Reconnect to read your brokerage accounts."
+        : error instanceof Error
+          ? error.message
+          : "SnapTrade is connected, but Wheely Nilly could not read the account list yet.";
       const copy = Object.assign(document.createElement("p"), { textContent: message });
       const actions = Object.assign(document.createElement("div"), { className: "onboarding-account-actions" });
-      const retry = Object.assign(document.createElement("button"), { type: "button", textContent: "Try again" });
-      const dashboard = Object.assign(document.createElement("a"), {
-        href: "https://dashboard.snaptrade.com",
-        target: "_blank",
-        rel: "noreferrer",
-        textContent: "Open SnapTrade",
-      });
-      retry.addEventListener("click", () => void loadAccounts());
-      actions.append(retry, dashboard);
+      if (authorizationExpired) {
+        actions.append(Object.assign(document.createElement("a"), {
+          href: "/api/auth/start?returnTo=/app",
+          textContent: "Reconnect SnapTrade",
+        }));
+      } else {
+        const retry = Object.assign(document.createElement("button"), { type: "button", textContent: "Try again" });
+        const dashboard = Object.assign(document.createElement("a"), {
+          href: "https://dashboard.snaptrade.com",
+          target: "_blank",
+          rel: "noreferrer",
+          textContent: "Open SnapTrade",
+        });
+        retry.addEventListener("click", () => void loadAccounts());
+        actions.append(retry, dashboard);
+      }
       accountList.replaceChildren(copy, actions);
     } finally {
       loadingAccounts = false;

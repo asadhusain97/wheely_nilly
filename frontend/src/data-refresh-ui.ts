@@ -65,6 +65,7 @@ export async function initializeDataRefresh(): Promise<void> {
   const brokerageAlertTitle = document.querySelector<HTMLElement>("[data-brokerage-alert-title]");
   const brokerageAlertCopy = document.querySelector<HTMLElement>("[data-brokerage-alert-copy]");
   const retryAlignment = document.querySelector<HTMLButtonElement>("[data-retry-alignment]");
+  const reconnectAlignment = document.querySelector<HTMLAnchorElement>("[data-reconnect-alignment]");
   const brokerageContent = document.querySelector<HTMLElement>("[data-brokerage-content]");
 
   const showBrokerageContent = (visible: boolean) => {
@@ -73,6 +74,7 @@ export async function initializeDataRefresh(): Promise<void> {
   const hideBrokerageAlert = () => {
     if (brokerageAlert) brokerageAlert.hidden = true;
     if (retryAlignment) retryAlignment.hidden = true;
+    if (reconnectAlignment) reconnectAlignment.hidden = true;
   };
   const showBrokerageAlignment = (state: "reading" | "history" | "error", error?: unknown) => {
     if (!brokerageAlert) return;
@@ -85,6 +87,7 @@ export async function initializeDataRefresh(): Promise<void> {
         ? "Your saved view remains available while SnapTrade responds."
         : "This can take a moment. Portfolio data will appear as soon as SnapTrade responds.";
       if (retryAlignment) retryAlignment.hidden = true;
+      if (reconnectAlignment) reconnectAlignment.hidden = true;
       return;
     }
     if (state === "history") {
@@ -92,6 +95,7 @@ export async function initializeDataRefresh(): Promise<void> {
       if (brokerageAlertTitle) brokerageAlertTitle.textContent = "Positions found. Loading trade history…";
       if (brokerageAlertCopy) brokerageAlertCopy.textContent = "Booked profit, past trades, and opening contract details will appear when this finishes.";
       if (retryAlignment) retryAlignment.hidden = true;
+      if (reconnectAlignment) reconnectAlignment.hidden = true;
       return;
     }
     const requestError = error as { status?: number; code?: string; message?: string };
@@ -107,7 +111,9 @@ export async function initializeDataRefresh(): Promise<void> {
         : requestError.status === 409
           ? "Choose an available brokerage account to continue."
           : "SnapTrade is connected, but Wheely Nilly could not read the selected account. Your saved view is unchanged.";
-    if (retryAlignment) retryAlignment.hidden = requestError.status === 401;
+    const authorizationExpired = requestError.status === 401;
+    if (retryAlignment) retryAlignment.hidden = authorizationExpired;
+    if (reconnectAlignment) reconnectAlignment.hidden = !authorizationExpired;
   };
 
   showBrokerageContent(Boolean(currentSnapshot));

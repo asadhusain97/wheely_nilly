@@ -71,6 +71,10 @@ describe('responsive dashboard shell', () => {
     assert.match(dataRefreshTs, /\[data-reset-setup\]/);
     assert.match(dataRefreshTs, /localRepository\.clearAllData\(\)/);
     assert.match(storageTs, /async clearAllData\(\)/);
+    assert.match(html, /data-reconnect-alignment[^>]+hidden>Reconnect SnapTrade/);
+    assert.match(dataRefreshTs, /reconnectAlignment\.hidden = !authorizationExpired/);
+    assert.match(onboardingTs, /SnapTrade access expired\. Reconnect to read your brokerage accounts\./);
+    assert.match(onboardingTs, /textContent: "Reconnect SnapTrade"/);
   });
   it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
     for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {

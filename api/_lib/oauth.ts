@@ -192,7 +192,12 @@ const tokenRequest = async (body: URLSearchParams, clientId: string, previousRef
     body,
     signal: AbortSignal.timeout(12_000),
   });
-  if (!response.ok) throw new Error(`SnapTrade token request failed with ${response.status}`);
+  if (!response.ok) {
+    throw Object.assign(new Error(`SnapTrade token request failed with ${response.status}`), {
+      status: response.status,
+      code: "OAUTH_TOKEN_REQUEST_FAILED",
+    });
+  }
   return parseTokens(await response.json() as Record<string, unknown>, clientId, previousRefreshToken);
 };
 
@@ -235,15 +240,26 @@ export const withAccessToken = async <T>(
 ): Promise<T> => {
   let session = readSession(request);
   if (!session) throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
+  const refreshSession = async (): Promise<OAuthTokens> => {
+    try {
+      return await refreshTokens(session!);
+    } catch (error) {
+      if ([400, 401, 403].includes((error as { status?: number }).status ?? 0)) {
+        clearAuth(response);
+        throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
+      }
+      throw error;
+    }
+  };
   if (session.expiresAt - Date.now() < 5 * 60 * 1000) {
-    session = await refreshTokens(session);
+    session = await refreshSession();
     setSession(response, session);
   }
   try {
     return await operation(session.accessToken);
   } catch (error) {
     if ((error as { status?: number }).status !== 401) throw error;
-    const refreshed = await refreshTokens(session);
+    const refreshed = await refreshSession();
     setSession(response, refreshed);
     return operation(refreshed.accessToken);
   }

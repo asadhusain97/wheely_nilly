@@ -121,11 +121,11 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /money\(viewModel\.reward\.netCredit\)/);
   });
   it('turns binary Close guidance into a compact decision-first contract card', () => {
-    for (const component of ['contractHeader', 'recommendationSummary', 'positionState', 'economicsSummary', 'premiumCaptureProgress', 'contractDetails']) {
+    for (const component of ['contractHeader', 'recommendationSummary', 'economicsSummary', 'premiumCaptureProgress', 'positionCheck', 'contractDetails']) {
       assert.match(js, new RegExp(`function ${component}`));
     }
     const cardSource = js.slice(js.indexOf('function renderOpenTrades'), js.indexOf('function renderDashboard'));
-    const hierarchy = ['contractHeader(trade)', 'recommendationSummary(management)', 'positionState(management)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
+    const hierarchy = ['contractHeader(trade)', 'recommendationSummary(management)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
     for (let index = 1; index < hierarchy.length; index += 1) {
       assert.ok(cardSource.indexOf(hierarchy[index - 1]) < cardSource.indexOf(hierarchy[index]));
     }
@@ -135,10 +135,13 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /label: 'Hold'/);
     assert.match(js, /management\.effectiveSettings\.rules\.closeAtProfitCapture/);
     assert.match(js, /meeting your \$\{target\} close target/);
+    assert.match(js, /Assignment risk deserves attention/);
+    assert.match(js, /alignment\?\.status === 'aligns'/);
     assert.doesNotMatch(cardSource, /weighted score|majority|assignment override|quoteAge|Roll over now/);
 
-    for (const metric of ['P/L if closed', 'Premium captured', 'Earned / day']) assert.match(js, new RegExp(metric.replace('/', '\\/')));
-    assert.match(css, /\.trade-economics\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
+    for (const metric of ['P/L if closed', 'Earned / day']) assert.match(js, new RegExp(metric.replace('/', '\\/')));
+    assert.doesNotMatch(js.slice(js.indexOf('function economicsSummary'), js.indexOf('function premiumCaptureProgress')), /Premium captured/);
+    assert.match(css, /\.trade-economics\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
     assert.match(js, /--capture-progress/);
     assert.match(js, /--capture-target/);
     assert.match(js, /role', 'progressbar'/);
@@ -146,18 +149,27 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /\.premium-progress\.is-met \.premium-progress-fill\{background:var\(--green\)\}/);
 
     assert.match(js, /const control = el\('button', 'contract-details-control'\)/);
-    assert.doesNotMatch(js, /contract-details-control', 'Details'/);
+    assert.match(js, /Show position check/);
+    assert.match(js, /Hide position check/);
     assert.match(js, /control\.setAttribute\('aria-expanded', 'false'\)/);
     assert.match(js, /control\.setAttribute\('aria-controls', panelId\)/);
     assert.match(js, /panel\.hidden = !expanded/);
     assert.match(js, /panel\.setAttribute\('role', 'region'\)/);
     assert.match(js, /panel\.setAttribute\('aria-labelledby', control\.id\)/);
     assert.match(css, /\.contract-details-control:focus-visible/);
-    assert.match(css, /\.contract-details-footer\{height:36px;display:grid;place-items:center/);
+    assert.match(css, /\.contract-details-footer\{height:40px;display:grid;place-items:center/);
     assert.match(css, /\.contract-details-control::after\{[^}]*border-right:1px solid currentColor[^}]*rotate\(45deg\)/);
     assert.match(css, /\.contract-details\[hidden\]\{display:none\}/);
 
     const detailsSource = js.slice(js.indexOf('function contractDetails'), js.indexOf('function renderDashboard'));
+    assert.match(js, /function profitTargetCheck/);
+    assert.match(js, /function assignmentRiskCheck/);
+    assert.match(js, /function exitLiquidityCheck/);
+    for (const check of ['Profit target', 'Assignment risk', 'Exit liquidity']) assert.match(js, new RegExp(check));
+    assert.match(js, /current buyback estimate is above the opening credit/);
+    assert.match(js, /executionWarning/);
+    assert.match(js, /calculateLiquidity/);
+    assert.match(detailsSource, /positionCheck\(trade, management, updateTime\)/);
     assert.ok(detailsSource.indexOf("detailGroup('Trade'") < detailsSource.indexOf("detailGroup('Market'"));
     for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Underlying price', 'Bid / ask', 'Delta', 'Implied volatility']) {
       assert.match(detailsSource, new RegExp(term.replace('/', '\\/')));
@@ -165,12 +177,11 @@ describe('responsive dashboard shell', () => {
     for (const duplicate of ['Profit if closed', 'Premium captured', 'Earned per day', 'Strike price', 'Position state', 'Strike distance', 'Moneyness', 'Expiration', 'DTE', 'Days held', 'Theta / day', 'Extrinsic per day', 'Remaining annualized return', 'Open interest / volume']) {
       assert.doesNotMatch(detailsSource, new RegExp(duplicate.replace('/', '\\/')));
     }
-    assert.match(detailsSource, /Last refreshed/);
+    assert.match(js, /Market data \$\{refreshed\}/);
     assert.doesNotMatch(detailsSource, /Cboe delayed|Yahoo Finance/);
     assert.match(css, /\.contract-detail-grid\{[^}]*gap:10px 20px/);
-    assert.match(css, /\.contract-detail-refresh\{margin:12px 0 0;padding-top:9px/);
-    assert.match(js, /money-state-badge is-\$\{moneyState\.toLowerCase\(\)\}/);
-    assert.match(css, /\.money-state-badge\.is-itm\{[^}]*var\(--warning\)/);
+    assert.match(css, /\.position-check-row\{[^}]*grid-template-columns:25px minmax\(0,1fr\)/);
+    assert.match(css, /\.position-check-row\.is-warning \.position-check-mark\{[^}]*var\(--warning\)/);
     assert.match(css, /\.recommendation-summary\.is-close \.recommendation-label\{color:var\(--green\)\}/);
     assert.match(css, /\.recommendation-summary\.is-review \.recommendation-label\{color:var\(--warning\)\}/);
     assert.match(html, /Moneyness = strike price ÷ stock price × 100%/);

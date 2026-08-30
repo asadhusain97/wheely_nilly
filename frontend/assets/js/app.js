@@ -1,4 +1,6 @@
 import { createGlossaryTerm, initializeGlossary } from './glossary.js';
+import { calculateLiquidity } from './radar-scoring.js';
+import { resolveRadarScoringConfig } from './radar-scoring-config.js';
 import { createScreenerController } from './screener.js';
 import { createStrategySettingsController } from './settings.js';
 
@@ -811,7 +813,6 @@ function renderOpenTrades(dashboard) {
       const details = contractDetails(trade, management);
       card.append(
         recommendationSummary(management),
-        positionState(management),
         economicsSummary(management),
         premiumCaptureProgress(management),
         details.footer,
@@ -856,9 +857,16 @@ function recommendationPresentation(management) {
   }
   const capture = percent(close.metrics.premiumCapture, { sign: false });
   const target = percent(management.effectiveSettings.rules.closeAtProfitCapture, { sign: false });
+  const moneyState = close.metrics?.moneyState;
+  const strikeDistance = close.metrics?.distanceFromStrikePercent;
+  const alignment = close.metrics?.assignmentAlignment;
+  const assignmentMeaning = alignment?.status === 'aligns' || alignment?.status === 'conflicts'
+    ? alignment.reason
+    : 'Assignment risk deserves attention.';
+  const assignmentNote = moneyState === 'ITM' ? ` This contract is ${strikeDistance == null ? '' : `${percent(Math.abs(strikeDistance), { sign: false })} `}ITM. ${assignmentMeaning}` : '';
   return close.signal
-    ? { label: 'Close candidate', tone: 'close', reason: `${capture} of premium captured, meeting your ${target} close target.` }
-    : { label: 'Hold', tone: 'hold', reason: `${capture} of premium captured; your close target is ${target}.` };
+    ? { label: 'Close candidate', tone: 'close', reason: `${capture} of premium captured, meeting your ${target} close target.${assignmentNote}` }
+    : { label: 'Hold', tone: 'hold', reason: `${capture} of premium captured; your close target is ${target}.${assignmentNote}` };
 }
 
 function recommendationSummary(management) {
@@ -871,24 +879,6 @@ function recommendationSummary(management) {
   );
   summary.append(heading, el('p', 'recommendation-reason', recommendation.reason));
   return summary;
-}
-
-function positionState(management) {
-  const metrics = management?.close?.metrics;
-  const section = el('div', 'position-state');
-  section.append(el('span', 'position-state-label', 'Position state'));
-  const value = el('div', 'position-state-value');
-  const moneyState = metrics?.moneyState ?? 'Unavailable';
-  value.append(el('strong', `money-state-badge is-${moneyState.toLowerCase()}`, moneyState));
-  value.append(el(
-    'span',
-    'strike-distance',
-    metrics?.distanceFromStrikePercent == null
-      ? 'Distance to strike unavailable'
-      : `${percent(Math.abs(metrics.distanceFromStrikePercent), { sign: false })} from strike`,
-  ));
-  section.append(value);
-  return section;
 }
 
 function summaryMetric(labelText, value, glossaryTerm, context) {
@@ -909,12 +899,6 @@ function economicsSummary(management) {
       metrics?.profitIfClosed == null ? '—' : money(metrics.profitIfClosed, { sign: true }),
       'Profit if closed',
       'Estimated now',
-    ),
-    summaryMetric(
-      'Premium captured',
-      metrics?.premiumCapture == null ? '—' : percent(metrics.premiumCapture, { sign: false }),
-      'Premium capture',
-      'Of opening credit',
     ),
     summaryMetric(
       'Earned / day',
@@ -985,6 +969,111 @@ function detailGroup(title, metrics) {
   return group;
 }
 
+function positionCheckRow(title, message, tone = 'neutral') {
+  const row = el('div', `position-check-row is-${tone}`);
+  const mark = el('span', 'position-check-mark', tone === 'positive' ? '✓' : tone === 'warning' ? '!' : '•');
+  mark.setAttribute('aria-hidden', 'true');
+  const copy = el('div', 'position-check-copy');
+  copy.append(el('strong', '', title), el('p', '', message));
+  row.append(mark, copy);
+  return row;
+}
+
+function profitTargetCheck(management) {
+  const rawCapture = management?.close?.metrics?.premiumCapture;
+  const rawTarget = management?.effectiveSettings?.rules?.closeAtProfitCapture;
+  const capture = Number(rawCapture);
+  const target = Number(rawTarget);
+  if (rawCapture == null || rawTarget == null || !Number.isFinite(capture) || !Number.isFinite(target)) {
+    return positionCheckRow('Profit target', 'Premium capture or the close target is unavailable.');
+  }
+  if (capture < 0) {
+    return positionCheckRow(
+      'Profit target',
+      `${percent(capture, { sign: false })} captured. The current buyback estimate is above the opening credit.`,
+      'warning',
+    );
+  }
+  const status = management.close.signal === true ? 'met' : 'not reached';
+  return positionCheckRow(
+    'Profit target',
+    `${percent(capture, { sign: false })} captured. Your ${percent(target, { sign: false })} close target is ${status}.`,
+    management.close.signal === true ? 'positive' : 'neutral',
+  );
+}
+
+function assignmentRiskCheck(trade, management) {
+  const metrics = management?.close?.metrics;
+  const moneyState = metrics?.moneyState;
+  if (!moneyState) {
+    return positionCheckRow('Assignment risk', 'Strike distance is unavailable, so assignment pressure cannot be assessed.');
+  }
+  const distance = metrics.distanceFromStrikePercent == null
+    ? null
+    : percent(Math.abs(metrics.distanceFromStrikePercent), { sign: false });
+  const dte = metrics.dte ?? trade.dte;
+  const context = [
+    `${distance == null ? '' : `${distance} `}${moneyState}`,
+    dte == null ? null : dteLabel(dte),
+    metrics.delta == null ? null : `delta ${decimal(metrics.delta, 2)}`,
+  ].filter(Boolean).join(' · ');
+  const alignment = metrics.assignmentAlignment;
+  const meaning = moneyState !== 'ITM'
+    ? 'The contract remains on the OTM side of the strike.'
+    : alignment?.status === 'aligns' || alignment?.status === 'conflicts'
+      ? alignment.reason
+      : 'Assignment risk deserves attention.';
+  const tone = moneyState === 'ITM' ? (alignment?.status === 'aligns' ? 'positive' : 'warning') : 'neutral';
+  return positionCheckRow('Assignment risk', `${context}. ${meaning}`, tone);
+}
+
+function exitLiquidityCheck(trade, management) {
+  const metrics = management?.close?.metrics;
+  const leg = trade.type === 'csp' ? 'cashSecuredPut' : 'coveredCall';
+  const config = resolveRadarScoringConfig({ leg, symbol: trade.symbol });
+  const liquidity = calculateLiquidity({
+    bid: metrics?.bidPerShare,
+    ask: metrics?.askPerShare,
+    openInterest: metrics?.openInterest,
+    volume: metrics?.volume,
+  }, config);
+  if (liquidity.label === 'unknown') {
+    return positionCheckRow('Exit liquidity', 'Bid/ask, open interest, or volume is unavailable, so liquidity cannot be rated.');
+  }
+  const rating = liquidity.label === 'poor' ? 'Thin' : label(liquidity.label);
+  const detail = [
+    metrics?.spreadPercent == null ? null : `${percent(metrics.spreadPercent, { sign: false })} spread`,
+    metrics?.openInterest == null ? null : `${quantity(metrics.openInterest)} OI`,
+    metrics?.volume == null ? null : `${quantity(metrics.volume)} volume`,
+  ].filter(Boolean).join(' · ');
+  const executionWarning = liquidity.warnings.some((warning) => warning.severity !== 'info');
+  const guidance = liquidity.label === 'poor'
+    ? 'Closing may require careful limit pricing.'
+    : liquidity.label === 'fair' || executionWarning
+      ? 'A limit order may need more patience.'
+      : 'Market depth should support a routine close.';
+  const tone = ['excellent', 'good'].includes(liquidity.label) && !executionWarning ? 'positive' : 'warning';
+  return positionCheckRow('Exit liquidity', `${rating} liquidity. ${detail}. ${guidance}`, tone);
+}
+
+function positionCheck(trade, management, updateTime) {
+  const section = el('section', 'position-check');
+  const heading = el('div', 'position-check-heading');
+  const refreshed = refreshTime(updateTime);
+  heading.append(
+    el('h4', '', 'Position check'),
+    el('small', '', refreshed ? `Market data ${refreshed}` : 'Market data time unavailable'),
+  );
+  const rows = el('div', 'position-check-list');
+  rows.append(
+    profitTargetCheck(management),
+    assignmentRiskCheck(trade, management),
+    exitLiquidityCheck(trade, management),
+  );
+  section.append(heading, rows);
+  return section;
+}
+
 function contractDetails(trade, management) {
   const metrics = management?.close?.metrics;
   const footer = el('div', 'contract-details-footer');
@@ -1007,6 +1096,7 @@ function contractDetails(trade, management) {
   const setExpanded = (expanded) => {
     control.setAttribute('aria-expanded', String(expanded));
     control.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} contract information for ${trade.symbol} ${trade.contractSymbol}`);
+    control.textContent = expanded ? 'Hide position check' : 'Show position check';
     panel.hidden = !expanded;
   };
   control.addEventListener('click', () => setExpanded(control.getAttribute('aria-expanded') !== 'true'));
@@ -1031,12 +1121,10 @@ function contractDetails(trade, management) {
     detailMetric('Delta', metrics?.delta == null ? null : decimal(metrics.delta, 3), 'Delta'),
     detailMetric('Implied volatility', metrics?.impliedVolatility == null ? null : percent(metrics.impliedVolatility, { sign: false }), 'Implied volatility'),
   ]);
-  panel.append(...[economics, market].filter(Boolean));
+  panel.append(positionCheck(trade, management, updateTime), ...[economics, market].filter(Boolean));
   if (trade.needsReview) {
     panel.append(el('p', 'contract-data-note', 'Some opening-position data needs review.'));
   }
-  const refreshed = refreshTime(updateTime);
-  panel.append(el('p', 'contract-detail-refresh', refreshed ? `Last refreshed ${refreshed}` : 'Last refresh unavailable'));
   return { footer, panel };
 }
 

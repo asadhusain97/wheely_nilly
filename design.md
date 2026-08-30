@@ -33,9 +33,11 @@ Typography uses the app's Pin Sans/system stack for text, the rounded system sta
 
 ## Open contracts
 
-Open-contract cards are decision summaries. Ticker and recommendation lead, followed by position state, three economics metrics, and premium-capture progress. A centered, unlabeled chevron ends the collapsed card and matches the Radar candidate disclosure. Its full 44px control remains keyboard and touch accessible.
+Open-contract cards are decision summaries. Ticker and recommendation lead, followed by two economics metrics and premium-capture progress. The recommendation calls out an in-the-money contract immediately. A centered "Show position check" disclosure ends the collapsed card. Its full 44px control remains keyboard and touch accessible.
 
-Expansion adds audit context without restating the summary. Use two balanced 2×2 groups: Trade for opening premium, buyback estimate, collateral, and breakeven; Market for underlying price, bid/ask with spread context, delta, and IV. Keep only the last refresh time in the quiet footer. Do not repeat P/L, premium capture, earned per day, strike state, strike, expiration, or DTE below the disclosure.
+Expansion starts with three short management inferences: profit-target status, assignment risk, and exit liquidity. Each inference uses the same restrained positive, neutral, or warning language as Radar, but it interprets the position now rather than re-evaluating the original trade. The market-data time sits beside this check so users can judge its freshness.
+
+Audit context follows in two balanced 2×2 groups: Trade for opening premium, buyback estimate, collateral, and breakeven; Market for underlying price, bid/ask with spread context, delta, and IV. Do not repeat P/L, earned per day, strike, expiration, or DTE in those audit groups. The position check may reuse a metric only when it explains what the current value means.
 
 ## Radar
 

@@ -1,162 +1,150 @@
 # Wheely Nilly
 
-Wheely Nilly is a local-first options wheel workspace. It reads brokerage data through SnapTrade, fetches market data through Yahoo Finance, and keeps portfolio snapshots, strategy settings, watchlists, and Radar results in the user's browser.
+Wheely Nilly is a local-first workspace for managing the options wheel. It reads brokerage positions through SnapTrade, checks market data through Yahoo Finance, and applies your rules to open contracts and possible next trades.
 
-There is no Wheely Nilly account, user database, portfolio database, Redis instance, background worker, or permanent server storage. Closing the app stops all refresh activity.
+[Open the live app](https://wheely-nilly.vercel.app) | [View the license](LICENSE.md)
 
-## Current architecture
+> Wheely Nilly provides analysis only. It cannot place trades and is not investment advice. Market data may be delayed, so confirm prices and contracts with your broker.
+
+![Wheely Nilly showing guidance for sample open option contracts](frontend/assets/images/app-open-contracts.png)
+
+## What it helps with
+
+The wheel strategy usually starts with a cash-secured put. If assignment leaves you owning the shares, the next leg is a covered call. Wheely Nilly keeps the positions, rules, and results for that cycle in one place.
+
+- See open contracts and guidance tied to your saved profit-capture target.
+- Track booked wheel profit and loss by month and ticker.
+- Scan covered calls and cash-secured puts with Radar.
+- Save different goals and rules for each ticker and strategy leg.
+- Review account balances, positions, and trade history through a read-only brokerage connection.
+- Install the site as a progressive web app and reopen its saved view offline.
+
+The current brokerage flow has been tested with Robinhood through SnapTrade. Other brokerages supported by SnapTrade may work, but have not been verified yet.
+
+## Privacy model
+
+Wheely Nilly has no app account, portfolio database, Redis instance, or permanent server storage. Portfolio snapshots, settings, watchlists, and Radar results stay in IndexedDB in your browser.
+
+SnapTrade tokens live in encrypted, authenticated, HttpOnly cookies on the user's device. The connection uses read-only access, OAuth with PKCE, state validation, and rotating refresh tokens. Wheely Nilly never receives brokerage credentials and cannot place, change, or cancel an order.
+
+Closing the app stops all refresh activity. Settings includes an **Erase saved financial data** action for clearing the browser's local copy.
+
+## How it works
 
 ```text
-wheelynilly.com
+Browser
 ├── Vite frontend and installable PWA
-│   ├── IndexedDB local state
+│   ├── IndexedDB for local state
 │   ├── cached application shell
-│   └── client refresh coordinator
-└── /api
+│   └── market and brokerage refresh coordinator
+└── Vercel API functions
     ├── TypeScript SnapTrade Personal MCP OAuth and brokerage bridge
-    └── Python Yahoo Finance market bridge
+    └── Python Yahoo Finance market-data bridge
 ```
 
-The app renders its cached shell and browser data first. Market and brokerage refreshes then run independently. Market data defaults to every 2 minutes while visible. Brokerage data defaults to every 30 minutes while visible. Returning to the app triggers a market refresh. Brokerage refresh waits until it is due.
+The app renders its cached shell and local data first. Market and brokerage refreshes then run independently. Market data refreshes every 2 minutes while the app is visible. Brokerage data refreshes every 30 minutes while visible.
 
-The previous Raspberry Pi server remains in `backend/` as a migration reference and local fallback. Vercel does not run its filesystem snapshots, cron jobs, notification outbox, Docker files, or process launcher.
+The earlier Raspberry Pi server remains in `backend/` as a migration reference and local fallback. Vercel does not run its filesystem snapshots, scheduled jobs, notification outbox, Docker files, or process launcher.
 
-## Requirements
+## Run it locally
 
-- Node.js 22 or newer
+You need:
+
+- Node.js 22
 - Python 3.12 or newer
-- A free SnapTrade Personal account for brokerage testing
-- A Vercel account for deployment
+- A free SnapTrade Personal account to test a brokerage connection
+- The Vercel CLI, which `npx` can run without a global install
 
-Wheely Nilly uses SnapTrade's read-only Personal MCP connector. It dynamically registers a public OAuth client and uses authorization code flow with PKCE. You do not need a Commercial SnapTrade account, API key, OAuth client ID, or OAuth client secret.
-
-## Local development
-
-Install the frontend dependencies:
+Clone the repository and install the frontend dependencies:
 
 ```bash
+git clone https://github.com/asadhusain97/wheely_nilly.git
+cd wheely_nilly
 npm install
 ```
 
-Create local environment values:
+Create the local environment file:
 
 ```bash
 cp .env.example .env.local
-```
-
-Generate a session seal key:
-
-```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 ```
 
-Set `APP_ORIGIN=http://127.0.0.1:3000`. SnapTrade registers the exact callback dynamically when the connection starts:
+Paste the generated value into `SESSION_SEAL_KEY` in `.env.local`. Keep `APP_ORIGIN=http://127.0.0.1:3000`. Environment files are ignored by git except for `.env.example`.
 
-```text
-http://127.0.0.1:3000/api/auth/callback
-```
-
-Install the Vercel CLI, then run the full project:
+Start the complete frontend and API project:
 
 ```bash
 npx vercel dev --listen 3000
 ```
 
-`npm run dev` runs only the Vite frontend. Use it for layout work that does not need API functions.
+Open <http://127.0.0.1:3000>. SnapTrade dynamically registers this exact callback when a connection begins:
 
-## Checks
+```text
+http://127.0.0.1:3000/api/auth/callback
+```
+
+No SnapTrade developer account, API key, OAuth client ID, or OAuth client secret is required. Each user connects through a free SnapTrade Personal account.
+
+For frontend-only work that does not need the API functions, run:
+
+```bash
+npm run dev
+```
+
+## Tests and checks
+
+The JavaScript and TypeScript checks run after `npm install`:
 
 ```bash
 npm run typecheck
 npm run build
 npm test
 npm --prefix backend test
+```
+
+Set up the Python test environment once:
+
+```bash
+python3 -m venv sidecar/.venv
+sidecar/.venv/bin/pip install -r sidecar/requirements.txt
 PYTHONPATH=sidecar sidecar/.venv/bin/pytest -q sidecar/tests
 ```
 
-`npm run test:all` runs the JavaScript and Python suites together after the Python environment exists.
+After that environment exists, `npm run test:all` runs all JavaScript and Python tests.
 
-## Vercel deployment
+## Deploy to Vercel
 
-### 1. Create the project
+Import the repository into Vercel and leave the project root at the repository root. `vercel.json` runs the Vite build, publishes `dist/`, and deploys the TypeScript and Python functions under `/api`.
 
-In Vercel, choose **Add New > Project**, import this repository, and keep the repository root as the project root. Vercel reads `vercel.json`, runs `npm run build`, publishes `dist/`, and deploys the TypeScript and Python functions under `/api`.
-
-Set the Node.js version to 22 in Project Settings if Vercel does not select it from `package.json`.
-
-### 2. Add production environment variables
-
-In **Project Settings > Environment Variables**, add these values for Production:
+Add these production environment variables:
 
 | Name | Value |
 | --- | --- |
-| `APP_ORIGIN` | `https://wheelynilly.com` |
+| `APP_ORIGIN` | Your canonical production origin, without a trailing slash |
 | `SESSION_SEAL_KEY` | One generated 32-byte base64url key |
 | `MARKET_TIMEOUT_SECONDS` | `15` |
 
-Keep the same `SESSION_SEAL_KEY` across production deployments. Changing it signs every user out, but it does not delete local portfolio data.
+Keep the same `SESSION_SEAL_KEY` across deployments. Changing it signs every user out, but does not delete their browser data. Do not prefix secrets with `VITE_`, because Vite exposes those values to the browser bundle.
 
-`APP_ORIGIN` is the canonical authentication origin. Users may reach a Vercel alias, but the connection flow moves to this origin before setting its short-lived login cookie.
+After deployment, verify the homepage, `/app`, the SnapTrade return flow, the service worker, and an offline reopen after one successful online load.
 
-Do not expose these as `VITE_` variables. Vite variables enter the browser bundle.
+## Repository map
 
-Vercel may also detect variables referenced by the retained Raspberry Pi backend. Do not configure `SNAPTRADE_OAUTH_CLIENT_ID`, `SNAPTRADE_OAUTH_CLIENT_SECRET`, `SNAPTRADE_CLIENT_ID`, `SNAPTRADE_CONSUMER_KEY`, `SNAPTRADE_ACCOUNT_IDS`, `OPPORTUNITY_SCAN_CRON`, `OPPORTUNITY_SCAN_TIMEZONE`, or `DASHBOARD_PUBLIC_URL` for the Vercel application. They are not used by the new deployment.
+| Path | Purpose |
+| --- | --- |
+| `frontend/` | Vite app, PWA shell, styles, browser storage, and UI tests |
+| `api/` | Vercel OAuth, brokerage, and market-data functions |
+| `sidecar/` | Python market-data and options-screening code |
+| `backend/` | Retained Node server, scheduled jobs, snapshots, and tests |
+| `docs/` | Strategy settings, position management, schema, and Radar details |
+| `docker/`, `deploy/` | Legacy self-hosting files |
+| `vercel.json` | Production routes, function limits, and response headers |
 
-### 3. Configure SnapTrade
+## License
 
-No developer or Commercial SnapTrade configuration is required. Each user:
+Wheely Nilly is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE.md).
 
-- Creates or signs into a free SnapTrade Personal account.
-- Connects Robinhood or another supported brokerage in SnapTrade.
-- Approves Wheely Nilly's read-only access.
+You may inspect, clone, fork, modify, and redistribute it for permitted noncommercial purposes. You may not sell it or use it for a commercial purpose without a separate license from the maintainer.
 
-SnapTrade receives the exact callback URL during dynamic client registration. Preview and local deployments therefore use their own `APP_ORIGIN` without wildcard callbacks.
-
-### 4. Attach the domain
-
-In **Project Settings > Domains**, add `wheelynilly.com` and the preferred `www` behavior. Apply the DNS records Vercel shows. After HTTPS is active, confirm that `APP_ORIGIN` exactly matches the canonical origin and redeploy if it changed.
-
-### 5. Deploy and verify
-
-Push the branch connected to Production or choose **Deploy** in Vercel. Then verify:
-
-1. `/` shows the product homepage.
-2. `/app` opens and offers a SnapTrade connection.
-3. OAuth returns to `/app?connected=1`.
-4. Market and brokerage freshness appear separately.
-5. Manual brokerage refresh exists only under Settings.
-6. The browser's Application panel reports a valid manifest and service worker.
-7. After one successful online app load, switch the browser offline and reopen `/app`. The shell and last saved view should appear without a network wait.
-
-## Local browser data
-
-IndexedDB separates data into these stores:
-
-```text
-userPreferences
-tickerStrategies
-radarConfig
-portfolioSnapshot
-eventLedger
-marketCache
-radarCache
-appSettings
-watchlists
-dismissedCandidates
-refreshMetadata
-```
-
-Settings contains an **Erase saved financial data** action. Disconnecting SnapTrade revokes access and clears the sealed OAuth cookie. It leaves the local snapshot in place until the user erases it.
-
-## Security and privacy
-
-- SnapTrade tokens live in encrypted, authenticated, HttpOnly cookies on the user's device.
-- OAuth uses dynamic public-client registration, PKCE S256, state validation, rotating refresh tokens, the `read` scope, and exact callback URLs.
-- Wheely Nilly never requests or receives a user's Personal `consumerKey`, SnapTrade user secret, or brokerage credentials.
-- API responses use `private, no-store`.
-- Server functions do not write portfolio data to disk or a database.
-- Production code does not log credentials or financial payloads.
-- Market data and brokerage errors return short sanitized messages.
-- All remote calls use HTTPS and bounded timeouts.
-
-Wheely Nilly provides analysis. It does not place trades and is not investment advice.
+This is not an OSI-approved open source license because it restricts commercial use and resale. Calling the code "source-available" is the accurate description. See [NOTICE](NOTICE) for the required copyright notice.

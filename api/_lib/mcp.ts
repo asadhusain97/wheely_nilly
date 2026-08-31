@@ -72,9 +72,11 @@ export class SnapTradeMcpClient {
   #protocolVersion = PROTOCOL_VERSION;
   #nextId = 1;
   #opened = false;
+  #deadlineAt: number;
 
-  constructor(accessToken: string) {
+  constructor(accessToken: string, timeoutMs = 52_000) {
     this.#accessToken = accessToken;
+    this.#deadlineAt = Date.now() + timeoutMs;
   }
 
   async open(): Promise<void> {
@@ -104,7 +106,7 @@ export class SnapTradeMcpClient {
     await fetch(MCP_RESOURCE, {
       method: "DELETE",
       headers: this.#headers(false),
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(3_000),
     }).catch(() => undefined);
     this.#sessionId = null;
     this.#opened = false;
@@ -120,12 +122,22 @@ export class SnapTradeMcpClient {
   }
 
   async #post(message: Record<string, unknown>, expectedId: number | null, initializing: boolean): Promise<unknown> {
-    const response = await fetch(MCP_RESOURCE, {
-      method: "POST",
-      headers: this.#headers(initializing),
-      body: JSON.stringify(message),
-      signal: AbortSignal.timeout(18_000),
-    });
+    const remainingMs = this.#deadlineAt - Date.now();
+    if (remainingMs <= 0) throw new McpHttpError(504, "SnapTrade MCP request timed out");
+    let response: Response;
+    try {
+      response = await fetch(MCP_RESOURCE, {
+        method: "POST",
+        headers: this.#headers(initializing),
+        body: JSON.stringify(message),
+        signal: AbortSignal.timeout(Math.min(18_000, remainingMs)),
+      });
+    } catch (error) {
+      if ((error as { name?: string }).name === "TimeoutError" || (error as { name?: string }).name === "AbortError") {
+        throw new McpHttpError(504, "SnapTrade MCP request timed out");
+      }
+      throw error;
+    }
     if (!response.ok) throw new McpHttpError(response.status, `SnapTrade MCP request failed with ${response.status}`);
     const sessionId = response.headers.get("mcp-session-id");
     if (sessionId) this.#sessionId = sessionId;

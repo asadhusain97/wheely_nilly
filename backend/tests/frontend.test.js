@@ -24,8 +24,23 @@ const onboardingTs = readFileSync(path.join(rootDirectory, 'frontend/src/onboard
 const dataRefreshTs = readFileSync(path.join(rootDirectory, 'frontend/src/data-refresh-ui.ts'), 'utf8');
 const storageTs = readFileSync(path.join(rootDirectory, 'frontend/src/storage.ts'), 'utf8');
 const serviceWorker = readFileSync(path.join(rootDirectory, 'frontend/public/sw.js'), 'utf8');
+const homeHtml = readFileSync(path.join(rootDirectory, 'frontend/index.html'), 'utf8');
+const homeTs = readFileSync(path.join(rootDirectory, 'frontend/src/home.ts'), 'utf8');
+const appBootstrapTs = readFileSync(path.join(rootDirectory, 'frontend/src/app-bootstrap.ts'), 'utf8');
+const setupResetTs = readFileSync(path.join(rootDirectory, 'frontend/src/setup-reset.ts'), 'utf8');
 
 describe('responsive dashboard shell', () => {
+  it('explains the SnapTrade handoff before starting OAuth', () => {
+    assert.match(homeHtml, /data-connect-intro-open/);
+    assert.match(homeHtml, /Set up SnapTrade first\./);
+    assert.match(homeHtml, /https:\/\/dashboard\.snaptrade\.com\/signup/);
+    assert.match(homeHtml, /Connect Robinhood in SnapTrade/);
+    assert.match(homeHtml, /href="\/api\/auth\/start">Connect Wheely Nilly/);
+    assert.match(homeTs, /event\.key === "Escape"/);
+    assert.match(homeTs, /event\.key !== "Tab"/);
+    assert.match(homeTs, /shouldOpenSignupGuide/);
+    assert.match(homeHtml, /data-connect-intro-notice/);
+  });
   it('has semantic landmarks, labels, live regions, and keyboard navigation support', () => {
     for (const token of ['<header', '<main', '<nav', '<dl', 'aria-live=', 'skip-link', '<label']) assert.match(html, new RegExp(token));
     assert.match(css, /:focus-visible/);
@@ -49,12 +64,18 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /class="brand-mark" src="\/assets\/images\/logo\.png"/);
     assert.match(html, /rel="icon"[^>]+href="\/assets\/images\/favicon\.png"/);
   });
-  it('waits for the selected account and history before completing onboarding', () => {
+  it('waits for positions without trapping setup behind the history import', () => {
     assert.match(html, /data-onboarding-sync-status/);
+    assert.match(html, /data-onboarding-retry/);
+    assert.match(html, /data-onboarding-reconnect/);
     assert.match(html, /data-onboarding-install-steps/);
     assert.match(onboardingTs, /account\.referenceLabel/);
-    assert.match(onboardingTs, /!portfolioReady \|\| !historyReady \|\| syncFailed/);
-    assert.match(onboardingTs, /Loading trade history and booked results/);
+    assert.match(onboardingTs, /failure\?\.phase === "brokerage"/);
+    assert.match(onboardingTs, /failure\?\.phase === "history"/);
+    assert.match(onboardingTs, /Trade history is still loading and can finish after setup/);
+    assert.match(onboardingTs, /Positions could not be loaded\./);
+    assert.match(onboardingTs, /Retry required/);
+    assert.match(dataRefreshTs, /wheely-brokerage-retry-requested/);
     assert.match(onboardingTs, /"Open Home"/);
     assert.match(onboardingTs, /data-target="overview"/);
     assert.doesNotMatch(onboardingTs, /"Open Radar"/);
@@ -68,18 +89,23 @@ describe('responsive dashboard shell', () => {
     assert.match(serviceWorker, /caches\.match\("\/app\.html"\)/);
     assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
   });
-  it('can clear browser state and rerun account setup without disconnecting SnapTrade', () => {
-    assert.match(html, /data-reset-setup><span>Run setup again<\/span>/);
-    assert.match(html, /Choose a different brokerage account/);
+  it('can choose another account or fully disconnect and restart setup', () => {
+    assert.match(html, /data-reset-setup><span>Choose another account<\/span>/);
+    assert.match(html, /Keep SnapTrade connected/);
+    assert.match(html, /data-restart-connection><span>Restart connection<\/span>/);
+    assert.match(html, /data-onboarding-start-over/);
     assert.match(html, /data-refresh-brokerage/);
     assert.doesNotMatch(html, /data-market-interval|data-brokerage-interval|data-disconnect|data-erase-local/);
     assert.match(dataRefreshTs, /\[data-reset-setup\]/);
-    assert.match(dataRefreshTs, /localRepository\.clearAllData\(\)/);
+    assert.match(dataRefreshTs, /disconnectAndClearSetup/);
+    assert.match(setupResetTs, /localRepository\.clearAllData\(\)/);
     assert.match(storageTs, /async clearAllData\(\)/);
     assert.match(html, /data-reconnect-alignment[^>]+hidden>Reconnect SnapTrade/);
     assert.match(dataRefreshTs, /reconnectAlignment\.hidden = !authorizationExpired/);
     assert.match(onboardingTs, /SnapTrade access expired\. Reconnect to read your brokerage accounts\./);
     assert.match(onboardingTs, /textContent: "Reconnect SnapTrade"/);
+    assert.match(appBootstrapTs, /startApp\(initializeDataRefresh, initializeOnboarding\)/);
+    assert.match(appBootstrapTs, /Setup could not start\./);
   });
   it('surfaces performance, collateral, conditional opportunities, and open trades from one dashboard projection', () => {
     for (const id of ['booked-profit', 'return-rate', 'annualized-return-rate', 'wheel-capital', 'open-csps', 'open-ccs', 'opportunity-list', 'open-trade-list']) {

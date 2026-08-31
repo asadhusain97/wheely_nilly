@@ -2,6 +2,7 @@ import { RefreshCoordinator, DEFAULT_REFRESH_POLICY } from "./refresh-coordinato
 import { localRepository } from "./storage";
 import type { BrokerageEvent, BrokerageSnapshot, ExactContractQuote, MarketQuote, PortfolioDiff, RefreshPolicy } from "./types";
 import { buildLocalCloseResults, buildLocalTargets, scanAllLocalTargets } from "./local-analysis";
+import { clearBrowserSetup, disconnectAndClearSetup } from "./setup-reset";
 
 const json = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(path, { ...init, headers: { accept: "application/json", ...(init?.headers ?? {}) } });
@@ -54,6 +55,15 @@ export async function initializeDataRefresh(): Promise<void> {
   const policy = storedPolicy ?? DEFAULT_REFRESH_POLICY;
   let marketUpdatedAt = (await localRepository.get<string>("refreshMetadata", "marketUpdatedAt").catch(() => null))?.value ?? null;
   let brokerageUpdatedAt = currentSnapshot?.fetchedAt ?? null;
+  const savedSnapshotMatchesSelection = Boolean(currentSnapshot
+    && selectedAccountIds.length
+    && selectedAccountIds.every((accountId) => currentSnapshot?.accounts.some((account) => account.id === accountId)));
+  if (currentSnapshot && !savedSnapshotMatchesSelection) {
+    await localRepository.clearFinancialData().catch(() => undefined);
+    currentSnapshot = null;
+    marketUpdatedAt = null;
+    brokerageUpdatedAt = null;
+  }
   let retryMode: "brokerage" | "history" = "brokerage";
   let historyRetryTimer: number | null = null;
 
@@ -259,7 +269,11 @@ export async function initializeDataRefresh(): Promise<void> {
   const savedRadar = await localRepository.get<unknown>("radarCache", "current").catch(() => null);
   if (savedRadar) document.dispatchEvent(new CustomEvent("wheely-radar-updated", { detail: savedRadar.value }));
 
-  const session = await json<{ connected: boolean }>("/api/auth/session").catch(() => ({ connected: false }));
+  const sessionController = new AbortController();
+  const sessionTimeout = window.setTimeout(() => sessionController.abort(), 12_000);
+  const session = await json<{ connected: boolean }>("/api/auth/session", { signal: sessionController.signal })
+    .catch(() => ({ connected: false }))
+    .finally(() => window.clearTimeout(sessionTimeout));
   if (connectionCard) connectionCard.hidden = session.connected || Boolean(currentSnapshot);
   if (session.connected && selectedAccountIds.length) {
     if (!currentSnapshot) showBrokerageAlignment("reading");
@@ -283,7 +297,7 @@ export async function initializeDataRefresh(): Promise<void> {
         window.clearTimeout(historyRetryTimer);
         historyRetryTimer = null;
       }
-      await localRepository.clearFinancialData();
+      await localRepository.clearFinancialData().catch(() => undefined);
       currentSnapshot = null;
       marketUpdatedAt = null;
       brokerageUpdatedAt = null;
@@ -293,6 +307,11 @@ export async function initializeDataRefresh(): Promise<void> {
     showBrokerageAlignment("reading");
     coordinator.start();
     void coordinator.refreshBrokerage().catch(() => undefined);
+  });
+  document.addEventListener("wheely-brokerage-retry-requested", (event) => {
+    const phase = (event as CustomEvent<{ phase?: string }>).detail?.phase;
+    if (phase === "history" && currentSnapshot) void importHistory(currentSnapshot).catch(() => undefined);
+    else void coordinator.refreshBrokerage().catch(() => undefined);
   });
   retryAlignment?.addEventListener("click", async () => {
     retryAlignment.disabled = true;
@@ -319,14 +338,45 @@ export async function initializeDataRefresh(): Promise<void> {
       if (label) label.textContent = "Refresh brokerage";
     }
   });
-  document.querySelector<HTMLButtonElement>("[data-reset-setup]")?.addEventListener("click", async () => {
-    if (!window.confirm("Run setup again? This clears saved portfolio data, trade history, Radar results, and strategy choices from this browser. SnapTrade stays connected.")) return;
+  const setupStatus = document.querySelector<HTMLElement>("[data-setup-action-status]");
+  const showSetupStatus = (message: string | null) => {
+    if (!setupStatus) return;
+    setupStatus.hidden = !message;
+    setupStatus.textContent = message ?? "";
+  };
+  document.querySelector<HTMLButtonElement>("[data-reset-setup]")?.addEventListener("click", async (event) => {
+    if (!window.confirm("Choose another account? This clears saved portfolio data, trade history, Radar results, and strategy choices from this browser. SnapTrade stays connected.")) return;
+    const button = event.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    showSetupStatus(null);
     coordinator.stop();
     if (historyRetryTimer !== null) window.clearTimeout(historyRetryTimer);
-    await localRepository.clearAllData();
-    globalThis.localStorage?.removeItem("wheely-nilly.screened-tickers.v1");
-    globalThis.localStorage?.removeItem("wheely-nilly.radar-scan-results.v1");
-    location.reload();
+    try {
+      await clearBrowserSetup();
+      location.assign("/app");
+    } catch {
+      button.disabled = false;
+      showSetupStatus("This browser could not clear setup. Close other Wheely Nilly tabs, allow site storage, and try again.");
+      coordinator.start();
+    }
+  });
+  document.querySelector<HTMLButtonElement>("[data-restart-connection]")?.addEventListener("click", async (event) => {
+    if (!window.confirm("Restart the connection? This disconnects SnapTrade and clears all Wheely Nilly data and settings saved in this browser.")) return;
+    const button = event.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    showSetupStatus("Disconnecting SnapTrade and clearing this browser…");
+    coordinator.stop();
+    if (historyRetryTimer !== null) window.clearTimeout(historyRetryTimer);
+    try {
+      await disconnectAndClearSetup();
+      location.assign("/?setup=restarted");
+    } catch {
+      button.disabled = false;
+      showSetupStatus(navigator.onLine
+        ? "The connection could not be restarted. Try again in a moment."
+        : "You’re offline. Reconnect, then try again.");
+      coordinator.start();
+    }
   });
   window.addEventListener("online", () => {
     renderFreshness();

@@ -124,6 +124,10 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     sendError(response, 404, "NOT_FOUND", "Route not found");
   } catch (error) {
+    if (request.method === "GET" && (route === "start" || route === "callback")) {
+      response.redirect(302, `${appOrigin()}/?oauth=unavailable`);
+      return;
+    }
     sendError(response, 503, "AUTH_UNAVAILABLE", "SnapTrade authorization is unavailable");
   }
 }

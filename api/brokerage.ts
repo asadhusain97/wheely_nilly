@@ -85,8 +85,8 @@ async function fetchAccountCatalog(client: SnapTradeMcpClient, errors: Failure[]
   return { accounts, connections };
 }
 
-async function fetchAccounts(accessToken: string) {
-  const client = new SnapTradeMcpClient(accessToken);
+async function fetchAccounts(accessToken: string, deadlineAt = Date.now() + 54_000) {
+  const client = new SnapTradeMcpClient(accessToken, Math.max(0, deadlineAt - Date.now()));
   const errors: Failure[] = [];
   try {
     const catalog = await fetchAccountCatalog(client, errors);
@@ -96,8 +96,8 @@ async function fetchAccounts(accessToken: string) {
   }
 }
 
-async function fetchSnapshot(accessToken: string, selectedAccountIds: string[]) {
-  const client = new SnapTradeMcpClient(accessToken);
+async function fetchSnapshot(accessToken: string, selectedAccountIds: string[], deadlineAt = Date.now() + 54_000) {
+  const client = new SnapTradeMcpClient(accessToken, Math.max(0, deadlineAt - Date.now()));
   const errors: Failure[] = [];
   try {
     const catalog = await fetchAccountCatalog(client, errors);
@@ -142,8 +142,8 @@ async function fetchSnapshot(accessToken: string, selectedAccountIds: string[]) 
   }
 }
 
-async function fetchHistoryPage(accessToken: string, accountId: string, offset: number) {
-  const client = new SnapTradeMcpClient(accessToken);
+async function fetchHistoryPage(accessToken: string, accountId: string, offset: number, deadlineAt = Date.now() + 54_000) {
+  const client = new SnapTradeMcpClient(accessToken, Math.max(0, deadlineAt - Date.now()));
   const limit = 1000;
   try {
     const payload = await callTool(client, "AccountInformation_getAccountActivities", { accountId, offset, limit }) as any;
@@ -191,7 +191,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       }
       const snapshot = useMock
         ? createMockBrokerageSnapshot(accountIds)
-        : await withAccessToken(request, response, (accessToken) => fetchSnapshot(accessToken, accountIds));
+        : await withAccessToken(request, response, (accessToken, deadlineAt) => fetchSnapshot(accessToken, accountIds, deadlineAt));
       response.status(snapshot.errors.length ? 207 : 200).json(snapshot);
       return;
     }
@@ -210,17 +210,17 @@ export default async function handler(request: VercelRequest, response: VercelRe
       }
       const page = useMock
         ? createMockHistoryPage(accountId, offset)
-        : await withAccessToken(request, response, (accessToken) => fetchHistoryPage(accessToken, accountId, offset));
+        : await withAccessToken(request, response, (accessToken, deadlineAt) => fetchHistoryPage(accessToken, accountId, offset, deadlineAt));
       response.status(200).json(page);
       return;
     }
     response.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
   } catch (error) {
     const upstreamStatus = (error as { status?: number }).status;
-    const status = upstreamStatus === 401 ? 401 : upstreamStatus === 409 ? 409 : 502;
+    const status = upstreamStatus === 401 ? 401 : upstreamStatus === 409 ? 409 : upstreamStatus === 504 ? 504 : 502;
     console.error(JSON.stringify({ event: "brokerage_request_failed", route, provider: useMock ? "mock" : "snaptrade", tool: (error as { tool?: string }).tool ?? null, kind: error instanceof Error ? error.name : typeof error, upstreamStatus: upstreamStatus ?? null }));
-    const code = status === 401 ? "AUTH_REQUIRED" : status === 409 ? "ACCOUNT_SELECTION_REQUIRED" : "BROKERAGE_UNAVAILABLE";
-    const message = status === 401 ? "Connect SnapTrade to continue" : status === 409 ? "Choose an available brokerage account" : useMock ? "Mock brokerage data could not be loaded" : "SnapTrade is connected, but brokerage data could not be aligned";
+    const code = status === 401 ? "AUTH_REQUIRED" : status === 409 ? "ACCOUNT_SELECTION_REQUIRED" : status === 504 ? "BROKERAGE_TIMEOUT" : "BROKERAGE_UNAVAILABLE";
+    const message = status === 401 ? "Connect SnapTrade to continue" : status === 409 ? "Choose an available brokerage account" : status === 504 ? "SnapTrade took too long to respond. Try again." : useMock ? "Mock brokerage data could not be loaded" : "SnapTrade is connected, but brokerage data could not be aligned";
     response.status(status).json({ error: { code, message } });
   }
 }

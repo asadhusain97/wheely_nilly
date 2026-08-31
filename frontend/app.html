@@ -40,7 +40,7 @@
 
         <section class="connection-card" data-connection-card hidden aria-labelledby="connection-title">
           <div><p>Read-only brokerage access</p><h2 id="connection-title">Bring in your wheel positions.</h2><small>Connect through SnapTrade. Wheely Nilly keeps the resulting snapshot on this device.</small></div>
-          <a href="/api/auth/start?returnTo=/app">Connect SnapTrade</a>
+          <a href="/?connect=1">Start connection</a>
         </section>
 
         <section class="connection-card" data-brokerage-alert hidden aria-labelledby="brokerage-alert-title">
@@ -279,8 +279,10 @@
         </div>
         <section class="data-refresh-settings" aria-label="Brokerage data actions">
           <button class="settings-data-action is-primary" type="button" data-refresh-brokerage><span>Refresh brokerage</span><small>Get the latest positions and balances</small></button>
-          <button class="settings-data-action" type="button" data-reset-setup><span>Run setup again</span><small>Choose a different brokerage account</small></button>
+          <button class="settings-data-action" type="button" data-reset-setup><span>Choose another account</span><small>Keep SnapTrade connected and run account setup again</small></button>
+          <button class="settings-data-action" type="button" data-restart-connection><span>Restart connection</span><small>Disconnect SnapTrade, clear this browser, and begin again</small></button>
         </section>
+        <p class="setup-action-status" data-setup-action-status role="status" aria-live="polite" hidden></p>
         <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
         <aside class="settings-support" aria-label="Support Wheely Nilly">
           <p>If Wheely Nilly has been useful, you can<a id="leave-a-tip"
@@ -963,6 +965,7 @@
     <div class="onboarding" data-onboarding hidden>
       <section role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
         <header><img src="/assets/images/logo.png" alt=""><span data-onboarding-progress>1 of 4</span></header>
+        <p class="onboarding-notice" data-onboarding-notice role="alert" hidden></p>
         <div data-onboarding-step="welcome">
           <p class="onboarding-eyebrow">Connection ready</p>
           <h2 id="onboarding-title">Welcome to your wheel workspace.</h2>
@@ -979,6 +982,10 @@
           <h2>These tickers will seed Radar.</h2>
           <div class="onboarding-tickers" data-onboarding-tickers><span>Checking your portfolio…</span></div>
           <p class="onboarding-sync-status" data-onboarding-sync-status aria-live="polite">Reading positions and trade history…</p>
+          <div class="onboarding-sync-actions" data-onboarding-sync-actions hidden>
+            <button type="button" data-onboarding-retry>Try again</button>
+            <a href="/api/auth/start?returnTo=/app" data-onboarding-reconnect hidden>Reconnect SnapTrade</a>
+          </div>
           <p class="onboarding-footnote">You can add ticker-specific rules later in Settings.</p>
         </div>
         <div data-onboarding-step="install" hidden>
@@ -991,7 +998,7 @@
             <li><span>Confirm, then open Wheely Nilly from your home screen or app list.</span></li>
           </ol>
         </div>
-        <footer><button type="button" data-onboarding-back hidden>Back</button><button type="button" data-onboarding-next>Continue</button></footer>
+        <footer><button class="onboarding-start-over" type="button" data-onboarding-start-over>Start over</button><button type="button" data-onboarding-back hidden>Back</button><button type="button" data-onboarding-next>Continue</button></footer>
       </section>
     </div>
     <div class="tip-celebration" id="tip-celebration" role="status" aria-live="polite" hidden>

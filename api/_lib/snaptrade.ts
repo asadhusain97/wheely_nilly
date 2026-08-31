@@ -38,19 +38,26 @@ export const payloadPagination = (payload: unknown): Record<string, unknown> | n
 export const payloadRecord = (payload: unknown): Record<string, unknown> => {
   const queue: unknown[] = [payload];
   const visited = new Set<object>();
+  let fallback: Record<string, unknown> = {};
+  const numberKeys = ["number", "account_number", "accountNumber", "masked_number", "maskedNumber", "number_suffix", "numberSuffix"];
   while (queue.length) {
     const candidate = queue.shift();
-    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate) || visited.has(candidate)) continue;
+    if (!candidate || typeof candidate !== "object" || visited.has(candidate)) continue;
     visited.add(candidate);
-    const record = candidate as Record<string, unknown>;
-    if (["id", "number", "account_number", "accountNumber", "institution_name", "institutionName"].some((key) => key in record)) {
-      return record;
+    if (Array.isArray(candidate)) {
+      queue.push(...candidate);
+      continue;
     }
+    const record = candidate as Record<string, unknown>;
+    if (numberKeys.some((key) => key in record)) return record;
+    if (!Object.keys(fallback).length
+      && "id" in record
+      && ["name", "display_name", "displayName", "institution_name", "institutionName"].some((key) => key in record)) fallback = record;
     for (const key of ["account", "data", "result", "structuredContent"]) {
       if (record[key] && typeof record[key] === "object") queue.push(record[key]);
     }
   }
-  return {};
+  return fallback;
 };
 
 const asRecord = (value: unknown): Record<string, any> => value && typeof value === "object" ? value as Record<string, any> : {};
@@ -112,7 +119,7 @@ export const normalizeAccount = (value: unknown) => {
     name: text(account.name ?? account.display_name ?? account.displayName),
     numberSuffix,
     referenceLabel: numberSuffix
-      ? `Account •••• ${numberSuffix}`
+      ? `Account number •••• ${numberSuffix}`
       : "Account number unavailable",
     syncStatus: text(syncStatus) ?? text(account.status),
     transactionSyncComplete: optionalBoolean(transactions.initial_sync_completed),

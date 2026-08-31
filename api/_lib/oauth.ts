@@ -236,8 +236,9 @@ export const requireSameOrigin = (request: VercelRequest): boolean => {
 export const withAccessToken = async <T>(
   request: VercelRequest,
   response: VercelResponse,
-  operation: (accessToken: string) => Promise<T>,
+  operation: (accessToken: string, deadlineAt: number) => Promise<T>,
 ): Promise<T> => {
+  const deadlineAt = Date.now() + 54_000;
   let session = readSession(request);
   if (!session) throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
   const refreshSession = async (): Promise<OAuthTokens> => {
@@ -256,12 +257,12 @@ export const withAccessToken = async <T>(
     setSession(response, session);
   }
   try {
-    return await operation(session.accessToken);
+    return await operation(session.accessToken, deadlineAt);
   } catch (error) {
     if ((error as { status?: number }).status !== 401) throw error;
     const refreshed = await refreshSession();
     setSession(response, refreshed);
-    return operation(refreshed.accessToken);
+    return operation(refreshed.accessToken, deadlineAt);
   }
 };
 

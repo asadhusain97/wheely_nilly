@@ -40,7 +40,7 @@ export class LocalRepository {
   #open(): Promise<IDBDatabase> {
     if (!globalThis.indexedDB) return Promise.reject(new BrowserStorageUnavailableError());
     if (this.#openPromise) return this.#openPromise;
-    this.#openPromise = new Promise((resolve, reject) => {
+    const pending = new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(this.databaseName, STORAGE_SCHEMA_VERSION);
       request.onupgradeneeded = () => {
         const database = request.result;
@@ -51,8 +51,12 @@ export class LocalRepository {
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(new BrowserStorageUnavailableError(request.error?.message));
       request.onblocked = () => reject(new BrowserStorageUnavailableError("Close other Wheely Nilly tabs and try again"));
+    }).catch((error) => {
+      this.#openPromise = null;
+      throw error;
     });
-    return this.#openPromise;
+    this.#openPromise = pending;
+    return pending;
   }
 
   async get<T>(domain: StorageDomain, key: string): Promise<StoredRecord<T> | null> {

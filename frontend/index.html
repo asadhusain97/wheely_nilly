@@ -29,7 +29,7 @@
         <p class="eyebrow">Your wheel, in one view</p>
         <h1 id="hero-title">Know when to hold. Know when to close.</h1>
         <p class="hero-lede">Wheely Nilly reads the positions you already own, checks current option data, and applies your rules to open contracts and the next trade.</p>
-        <a class="primary-action" href="/api/auth/start">Get started <span aria-hidden="true">→</span></a>
+        <button class="primary-action" type="button" data-connect-intro-open>Get started <span aria-hidden="true">→</span></button>
         <p class="cta-note">Connects your brokerage through SnapTrade. Tested with Robinhood so far.</p>
       </div>
 
@@ -116,6 +116,28 @@
       </div>
     </section>
   </main>
+
+  <div class="connect-intro" data-connect-intro hidden>
+    <section role="dialog" aria-modal="true" aria-labelledby="connect-intro-title" aria-describedby="connect-intro-copy">
+      <header>
+        <img src="/assets/images/logo.png" alt="">
+        <button type="button" data-connect-intro-close aria-label="Close connection guide">×</button>
+      </header>
+      <p class="eyebrow">Before you connect</p>
+      <h2 id="connect-intro-title">Set up SnapTrade first.</h2>
+      <p class="connect-intro-notice" data-connect-intro-notice role="status" aria-live="polite" hidden></p>
+      <p id="connect-intro-copy">Wheely Nilly reads the Robinhood account you share through SnapTrade. It never receives your brokerage password and cannot place trades.</p>
+      <ol>
+        <li><span>1</span><div><strong>Create or open SnapTrade</strong><p>Use a free Personal account and verify your email.</p></div></li>
+        <li><span>2</span><div><strong>Connect Robinhood in SnapTrade</strong><p>Wait until your Robinhood accounts appear in the SnapTrade dashboard.</p></div></li>
+        <li><span>3</span><div><strong>Connect Wheely Nilly</strong><p>Return here, approve read-only access, then choose the account by its ending digits.</p></div></li>
+      </ol>
+      <div class="connect-intro-actions">
+        <a href="https://dashboard.snaptrade.com/signup" target="_blank" rel="noopener noreferrer">Open SnapTrade <span aria-hidden="true">↗</span></a>
+        <a class="connect-intro-primary" href="/api/auth/start">Connect Wheely Nilly <span aria-hidden="true">→</span></a>
+      </div>
+    </section>
+  </div>
 
   <footer>
     <a class="footer-brand" href="/"><img src="/assets/images/logo.png" alt=""><span>Wheely Nilly</span></a>

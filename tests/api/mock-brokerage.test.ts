@@ -16,6 +16,7 @@ const originalEnvironment = {
   NODE_ENV: process.env.NODE_ENV,
   VERCEL_ENV: process.env.VERCEL_ENV,
 };
+const originalFetch = globalThis.fetch;
 
 const restore = (name: keyof typeof originalEnvironment): void => {
   const value = originalEnvironment[name];
@@ -51,6 +52,7 @@ afterEach(() => {
   restore("BROKERAGE_MODE");
   restore("NODE_ENV");
   restore("VERCEL_ENV");
+  globalThis.fetch = originalFetch;
 });
 
 describe("local mock brokerage", () => {
@@ -79,6 +81,19 @@ describe("local mock brokerage", () => {
       brokerageMode: "snaptrade",
     });
     assert.equal(sessionResponse.result().headers.get("X-Wheely-Brokerage-Mode"), undefined);
+  });
+
+  it("returns browser OAuth failures to an actionable signup screen", async () => {
+    process.env.VERCEL_ENV = "production";
+    globalThis.fetch = async () => { throw new Error("provider unavailable"); };
+    const response = responseStub();
+
+    await authHandler({ method: "GET", url: "/api/auth/start", headers: {}, query: { path: "start" } }, response as any);
+
+    assert.deepEqual(response.result().redirect, {
+      status: 302,
+      url: "http://127.0.0.1:3000/?oauth=unavailable",
+    });
   });
 
   it("provides a representative account, snapshot, and authoritative history", () => {

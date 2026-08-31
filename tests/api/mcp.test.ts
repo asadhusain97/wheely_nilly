@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { extractToolPayload, SnapTradeMcpClient } from "../../api/_lib/mcp";
+import { extractToolPayload, McpHttpError, SnapTradeMcpClient } from "../../api/_lib/mcp";
 import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems, payloadPagination, payloadRecord } from "../../api/_lib/snaptrade";
 
 const originalFetch = globalThis.fetch;
@@ -10,6 +10,15 @@ afterEach(() => {
 });
 
 describe("SnapTrade MCP client", () => {
+  it("fails within the request budget instead of waiting for the platform to kill the function", async () => {
+    const client = new SnapTradeMcpClient("private-token", 0);
+    await assert.rejects(client.listTools(), (error: unknown) => {
+      assert.ok(error instanceof McpHttpError);
+      assert.equal(error.status, 504);
+      return true;
+    });
+  });
+
   it("unwraps the response containers used by MCP and SnapTrade", () => {
     const accounts = [{ id: "account-1" }];
     assert.deepEqual(payloadItems({ result: accounts }), accounts);
@@ -35,7 +44,7 @@ describe("SnapTrade MCP client", () => {
       institution: "Robinhood",
       name: "Robinhood Individual",
       numberSuffix: "8443",
-      referenceLabel: "Account •••• 8443",
+      referenceLabel: "Account number •••• 8443",
       syncStatus: null,
       transactionSyncComplete: null,
     });
@@ -49,7 +58,21 @@ describe("SnapTrade MCP client", () => {
       accountNumber: "****2087",
     } } } });
 
-    assert.equal(normalizeAccount(detail).referenceLabel, "Account •••• 2087");
+    assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 2087");
+  });
+
+  it("prefers a nested account number over an MCP wrapper identifier", () => {
+    const detail = payloadRecord({
+      id: "tool-result-1",
+      structuredContent: [{ result: { account: {
+        id: "account-1",
+        name: "Robinhood Individual",
+        number: "****3914",
+      } } }],
+    });
+
+    assert.equal(normalizeAccount(detail).id, "account-1");
+    assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 3914");
   });
 
   it("does not present provider identifiers as brokerage account numbers", () => {

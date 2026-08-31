@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "./_lib/vercel.js";
+import { mockBrokerageEnabled } from "./_lib/brokerage-mode.js";
 import {
   appOrigin,
   callbackUri,
@@ -34,6 +35,29 @@ export default async function handler(request: VercelRequest, response: VercelRe
   response.setHeader("Cache-Control", "private, no-store");
   const route = routeName(request);
   try {
+    if (mockBrokerageEnabled()) {
+      response.setHeader("X-Wheely-Brokerage-Mode", "mock");
+      if (route === "start" && request.method === "GET") {
+        const redirect = new URL(validReturnTo(request.query.returnTo), `${appOrigin()}/`);
+        redirect.searchParams.set("connected", "1");
+        redirect.searchParams.set("brokerage", "mock");
+        response.redirect(302, redirect.toString());
+        return;
+      }
+      if (route === "session" && request.method === "GET") {
+        response.status(200).json({ connected: true, scope: "mock", expiresAt: null, brokerageMode: "mock" });
+        return;
+      }
+      if (route === "disconnect" && request.method === "POST") {
+        if (!requireSameOrigin(request)) {
+          sendError(response, 403, "ORIGIN_REJECTED", "Request origin was rejected");
+          return;
+        }
+        response.status(204).end();
+        return;
+      }
+    }
+
     if (route === "start" && request.method === "GET") {
       const origin = appOrigin();
       if (requestHost(request) && requestHost(request) !== new URL(origin).host.toLowerCase()) {
@@ -82,7 +106,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
     if (route === "session" && request.method === "GET") {
       const session = readSession(request);
-      response.status(200).json({ connected: Boolean(session), scope: session?.scope ?? null, expiresAt: session ? new Date(session.expiresAt).toISOString() : null });
+      response.status(200).json({ connected: Boolean(session), scope: session?.scope ?? null, expiresAt: session ? new Date(session.expiresAt).toISOString() : null, brokerageMode: "snaptrade" });
       return;
     }
 

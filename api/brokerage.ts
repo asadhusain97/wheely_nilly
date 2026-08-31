@@ -1,4 +1,10 @@
 import type { VercelRequest, VercelResponse } from "./_lib/vercel.js";
+import { mockBrokerageEnabled } from "./_lib/brokerage-mode.js";
+import {
+  createMockAccountCatalog,
+  createMockBrokerageSnapshot,
+  createMockHistoryPage,
+} from "./_lib/mock-brokerage.js";
 import { requireSameOrigin, withAccessToken } from "./_lib/oauth.js";
 import { SnapTradeMcpClient } from "./_lib/mcp.js";
 import {
@@ -160,9 +166,14 @@ async function fetchHistoryPage(accessToken: string, accountId: string, offset: 
 export default async function handler(request: VercelRequest, response: VercelResponse): Promise<void> {
   response.setHeader("Cache-Control", "private, no-store");
   const route = pathName(request);
+  const useMock = mockBrokerageEnabled();
+  if (useMock) response.setHeader("X-Wheely-Brokerage-Mode", "mock");
   try {
     if (route === "accounts" && request.method === "GET") {
-      response.status(200).json(await withAccessToken(request, response, fetchAccounts));
+      const catalog = useMock
+        ? createMockAccountCatalog()
+        : await withAccessToken(request, response, fetchAccounts);
+      response.status(200).json(catalog);
       return;
     }
     if (route === "refresh" && request.method === "POST") {
@@ -178,7 +189,9 @@ export default async function handler(request: VercelRequest, response: VercelRe
         response.status(409).json({ error: { code: "ACCOUNT_SELECTION_REQUIRED", message: "Choose a brokerage account before syncing" } });
         return;
       }
-      const snapshot = await withAccessToken(request, response, (accessToken) => fetchSnapshot(accessToken, accountIds));
+      const snapshot = useMock
+        ? createMockBrokerageSnapshot(accountIds)
+        : await withAccessToken(request, response, (accessToken) => fetchSnapshot(accessToken, accountIds));
       response.status(snapshot.errors.length ? 207 : 200).json(snapshot);
       return;
     }
@@ -195,16 +208,19 @@ export default async function handler(request: VercelRequest, response: VercelRe
         response.status(400).json({ error: { code: "INVALID_HISTORY_CURSOR", message: "A valid accountId or cursor is required" } });
         return;
       }
-      response.status(200).json(await withAccessToken(request, response, (accessToken) => fetchHistoryPage(accessToken, accountId, offset)));
+      const page = useMock
+        ? createMockHistoryPage(accountId, offset)
+        : await withAccessToken(request, response, (accessToken) => fetchHistoryPage(accessToken, accountId, offset));
+      response.status(200).json(page);
       return;
     }
     response.status(404).json({ error: { code: "NOT_FOUND", message: "Route not found" } });
   } catch (error) {
     const upstreamStatus = (error as { status?: number }).status;
     const status = upstreamStatus === 401 ? 401 : upstreamStatus === 409 ? 409 : 502;
-    console.error(JSON.stringify({ event: "brokerage_request_failed", route, tool: (error as { tool?: string }).tool ?? null, kind: error instanceof Error ? error.name : typeof error, upstreamStatus: upstreamStatus ?? null }));
+    console.error(JSON.stringify({ event: "brokerage_request_failed", route, provider: useMock ? "mock" : "snaptrade", tool: (error as { tool?: string }).tool ?? null, kind: error instanceof Error ? error.name : typeof error, upstreamStatus: upstreamStatus ?? null }));
     const code = status === 401 ? "AUTH_REQUIRED" : status === 409 ? "ACCOUNT_SELECTION_REQUIRED" : "BROKERAGE_UNAVAILABLE";
-    const message = status === 401 ? "Connect SnapTrade to continue" : status === 409 ? "Choose an available brokerage account" : "SnapTrade is connected, but brokerage data could not be aligned";
+    const message = status === 401 ? "Connect SnapTrade to continue" : status === 409 ? "Choose an available brokerage account" : useMock ? "Mock brokerage data could not be loaded" : "SnapTrade is connected, but brokerage data could not be aligned";
     response.status(status).json({ error: { code, message } });
   }
 }

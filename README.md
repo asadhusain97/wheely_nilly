@@ -52,7 +52,7 @@ You need:
 
 - Node.js 22
 - Python 3.12 or newer
-- A free SnapTrade Personal account to test a brokerage connection
+- A free SnapTrade Personal account for real brokerage data, or the included local mock
 - The Vercel CLI, which `npx` can run without a global install
 
 Clone the repository and install the frontend dependencies:
@@ -72,13 +72,25 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 Paste the generated value into `SESSION_SEAL_KEY` in `.env.local`. Keep `APP_ORIGIN=http://127.0.0.1:3000`. Environment files are ignored by git except for `.env.example`.
 
+To work without a SnapTrade connection, set this in `.env.local`:
+
+```bash
+BROKERAGE_MODE=mock
+```
+
+Mock mode supplies a local account with shares, open covered-call and cash-secured-put positions, balances, recent orders, and trade history. Edit `api/_lib/mock-brokerage.ts` to change the scenarios. The sample uses real ticker symbols, so market quotes and option lookups still use Yahoo Finance. Mock mode cannot run in production. `SESSION_SEAL_KEY` is not used while mock mode is active.
+
+See [Local testing](docs/local-testing.md) for the full setup, verification commands, and troubleshooting notes.
+
 Start the complete frontend and API project:
 
 ```bash
-npx vercel dev --listen 3000
+npm run dev:local
 ```
 
-Open <http://127.0.0.1:3000>. SnapTrade dynamically registers this exact callback when a connection begins:
+This runs Vercel with the Python version pinned in `.python-version`, keeping its local Python function runtime aligned with the dependencies it builds. It requires `uv` 0.9.25 or newer, as required by the current Vercel Python builder.
+
+Open <http://127.0.0.1:3000>. In real brokerage mode, SnapTrade dynamically registers this exact callback when a connection begins:
 
 ```text
 http://127.0.0.1:3000/api/auth/callback

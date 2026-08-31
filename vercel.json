@@ -8,15 +8,14 @@
       "maxDuration": 30
     },
     "api/**/*.py": {
-      "maxDuration": 30,
       "excludeFiles": "{sidecar/tests/**,backend/**,frontend/**,deploy/**,docker/**,data/**}"
     }
   },
   "rewrites": [
     { "source": "/app", "destination": "/app.html" },
-    { "source": "/api/auth/:path*", "destination": "/api/auth?path=:path*" },
-    { "source": "/api/brokerage/:path*", "destination": "/api/brokerage?path=:path*" },
-    { "source": "/api/market/:path*", "destination": "/api/market?route=:path*" }
+    { "source": "/api/auth/:path", "destination": "/api/auth?path=:path" },
+    { "source": "/api/brokerage/:path", "destination": "/api/brokerage?path=:path" },
+    { "source": "/api/market/:path", "destination": "/api/market?route=:path" }
   ],
   "headers": [
     {

@@ -68,8 +68,6 @@ export async function buildLocalModel() {
   const snapshot = snapshotRecord?.value ?? null;
   const positions = (snapshot?.positions ?? []).map((position) => ({
     ...position,
-    name: null,
-    instrumentType: null,
     priceMinor: minor(position.price),
     brokerCostBasisMinor: minor(position.costBasis),
     option: position.option ? normalizedOption(position.option) : null,
@@ -98,12 +96,20 @@ const sourceSummary = (sourceMap: Record<string, string>) => Object.entries(sour
   return result;
 }, { system: [], goal: [], tickerOverride: [] } as Record<string, string[]>);
 
-const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "cashSecuredPut") => {
+const defaultGoal = (leg: "coveredCall" | "cashSecuredPut", instrumentType: unknown) => {
+  const kind = String(instrumentType ?? "").toLowerCase();
+  const isFund = kind.includes("etf") || (kind.includes("mutual") && kind.includes("fund"));
+  return leg === "coveredCall" && isFund ? "protect" : "income";
+};
+
+const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "cashSecuredPut", instrumentType: unknown = null) => {
   const legSettings = settings.tickerPlaybooks?.[symbol]?.[leg] ?? null;
-  const rules = legSettings ? { ...settings.goalProfiles[legSettings.goal][leg], ...(legSettings.overrides ?? {}) } : { ...SYSTEM_RULES };
+  const goal = legSettings?.goal ?? defaultGoal(leg, instrumentType);
+  const goalRules = settings.goalProfiles?.[goal]?.[leg] ?? SYSTEM_RULES;
+  const rules = { ...goalRules, ...(legSettings?.overrides ?? {}) };
   const sourceMap = Object.fromEntries(Object.keys(rules).map((field) => [
     field,
-    legSettings ? (Object.hasOwn(legSettings.overrides ?? {}, field) ? "tickerOverride" : "goal") : "system",
+    Object.hasOwn(legSettings?.overrides ?? {}, field) ? "tickerOverride" : "goal",
   ]));
   const priceField = leg === "coveredCall" ? "minNetSalePriceMinor" : "maxNetPurchasePriceMinor";
   return {
@@ -111,7 +117,8 @@ const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "
     leg,
     rules,
     enabled: legSettings?.enabled ?? false,
-    goal: legSettings?.goal ?? null,
+    goal,
+    goalDefaulted: !legSettings,
     priceGuard: { field: priceField, valueMinor: legSettings?.[priceField] ?? null },
     sourceMap,
     sourceSummary: sourceSummary(sourceMap),
@@ -144,7 +151,10 @@ export async function buildLocalTargets() {
   }
   const targets = [...bySymbol.values()].filter((target) => target.legs.length).sort((a, b) => a.symbol.localeCompare(b.symbol)).map((target) => ({
     ...target,
-    legs: target.legs.map((leg: "coveredCall" | "cashSecuredPut") => ({ leg, goal: effectiveSettings(settings, target.symbol, leg).goal, effectiveSettings: effectiveSettings(settings, target.symbol, leg) })),
+    legs: target.legs.map((leg: "coveredCall" | "cashSecuredPut") => {
+      const effective = effectiveSettings(settings, target.symbol, leg, target.instrumentType);
+      return { leg, goal: effective.goal, effectiveSettings: effective };
+    }),
   }));
   return { generatedAt: model.generatedAt, freshness: model.freshness, targets };
 }
@@ -207,24 +217,41 @@ export async function scanAllLocalTargets(fetcher: typeof fetch) {
   return { scannedAt: new Date().toISOString(), freshness: context.freshness, targets: context.targets, results };
 }
 
-export async function buildLocalCloseResults(contractResults: any[]) {
+const marketNumber = (value: unknown): number | null => {
+  const parsed = Number(value);
+  return value === null || value === undefined || !Number.isFinite(parsed) ? null : parsed;
+};
+
+const lastUsableQuoteView = (quote: any) => quote ? {
+  bidPerShare: marketNumber(quote.bid),
+  askPerShare: marketNumber(quote.ask),
+  underlyingPrice: marketNumber(quote.underlying_price),
+  quoteTimestamp: quote.contract_quote_time ?? quote.underlying_quote_time ?? quote.fetched_at ?? null,
+  fetchedAt: quote.fetched_at ?? null,
+  provider: quote.provider ?? null,
+} : null;
+
+export async function buildLocalCloseResults(contractResults: any[], lastUsableContractResults: any[] = []) {
   const [model, settingsRecord] = await Promise.all([
     buildLocalModel(),
     localRepository.get<any>("tickerStrategies", "document").catch(() => null),
   ]);
   const settings = settingsRecord?.value ?? builtInSettingsDocument();
   const quotes = new Map(contractResults.map((item) => [item.contract?.contract_symbol, item]));
+  const lastUsableQuotes = new Map(lastUsableContractResults.map((item) => [item.contract?.contract_symbol, item]));
   const scanTimestamp = new Date().toISOString();
   const results = model.dashboard.openTrades.map((trade: any) => {
     const leg = trade.type === "csp" ? "cashSecuredPut" : "coveredCall";
-    const effective = effectiveSettings(settings, trade.symbol, leg);
+    const effective = effectiveSettings(settings, trade.symbol, leg, trade.instrumentType);
     const quote = quotes.get(trade.contractSymbol) ?? null;
+    const currentQuoteUsable = quote?.available === true && marketNumber(quote.ask) !== null && Number(quote.ask) > 0;
     const close = calculateCloseResult({ trade, quote, effectiveSettings: effective, now: new Date(scanTimestamp) });
     return {
       contract: { accountId: trade.accountId, contractSymbol: trade.contractSymbol, symbol: trade.symbol, optionType: leg === "cashSecuredPut" ? "put" : "call", strategy: trade.type, strike: trade.strike, expiration: trade.expiration, contracts: trade.contracts, multiplier: trade.multiplier ?? 100, openedAt: trade.openedAt },
       scanTimestamp,
       quoteTimestamps: { contract: quote?.contract_quote_time ?? null, underlying: quote?.underlying_quote_time ?? null, providerFetchedAt: quote?.fetched_at ?? null },
       provider: quote?.provider ?? null,
+      lastUsableQuote: currentQuoteUsable ? null : lastUsableQuoteView(lastUsableQuotes.get(trade.contractSymbol)),
       effectiveSettings: effective,
       close,
     };
@@ -241,7 +268,7 @@ export async function buildLocalRollResults(fetcher: typeof fetch, contractSymbo
   if (!trade) throw Object.assign(new Error("This contract is no longer open"), { status: 409 });
   const settings = settingsRecord?.value ?? builtInSettingsDocument();
   const leg = trade.type === "csp" ? "cashSecuredPut" : "coveredCall";
-  const effective = effectiveSettings(settings, trade.symbol, leg);
+  const effective = effectiveSettings(settings, trade.symbol, leg, trade.instrumentType);
   const profile = buildRollSearchProfile(effective);
   if (!effective.goal || !profile) throw Object.assign(new Error("Choose a ticker goal before evaluating a roll"), { status: 400 });
   const rules = effective.rules;

@@ -180,7 +180,11 @@ export function createPositionManagementService({ derived, strategySettings, scr
     const quotes = new Map(quoteBatch.results.map((item) => [item.contract.contract_symbol, item]));
     const results = trades.map((trade) => {
       const leg = trade.type === 'csp' ? 'cashSecuredPut' : 'coveredCall';
-      const effectiveSettings = resolveEffectiveSettings(settings, { symbol: trade.symbol, leg });
+      const effectiveSettings = resolveEffectiveSettings(settings, {
+        symbol: trade.symbol,
+        leg,
+        instrumentType: trade.instrumentType,
+      });
       const quote = quotes.get(exactContract(trade).contract_symbol) ?? null;
       const close = quote?.available === false
         ? unavailableClose(quote.unavailable_reason ?? 'The exact contract quote is unavailable.', effectiveSettings, quote, number(trade.openingCredit))

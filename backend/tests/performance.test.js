@@ -29,6 +29,7 @@ function model({ basisMinor = 4000 } = {}) {
   const openCall = option('WXYZ260918C00046000', 'call', 4600);
   const equity = {
     accountId: 'acct-1', symbol: 'WXYZ', option: null, quantity: 250,
+    instrumentType: 'ETF',
     priceMinor: 4300, brokerCostBasisMinor: basisMinor,
     coveredCall: { status: 'open', contracts: 1, expirations: ['2026-09-18'], availableLots: 1, totalLots: 2 },
   };
@@ -77,9 +78,11 @@ describe('wheel performance dashboard', () => {
       { type: 'csp', contracts: 1 },
     ]);
     assert.ok(dashboard.openTrades.every((trade) => trade.stockPrice === '43.21'));
+    assert.ok(dashboard.openTrades.every((trade) => trade.instrumentType === 'ETF'));
     assert.equal(dashboard.tickerPerformance.length, 1);
     const ticker = dashboard.tickerPerformance[0];
     assert.equal(ticker.symbol, 'WXYZ');
+    assert.equal(ticker.instrumentType, 'ETF');
     assert.equal(ticker.bookedProfit, '160.00');
     assert.equal(ticker.returnRate, 0.017778);
     assert.equal(ticker.annualizedReturnRate, 0.449231);

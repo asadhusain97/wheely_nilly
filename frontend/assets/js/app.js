@@ -171,10 +171,14 @@ function settingsTickerFromActivity(ticker) {
     return time(b) - time(a);
   })[0];
   const preferredLeg = recentTrade?.type === 'csp' ? 'cashSecuredPut' : 'coveredCall';
+  const goal = preferredLeg === 'coveredCall'
+    ? defaultContractGoal(ticker.instrumentType)
+    : 'income';
   return {
     symbol: ticker.symbol,
+    instrumentType: ticker.instrumentType ?? null,
     preferredLeg,
-    goal: preferredLeg === 'cashSecuredPut' ? 'acquire' : 'income',
+    goal,
     lastActivityAt: recentTrade?.closedAt ?? recentTrade?.openedAt ?? null,
   };
 }
@@ -805,20 +809,23 @@ function renderOpenTrades(dashboard) {
     const card = el('article', `trade-card${metricsMissing ? ' is-metrics-loading' : ''}`);
     if (metricsMissing && !metricsFailed) card.setAttribute('aria-busy', 'true');
     card.setAttribute('aria-label', `${trade.symbol} ${trade.type.toUpperCase()} open contract`);
-    card.append(contractHeader(trade, management));
+    card.append(contractHeader(trade, management, dashboard));
     if (metricsMissing) {
       const pending = el('div', `contract-metrics-loading${metricsFailed ? ' is-error' : ''}`);
       pending.setAttribute('role', 'status');
       pending.append(el('span', '', metricsFailed ? 'Metrics unavailable' : 'Loading metrics'));
       if (!metricsFailed) pending.append(el('i'), el('i'), el('i'));
-      card.append(pending);
+      const goal = effectiveContractGoal(trade, management, dashboard);
+      const rollAction = rollController.action(trade, {
+        state: 'unavailable', goal, searchProfile: null,
+      });
+      card.append(pending, ...[rollAction].filter(Boolean));
     } else {
       const rollReview = deriveRollReview({ trade, management });
       const details = contractDetails(trade, management, rollReview);
       const rollAction = rollController.action(trade, rollReview);
       card.append(
-        recommendationSummary(management, rollReview),
-        ...[rollAction].filter(Boolean),
+        recommendationSummary(management, rollReview, rollAction),
         economicsSummary(management),
         premiumCaptureProgress(management),
         details.footer,
@@ -829,7 +836,23 @@ function renderOpenTrades(dashboard) {
   }
 }
 
-function contractHeader(trade, management = null) {
+function defaultContractGoal(instrumentType) {
+  const normalizedType = String(instrumentType ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  return normalizedType === 'etf' || normalizedType === 'mutualfund' ? 'protect' : 'income';
+}
+
+function effectiveContractGoal(trade, management, dashboard) {
+  const savedGoal = management?.effectiveSettings?.goal;
+  if (savedGoal && GOAL_LABELS[savedGoal]) return savedGoal;
+  const ticker = dashboard?.tickerPerformance?.find((item) => item.symbol === trade.symbol);
+  const screened = state.screenedTickers.find((item) => item.symbol === trade.symbol);
+  const opportunity = dashboard?.opportunities?.coveredCalls?.find((item) => item.symbol === trade.symbol);
+  return defaultContractGoal(
+    trade.instrumentType ?? ticker?.instrumentType ?? screened?.instrumentType ?? opportunity?.instrumentType,
+  );
+}
+
+function contractHeader(trade, management = null, dashboard = null) {
   const header = el('header', 'contract-header');
   const title = el('div', 'contract-title');
   const identity = el('div', 'contract-identity');
@@ -837,23 +860,26 @@ function contractHeader(trade, management = null) {
     el('h3', '', trade.symbol),
     el('span', `trade-badge ${trade.type}`, trade.type.toUpperCase()),
   );
-  const goal = management?.effectiveSettings?.goal;
-  if (goal && GOAL_LABELS[goal]) {
-    const goalChip = el('span', 'contract-goal goal-tone', GOAL_LABELS[goal]);
-    goalChip.dataset.goal = goal;
-    identity.append(goalChip);
-  }
+  const goal = effectiveContractGoal(trade, management, dashboard);
+  const goalChip = el('span', 'contract-goal goal-tone', GOAL_LABELS[goal]);
+  goalChip.dataset.goal = goal;
+  identity.append(goalChip);
   const optionType = trade.type === 'csp' ? 'Put' : 'Call';
   title.append(
     identity,
     el('p', 'contract-terms', `${marketPrice(trade.strike)} ${optionType} · ${shortDate(trade.expiration)} · ${dteLabel(trade.dte)}`),
   );
   const contracts = trade.contracts == null ? Number.NaN : Math.abs(Number(trade.contracts));
-  header.append(
-    title,
+  const headerMeta = el('div', 'contract-header-meta');
+  headerMeta.append(
+    stockPriceTag(management?.close?.metrics?.underlyingPrice ?? trade.stockPrice),
     el('small', 'contract-quantity', Number.isFinite(contracts)
       ? `${quantity(contracts)} contract${contracts === 1 ? '' : 's'}`
       : 'Quantity unavailable'),
+  );
+  header.append(
+    title,
+    headerMeta,
   );
   return header;
 }
@@ -862,8 +888,8 @@ function recommendationPresentation(management, rollReview) {
   const close = management?.close;
   if (!close?.available) {
     return {
-      label: 'Review now',
-      tone: 'review',
+      label: 'Market data unavailable',
+      tone: 'unavailable',
       reason: close?.unavailableReason ?? 'Close guidance has not been calculated yet.',
     };
   }
@@ -887,7 +913,7 @@ function recommendationPresentation(management, rollReview) {
     : { label: 'Hold', tone: 'hold', reason: `${capture} of premium captured; your close target is ${target}.${assignmentNote}` };
 }
 
-function recommendationSummary(management, rollReview) {
+function recommendationSummary(management, rollReview, rollAction = null) {
   const recommendation = recommendationPresentation(management, rollReview);
   const summary = el('section', `recommendation-summary is-${recommendation.tone}`);
   if (rollReview?.goal) summary.dataset.goal = rollReview.goal;
@@ -897,6 +923,20 @@ function recommendationSummary(management, rollReview) {
     el('strong', 'recommendation-label', recommendation.label),
   );
   summary.append(heading, el('p', 'recommendation-reason', recommendation.reason));
+  const staleQuote = management?.lastUsableQuote;
+  if (!management?.close?.available && staleQuote) {
+    const timestamp = staleQuote.quoteTimestamp ?? staleQuote.fetchedAt;
+    const note = el('div', 'stale-market-note');
+    const tag = el('span', 'stale-market-tag', 'Stale quote');
+    const time = el('time', '', timestamp ? `Last usable ${updatedAt(timestamp)}` : 'Last usable time unavailable');
+    if (timestamp) time.dateTime = timestamp;
+    const prices = staleQuote.bidPerShare == null && staleQuote.askPerShare == null
+      ? 'Bid / ask unavailable'
+      : `${marketPrice(staleQuote.bidPerShare)} / ${marketPrice(staleQuote.askPerShare)} bid / ask`;
+    note.append(tag, time, el('strong', '', prices));
+    summary.append(note);
+  }
+  if (rollAction) summary.append(rollAction);
   return summary;
 }
 
@@ -976,15 +1016,12 @@ function detailMetric(labelText, value, glossaryTerm = labelText) {
   return item;
 }
 
-function detailGroup(title, metrics) {
+function detailGrid(metrics) {
   const visibleMetrics = metrics.filter(Boolean);
   if (!visibleMetrics.length) return null;
-  const group = el('section', 'contract-detail-group');
-  group.append(el('h4', '', title));
   const grid = el('dl', 'contract-detail-grid');
   grid.append(...visibleMetrics);
-  group.append(grid);
-  return group;
+  return grid;
 }
 
 function positionCheckRow(title, message, tone = 'neutral') {
@@ -1123,21 +1160,19 @@ function contractDetails(trade, management, rollReview) {
   panel.setAttribute('aria-labelledby', control.id);
   const setExpanded = (expanded) => {
     control.setAttribute('aria-expanded', String(expanded));
-    control.setAttribute('aria-label', `${expanded ? 'Hide' : 'Show'} contract information for ${trade.symbol} ${trade.contractSymbol}`);
-    control.textContent = expanded ? 'Hide position check' : 'Show position check';
+    const controlLabel = `${expanded ? 'Hide' : 'Show'} position check for ${trade.symbol}`;
+    control.setAttribute('aria-label', controlLabel);
+    control.title = controlLabel;
     panel.hidden = !expanded;
   };
   control.addEventListener('click', () => setExpanded(control.getAttribute('aria-expanded') !== 'true'));
   setExpanded(false);
 
-  const economics = detailGroup('Trade', [
+  const metricsGrid = detailGrid([
     detailMetric('Premium received', trade.openingCredit == null ? null : money(trade.openingCredit), 'Premium received'),
     detailMetric('Buyback estimate', metrics?.estimatedBuybackDebit == null ? null : money(metrics.estimatedBuybackDebit), 'Buyback debit'),
     detailMetric('Collateral', trade.collateral == null ? null : money(trade.collateral), 'Collateral'),
     detailMetric('Breakeven price', metrics?.breakevenPrice == null ? null : marketPrice(metrics.breakevenPrice), 'Breakeven'),
-  ]);
-  const market = detailGroup('Market', [
-    detailMetric('Underlying price', metrics?.underlyingPrice == null ? (trade.stockPrice == null ? null : marketPrice(trade.stockPrice)) : marketPrice(metrics.underlyingPrice), 'Underlying price'),
     detailMetric(
       'Bid / ask',
       metrics?.bidPerShare == null && metrics?.askPerShare == null
@@ -1151,7 +1186,7 @@ function contractDetails(trade, management, rollReview) {
     detailMetric('Delta', metrics?.delta == null ? null : decimal(metrics.delta, 3), 'Delta'),
     detailMetric('Implied volatility', metrics?.impliedVolatility == null ? null : percent(metrics.impliedVolatility, { sign: false }), 'Implied volatility'),
   ]);
-  panel.append(positionCheck(trade, management, updateTime, rollReview), ...[economics, market].filter(Boolean));
+  panel.append(positionCheck(trade, management, updateTime, rollReview), ...[metricsGrid].filter(Boolean));
   if (trade.needsReview) {
     panel.append(el('p', 'contract-data-note', 'Some opening-position data needs review.'));
   }

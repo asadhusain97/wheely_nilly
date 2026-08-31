@@ -19,7 +19,7 @@ Wheely Nilly is a private, mobile-first options workspace. Its interface should 
 
 Glass surfaces use a light diagonal white gradient, a soft inset highlight, a low neutral shadow, and `backdrop-filter: blur(18–30px) saturate(150–175%)`. Avoid dark dashboard slabs, heavy outlines, and gratuitous colored status panels. Amber and red surfaces are reserved for actionable stale/error states; green appears only for a verified or passing state.
 
-Typography uses the app's Pin Sans/system stack for text, the rounded system stack for important financial figures, and tabular numerals for prices and returns. Headlines are compact with slightly negative tracking. Utility labels use plain sentence case unless a short eyebrow genuinely establishes context.
+Typography uses the app's Pin Sans/system stack for text, the rounded system stack for important financial figures, and tabular numerals for prices and returns. Headlines are compact with slightly negative tracking. Utility labels use plain sentence case unless a short eyebrow genuinely establishes context. Visible interface text has a 12px minimum size, including dense metadata, badges, chart labels, and mobile controls.
 
 ## Interaction principles
 
@@ -33,15 +33,15 @@ Typography uses the app's Pin Sans/system stack for text, the rounded system sta
 
 ## Open contracts
 
-Open-contract cards are decision summaries. Ticker and recommendation lead, followed by two economics metrics and premium-capture progress. The recommendation calls out an in-the-money contract immediately. A centered "Show position check" disclosure ends the collapsed card. Its full 44px control remains keyboard and touch accessible.
+Open-contract cards are decision summaries. Ticker, current stock price, and recommendation lead, followed by two economics metrics and premium-capture progress. The recommendation calls out an in-the-money contract immediately and keeps the roll-candidate action as a text link directly below the reason. A centered arrow-only disclosure ends the collapsed card. Its accessible label changes between showing and hiding the position check, and its full 44px control remains keyboard and touch accessible.
 
-The ticker's effective goal appears as a quiet goal-colored chip. Roll UI is absent for positions that do not need it. When goal, assignment intent, time, or delta makes a roll worth reviewing, the recommendation explains why and adds one compact `See roll choices` action. An aligned ITM assignment reads `Let assignment work` and does not show the action.
+The ticker's effective goal appears as a quiet goal-colored chip. Unconfigured stocks default to Earn Income; ETF and mutual-fund covered calls default to Keep Shares. Cash-secured puts use Earn Income when no compatible goal is saved. Every open contract offers a compact `Check roll candidates` action. The action stays quiet unless goal, assignment intent, time, or delta makes a roll worth reviewing, when it receives a warning treatment. An aligned ITM assignment reads `Let assignment work`; its manual candidate check remains available without the warning treatment.
 
 Roll choices open in a Home bottom sheet, never by redirecting to Radar. The sheet starts with the broker search profile, then a current-to-replacement swap rail and three decision numbers: conservative net credit/debit, added days, and effective assignment price. At most two alternate matches and an optional audit disclosure follow. The only primary action copies a two-leg broker handoff; it does not resemble or prepare an order ticket.
 
 Expansion starts with three short management inferences: profit-target status, assignment risk, and exit liquidity. A fourth roll-decision inference appears only when roll review or aligned assignment is relevant. Each inference uses the same restrained positive, neutral, or warning language as Radar, but it interprets the position now rather than re-evaluating the original trade. The market-data time sits beside this check so users can judge its freshness.
 
-Audit context follows in two balanced 2×2 groups: Trade for opening premium, buyback estimate, collateral, and breakeven; Market for underlying price, bid/ask with spread context, delta, and IV. Do not repeat P/L, earned per day, strike, expiration, or DTE in those audit groups. The position check may reuse a metric only when it explains what the current value means.
+Audit context follows in one balanced grid for opening premium, buyback estimate, collateral, breakeven, bid/ask with spread context, delta, and IV. The stock price already appears in the card header. Do not repeat P/L, earned per day, strike, expiration, or DTE in the audit grid. The position check may reuse a metric only when it explains what the current value means.
 
 ## Radar
 

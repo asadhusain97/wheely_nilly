@@ -80,8 +80,10 @@ describe('strategy settings API', () => {
     assert.equal(response.body.symbol, 'VOOG');
     assert.equal(response.body.rules.minDte, 14);
     assert.equal(response.body.rules.maxDte, 40);
+    assert.equal(response.body.rules.rollReviewDte, 10);
     assert.equal(response.body.sourceMap.minDte, 'goal');
     assert.equal(response.body.sourceMap.maxDte, 'tickerOverride');
+    assert.equal(response.body.sourceMap.rollReviewDte, 'goal');
 
     for (const query of [
       'symbol=%3Cbad%3E&leg=coveredCall',

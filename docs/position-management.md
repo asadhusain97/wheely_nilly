@@ -4,24 +4,39 @@ The home page evaluates every derived open short call and put in place. It does 
 
 Close and roll guidance are analysis only. The card explains the current decision and never places or prepares an order. Roll review stays on Home because it manages an existing contract; Radar remains dedicated to finding a new wheel trade.
 
-The collapsed card is a decision summary. Its order is contract identity and saved goal, recommendation, an optional roll action, two economics metrics, premium-capture progress, and a centered disclosure chevron. Identity includes ticker, strategy, strike, option type, expiration, DTE, quantity, and goal. The binary Close result maps to `Hold` when the target is not met, `Close candidate` when it is met, and `Review now` when the required inputs are unavailable. A goal-aware roll state can replace that label only when a roll condition is active. The visible reason states why the decision applies.
+The collapsed card is a decision summary. Its order is contract identity, current stock price, effective goal, recommendation with a roll-candidate link below its reason, two economics metrics, premium-capture progress, and a centered disclosure chevron. Identity includes ticker, strategy, strike, option type, expiration, DTE, quantity, and goal. The binary Close result maps to `Hold` when the target is not met, `Close candidate` when it is met, and `Review now` when the required inputs are unavailable. A goal-aware roll state can replace that label only when a roll condition is active. The visible reason states why the decision applies.
 
-The economics row promotes estimated P/L if closed and earned per day. A progress bar marks the effective `closeAtProfitCapture` setting and turns green only when the existing Close signal passes. The expanded area does not repeat collapsed values. It starts with profit-target, assignment-risk, exit-liquidity, and conditional roll-decision interpretations, followed by two balanced audit groups. Trade shows premium received, buyback estimate, collateral, and breakeven. Market shows the underlying price, bid/ask with spread context, delta, and implied volatility. Empty optional metrics are omitted. Metric labels continue to open the glossary where a matching term exists.
+The economics row promotes estimated P/L if closed and earned per day. A progress bar marks the effective `closeAtProfitCapture` setting and turns green only when the existing Close signal passes. The expanded area does not repeat collapsed values. It starts with profit-target, assignment-risk, exit-liquidity, and conditional roll-decision interpretations. One audit grid then shows premium received, buyback estimate, collateral, breakeven, bid/ask with spread context, delta, and implied volatility. Empty optional metrics are omitted. Metric labels continue to open the glossary where a matching term exists.
 
 ## Goal-aware roll review
 
-Roll conditions are derived locally from the current position, its exact-contract metrics, and the effective ticker goal. A normal `Hold` or `Close candidate` does not gain extra controls. `See roll choices` appears only for `review`:
+Roll conditions are derived locally from the current position, its exact-contract metrics, and the effective ticker goal. `Check roll candidates` remains available in every recommendation state. It receives the warning treatment only for `review`:
 
 - **Keep Shares:** review a covered call when assignment conflicts with the goal and the call is ITM or above the saved delta ceiling. Candidate preference is up and out within the saved contract range.
 - **Earn Income:** review when the profit target is met or expiration is near. Candidate preference stays near the saved delta and DTE targets, then favors a better conservative credit.
 - **Plan Exit:** let an aligned ITM covered call proceed. If an OTM call nears expiration, review lower or later calls that preserve any saved minimum effective sale price.
 - **Plan Entry:** let an aligned ITM put proceed. If an OTM put nears expiration, review a later put near spot that preserves any saved maximum effective purchase price.
 
-“Let assignment work” is a positive management decision, not a roll prompt. The current assignment already matches the ticker goal, so the interface does not create work for the user.
+“Let assignment work” is a positive management decision, not a roll recommendation. The card still allows a manual candidate check, but keeps that action visually quiet because the current assignment already matches the ticker goal.
 
-The near-expiration window is the smaller of 10 days and the goal's saved minimum DTE. Roll review can also activate earlier when delta and assignment intent conflict. A credit alone never activates or validates a roll.
+The near-expiration window comes from the effective `rollReviewDte` rule. Its built-in value is 10 DTE for Keep Shares and both Earn Income legs, and 7 DTE for Plan Exit and Plan Entry. Roll review can also activate earlier when delta and assignment intent conflict. A credit alone never activates or validates a roll.
+
+The exact decision order is:
+
+1. Missing exact-contract data returns `unavailable`.
+2. A missing goal returns `notNeeded`.
+3. An ITM contract whose assignment aligns with Plan Exit or Plan Entry returns `assignmentAligned`, even inside the review window.
+4. Assignment conflict returns `review` when the contract is ITM or its absolute delta exceeds `targetDeltaMax`.
+5. An OTM Plan Exit call or Plan Entry put returns `review` at or below `rollReviewDte` because the intended assignment has not developed.
+6. Earn Income returns `review` when `close.signal` passes `closeAtProfitCapture`, or at or below `rollReviewDte`.
+7. Keep Shares returns `review` when absolute delta exceeds `targetDeltaMax`.
+8. Otherwise the state is `notNeeded`.
+
+Settings lists `rollReviewDte`, `targetDeltaMax`, and `closeAtProfitCapture` inside each compatible goal and strategy profile. These numeric thresholds can differ between the Earn Income covered-call and cash-secured-put profiles. Assignment alignment and conflict remain defined by the selected goal rather than separate switches. Disabling those semantics would make Plan Exit, Plan Entry, or Keep Shares contradict its own name.
 
 ## Roll choices and broker handoff
+
+Every open-contract card with a resolved goal includes `Check roll candidates` below the recommendation copy. The button looks like a text link, stays quiet when no roll condition is active, and uses the warning color when the decision rules return `review`. Running the check never changes the recommendation and never places or prepares an order.
 
 Opening the Home sheet requests the exact current contract and later candidate expirations in one chain snapshot. The browser keeps the opening credit, position size, goal, and price guard local. The market bridge receives only the technical contract identity and screening limits.
 

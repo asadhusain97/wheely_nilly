@@ -23,6 +23,7 @@ export const RULE_FIELDS = [
   'minVolume',
   'minPeriodReturn',
   'closeAtProfitCapture',
+  'rollReviewDte',
 ];
 
 const legSchema = z.enum(STRATEGY_LEGS);
@@ -44,11 +45,13 @@ const ruleShape = {
   minVolume: safeNonnegativeInteger,
   minPeriodReturn: z.number().min(0).max(10),
   closeAtProfitCapture: z.number().positive().max(1),
+  rollReviewDte: z.number().int().min(0).max(365),
 };
 
 const legacyRuleShape = {
   ...ruleShape,
   closeAtProfitCapture: ruleShape.closeAtProfitCapture.optional(),
+  rollReviewDte: ruleShape.rollReviewDte.optional(),
   maxQuoteAgeSeconds: z.number().int().min(1).max(86_400).optional(),
 };
 
@@ -258,9 +261,17 @@ const SYSTEM_RULE_DEFAULTS = {
   minVolume: 0,
   minPeriodReturn: 0,
   closeAtProfitCapture: 0.50,
+  rollReviewDte: 7,
 };
 
-const completeProfile = (rules = {}) => ({ ...SYSTEM_RULE_DEFAULTS, ...rules });
+const completeProfile = (rules = {}) => {
+  const profile = { ...SYSTEM_RULE_DEFAULTS, ...rules };
+  return {
+    ...profile,
+    // Before this field was saved, roll review used min(10, minDte).
+    rollReviewDte: rules.rollReviewDte ?? Math.min(10, profile.minDte),
+  };
+};
 
 const BUILT_IN_SETTINGS = {
   schemaVersion: 2,
@@ -269,33 +280,33 @@ const BUILT_IN_SETTINGS = {
       minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
       targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-      closeAtProfitCapture: 0.35,
+      closeAtProfitCapture: 0.35, rollReviewDte: 10,
     } },
     income: {
       coveredCall: {
         minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
         targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
         minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-        closeAtProfitCapture: 0.50,
+        closeAtProfitCapture: 0.50, rollReviewDte: 10,
       },
       cashSecuredPut: {
         minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
         targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
         minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-        closeAtProfitCapture: 0.50,
+        closeAtProfitCapture: 0.50, rollReviewDte: 10,
       },
     },
     exit: { coveredCall: {
       minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
       targetDeltaMin: 0.45, targetDeltaMax: 0.65, maxSpreadPercent: 0.10,
       minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.0025,
-      closeAtProfitCapture: 0.90,
+      closeAtProfitCapture: 0.90, rollReviewDte: 7,
     } },
     acquire: { cashSecuredPut: {
       minDte: 7, maxDte: 28, minMoneyness: 0.97, maxMoneyness: 1,
       targetDeltaMin: 0.40, targetDeltaMax: 0.55, maxSpreadPercent: 0.10,
       minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.005,
-      closeAtProfitCapture: 0.85,
+      closeAtProfitCapture: 0.85, rollReviewDte: 7,
     } },
   },
   tickerPlaybooks: {},
@@ -404,7 +415,12 @@ export function normalizeStrategySettings(input) {
   return result.data;
 }
 
-export function resolveEffectiveSettings(input, { symbol, leg }) {
+export function defaultGoalForInstrument({ leg, instrumentType }) {
+  const kind = String(instrumentType ?? '').toLowerCase().replace(/[^a-z]/g, '');
+  return leg === 'coveredCall' && ['etf', 'mutualfund'].includes(kind) ? 'protect' : 'income';
+}
+
+export function resolveEffectiveSettings(input, { symbol, leg, instrumentType = null }) {
   const settings = normalizeStrategySettings(input);
   const parsedSymbol = tickerSymbolSchema.safeParse(symbol);
   const parsedLeg = legSchema.safeParse(leg);
@@ -415,14 +431,13 @@ export function resolveEffectiveSettings(input, { symbol, leg }) {
   const normalizedSymbol = parsedSymbol.data;
   const playbook = settings.tickerPlaybooks[normalizedSymbol];
   const legSettings = playbook?.[parsedLeg.data] ?? null;
-  const goalRules = legSettings
-    ? settings.goalProfiles[legSettings.goal][parsedLeg.data]
-    : SYSTEM_RULE_DEFAULTS;
+  const goal = legSettings?.goal ?? defaultGoalForInstrument({ leg: parsedLeg.data, instrumentType });
+  const goalRules = settings.goalProfiles[goal]?.[parsedLeg.data] ?? SYSTEM_RULE_DEFAULTS;
   const rules = {
     ...goalRules,
     ...(legSettings?.overrides ?? {}),
   };
-  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, legSettings ? 'goal' : 'system']));
+  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, 'goal']));
   for (const field of Object.keys(legSettings?.overrides ?? {})) sourceMap[field] = 'tickerOverride';
 
   const priceGuardField = parsedLeg.data === 'coveredCall'
@@ -433,7 +448,8 @@ export function resolveEffectiveSettings(input, { symbol, leg }) {
     leg: parsedLeg.data,
     rules,
     enabled: legSettings?.enabled ?? false,
-    goal: legSettings?.goal ?? null,
+    goal,
+    goalDefaulted: !legSettings,
     priceGuard: {
       field: priceGuardField,
       valueMinor: legSettings?.[priceGuardField] ?? null,

@@ -7,6 +7,11 @@ const RULE_FIELDS = [
   { key: 'targetDeltaMax', label: 'Maximum delta', short: 'Max delta', step: 0.01, min: 0, max: 1, nullable: true },
   { key: 'minPeriodReturn', label: 'Minimum period return', short: 'Min return', step: 0.1, min: 0, max: 1000, scale: 100, suffix: '%' },
   { key: 'closeAtProfitCapture', label: 'Close when premium captured', short: 'Close when premium captured', step: 1, min: 0.01, max: 100, scale: 100, suffix: '%' },
+  {
+    key: 'rollReviewDte', label: 'Review rolls at or below DTE', short: 'Roll review DTE',
+    step: 1, min: 0, max: 365, integer: true, suffix: 'days',
+    help: 'Starts the near-expiration roll review at this DTE.',
+  },
   { key: 'minMoneyness', label: 'Minimum strike / stock', short: 'Min moneyness', step: 1, min: 0.01, max: 200, scale: 100, suffix: '%' },
   { key: 'maxMoneyness', label: 'Maximum strike / stock', short: 'Max moneyness', step: 1, min: 0.01, max: 300, scale: 100, suffix: '%' },
   { key: 'maxSpreadPercent', label: 'Maximum bid / ask spread', short: 'Max spread', step: 1, min: 0.01, max: 100, scale: 100, suffix: '%' },
@@ -15,8 +20,8 @@ const RULE_FIELDS = [
 ];
 
 const FIELD_BY_KEY = Object.fromEntries(RULE_FIELDS.map((field) => [field.key, field]));
-const CORE_FIELDS = RULE_FIELDS.slice(0, 5);
-const ADVANCED_FIELDS = RULE_FIELDS.slice(5);
+const CORE_FIELDS = RULE_FIELDS.slice(0, 6);
+const ADVANCED_FIELDS = RULE_FIELDS.slice(6);
 const GLOSSARY_TERM_BY_RULE_KEY = {
   minDte: 'DTE',
   maxDte: 'DTE',
@@ -24,6 +29,7 @@ const GLOSSARY_TERM_BY_RULE_KEY = {
   targetDeltaMax: 'Delta',
   minPeriodReturn: 'Minimum return',
   closeAtProfitCapture: 'Premium capture',
+  rollReviewDte: 'Roll review DTE',
   minMoneyness: 'Moneyness',
   maxMoneyness: 'Moneyness',
   maxSpreadPercent: 'Maximum spread',
@@ -72,39 +78,40 @@ export const SYSTEM_RULES = {
   minVolume: 0,
   minPeriodReturn: 0,
   closeAtProfitCapture: 0.50,
+  rollReviewDte: 7,
 };
 const BUILT_IN_GOAL_PROFILES = {
   protect: { coveredCall: {
     minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
     targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
     minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-    closeAtProfitCapture: 0.35,
+    closeAtProfitCapture: 0.35, rollReviewDte: 10,
   } },
   income: {
     coveredCall: {
       minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50,
+      closeAtProfitCapture: 0.50, rollReviewDte: 10,
     },
     cashSecuredPut: {
       minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50,
+      closeAtProfitCapture: 0.50, rollReviewDte: 10,
     },
   },
   exit: { coveredCall: {
     minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
     targetDeltaMin: 0.45, targetDeltaMax: 0.65, maxSpreadPercent: 0.10,
     minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.0025,
-    closeAtProfitCapture: 0.90,
+    closeAtProfitCapture: 0.90, rollReviewDte: 7,
   } },
   acquire: { cashSecuredPut: {
     minDte: 7, maxDte: 28, minMoneyness: 0.97, maxMoneyness: 1,
     targetDeltaMin: 0.40, targetDeltaMax: 0.55, maxSpreadPercent: 0.10,
     minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.005,
-    closeAtProfitCapture: 0.85,
+    closeAtProfitCapture: 0.85, rollReviewDte: 7,
   } },
 };
 
@@ -283,10 +290,15 @@ export function normalizeTrackedTickers(items = []) {
     if (!/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) continue;
     const recency = Date.parse(raw.lastActivityAt) || 0;
     const preferredLeg = raw.preferredLeg === 'cashSecuredPut' ? 'cashSecuredPut' : 'coveredCall';
+    const instrumentType = String(raw.instrumentType ?? raw.instrument_type ?? '').trim();
+    const normalizedType = instrumentType.toLowerCase().replace(/[^a-z]/g, '');
+    const defaultGoal = preferredLeg === 'coveredCall' && ['etf', 'mutualfund'].includes(normalizedType)
+      ? 'protect'
+      : 'income';
     const allowedGoals = ALLOWED_GOALS[preferredLeg];
-    const goal = allowedGoals.includes(raw.goal) ? raw.goal : (preferredLeg === 'cashSecuredPut' ? 'acquire' : 'income');
+    const goal = allowedGoals.includes(raw.goal) ? raw.goal : defaultGoal;
     const existing = tickers.get(symbol);
-    if (!existing || recency >= existing.recency) tickers.set(symbol, { symbol, recency, preferredLeg, goal });
+    if (!existing || recency >= existing.recency) tickers.set(symbol, { symbol, recency, preferredLeg, goal, instrumentType });
   }
   return tickers;
 }
@@ -382,15 +394,15 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     return token;
   }
 
-  function summaryLabel(label, glossaryTerms) {
+  function summaryLabel(label, glossaryTerm, glossaryTerms) {
     return glossaryTerms
-      ? createGlossaryTerm(label, label, 'settings-rule-label')
+      ? createGlossaryTerm(label, glossaryTerm, 'settings-rule-label')
       : element('span', 'settings-rule-label', label);
   }
 
   function rangeSummary(label, rules, first, second, specificKeys, source, suffix = '', glossaryTerms = false) {
     const row = element('div', 'settings-rule-row');
-    row.append(summaryLabel(label, glossaryTerms));
+    row.append(summaryLabel(label, GLOSSARY_TERM_BY_RULE_KEY[first] ?? label, glossaryTerms));
     const value = element('div', 'settings-rule-value');
     const separator = element('span', 'rule-separator', '–');
     if (!specificKeys.has(first) && !specificKeys.has(second)) separator.classList.add('is-inherited');
@@ -406,7 +418,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
 
   function singleSummary(label, rules, key, specificKeys, source, glossaryTerms = false) {
     const row = element('div', 'settings-rule-row');
-    row.append(summaryLabel(label, glossaryTerms));
+    row.append(summaryLabel(label, GLOSSARY_TERM_BY_RULE_KEY[key] ?? label, glossaryTerms));
     const value = element('div', 'settings-rule-value');
     value.append(valueToken(key, rules[key], specificKeys.has(key), source));
     row.append(value);
@@ -420,6 +432,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       rangeSummary('Delta', rules, 'targetDeltaMin', 'targetDeltaMax', specificKeys, source, '', glossaryTerms),
       singleSummary('Minimum return', rules, 'minPeriodReturn', specificKeys, source, glossaryTerms),
       singleSummary('Close when premium captured', rules, 'closeAtProfitCapture', specificKeys, source, glossaryTerms),
+      singleSummary('Roll review starts at DTE', rules, 'rollReviewDte', specificKeys, source, glossaryTerms),
     );
     const advanced = element('details', 'settings-rule-advanced');
     const advancedSummary = element('summary');
@@ -668,8 +681,14 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     const copy = element('div', 'editor-rule-copy');
     const label = element('label', glossaryTerms ? 'sr-only' : '', field.label);
     label.htmlFor = id;
-    const helper = element('small', '', partial && !overridden ? `From ${inheritLabels[field.key] ?? 'the layer above'}` : '');
-    helper.hidden = !partial || overridden;
+    const helperText = () => {
+      const inheritedCopy = partial && !Object.hasOwn(rules, field.key)
+        ? `From ${inheritLabels[field.key] ?? 'the layer above'}. `
+        : '';
+      return `${inheritedCopy}${field.help ?? ''}`.trim();
+    };
+    const helper = element('small', '', helperText());
+    helper.hidden = !helper.textContent;
     if (glossaryTerms) {
       copy.append(
         createGlossaryTerm(field.label, GLOSSARY_TERM_BY_RULE_KEY[field.key] ?? field.label, 'editor-rule-label'),
@@ -701,8 +720,9 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
 
     const syncAppearance = (isOverride) => {
       row.classList.toggle('is-inherited', partial && !isOverride);
-      helper.textContent = partial && !isOverride ? `From ${inheritLabels[field.key] ?? 'the layer above'}` : '';
-      helper.hidden = !partial || isOverride;
+      const inheritedCopy = partial && !isOverride ? `From ${inheritLabels[field.key] ?? 'the layer above'}. ` : '';
+      helper.textContent = `${inheritedCopy}${field.help ?? ''}`.trim();
+      helper.hidden = !helper.textContent;
       reset.hidden = !partial || !isOverride;
       input.required = !field.nullable && (!partial || isOverride);
     };

@@ -34,6 +34,22 @@ function goalGuidance(goal) {
   return 'Earn Income favors another liquid contract inside the saved income range.';
 }
 
+export function rollActionPresentation(review) {
+  if (review?.state === 'unavailable') {
+    return {
+      disabled: true,
+      label: 'Waiting for market data',
+      title: review.reason ?? 'A usable current option quote is required before checking roll candidates.',
+    };
+  }
+  const recommended = review?.state === 'review';
+  return {
+    disabled: false,
+    label: 'Check roll candidates',
+    title: recommended ? 'A rollover review is recommended' : 'Check later contracts against this goal',
+  };
+}
+
 function strikeGuidance(profile, strategy) {
   if (profile.strikeDirection === 'higher') return 'Higher call strike';
   if (profile.strikeDirection === 'lower') return 'Near or below spot';
@@ -242,7 +258,7 @@ export function createRollController({ request, notify }) {
     title.textContent = `Roll ${trade.symbol} ${trade.type === 'cc' ? 'call' : 'put'}`;
     description.textContent = goalGuidance(review.goal);
     status.textContent = 'Checking the current contract and later expirations.';
-    body.replaceChildren(searchProfileView(review.searchProfile, trade.type));
+    body.replaceChildren(...[review.searchProfile ? searchProfileView(review.searchProfile, trade.type) : null].filter(Boolean));
     const loading = node('div', 'roll-loading');
     loading.append(node('span', '', 'Checking matching contracts'), node('i'), node('i'));
     body.append(loading);
@@ -264,7 +280,7 @@ export function createRollController({ request, notify }) {
     } catch (error) {
       if (requestSequence !== sequence) return;
       status.textContent = 'Roll choices unavailable.';
-      body.replaceChildren(searchProfileView(review.searchProfile, trade.type));
+      body.replaceChildren(...[review.searchProfile ? searchProfileView(review.searchProfile, trade.type) : null].filter(Boolean));
       const unavailable = node('section', 'roll-empty is-warning');
       unavailable.append(node('strong', '', 'Roll choices could not be verified'), node('p', '', error.status === 409 ? 'This contract is no longer open. Refresh Home to see the latest position.' : 'Use the contract targets above in your broker and confirm current prices there.'));
       body.append(unavailable);
@@ -272,13 +288,18 @@ export function createRollController({ request, notify }) {
   };
 
   const action = (trade, review) => {
-    if (review.state !== 'review') return null;
-    const wrapper = node('div', 'roll-review-action');
-    const button = node('button', '', 'See roll choices');
+    if (!review?.goal) return null;
+    const recommended = review.state === 'review';
+    const presentation = rollActionPresentation(review);
+    const wrapper = node('div', `roll-review-action${recommended ? ' is-recommended' : ''}`);
+    const button = node('button', '', presentation.label);
     button.type = 'button';
+    button.disabled = presentation.disabled;
+    button.title = presentation.title;
     button.setAttribute('aria-haspopup', 'dialog');
     button.setAttribute('aria-controls', 'roll-dialog');
     button.setAttribute('aria-expanded', 'false');
+    if (recommended) button.setAttribute('aria-label', 'Check roll candidates, rollover review recommended');
     button.addEventListener('click', () => open(trade, review, button));
     wrapper.append(button);
     return wrapper;

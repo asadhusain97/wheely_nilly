@@ -53,7 +53,7 @@
   border: 1px solid rgba(255, 255, 255, .76);
   border-radius: 15px;
   background: var(--settings-glass);
-  font-size: 11px;
+  font-size: 12px;
   box-shadow: 0 6px 18px rgba(29, 29, 25, .05), inset 0 1px 0 rgba(255, 255, 255, .8);
   -webkit-backdrop-filter: blur(18px) saturate(155%);
   backdrop-filter: blur(18px) saturate(155%);
@@ -73,13 +73,72 @@
   min-height: 38px;
   border-radius: 999px;
   padding-inline: 14px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .settings-stack {
   display: grid;
   gap: 24px;
   padding: 0;
+}
+
+.data-refresh-settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid var(--settings-hairline);
+}
+
+.settings-data-action {
+  min-width: 0;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--mute);
+  text-align: center;
+  box-shadow: none;
+}
+
+.settings-data-action span {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-data-action.is-refresh {
+  border-color: rgba(38, 38, 34, .08);
+  background: rgba(255, 255, 255, .52);
+  color: var(--body);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .72);
+}
+
+.settings-data-action:hover:not(:disabled),
+.settings-data-action:active:not(:disabled) {
+  border-color: rgba(38, 38, 34, .1);
+  background: rgba(255, 255, 255, .68);
+  color: var(--body);
+}
+
+.settings-data-action.is-destructive:hover:not(:disabled),
+.settings-data-action.is-destructive:focus-visible {
+  border-color: rgba(158, 10, 10, .12);
+  background: rgba(252, 237, 239, .54);
+  color: var(--error);
+}
+
+.settings-data-action:disabled {
+  cursor: wait;
+  opacity: .52;
 }
 
 .settings-stack::before,
@@ -264,7 +323,7 @@
 
 .settings-rule-value small {
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 580;
 }
 
@@ -310,7 +369,7 @@
   min-width: 0;
   min-height: 32px;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .goal-context strong {
@@ -322,7 +381,7 @@
   max-width: 315px;
   overflow: visible;
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
   text-overflow: clip;
   white-space: normal;
@@ -333,7 +392,7 @@
   border: 1px solid rgba(255, 255, 255, .72);
   background: rgba(255, 255, 255, .52);
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82);
 }
 
@@ -352,7 +411,7 @@
   border-color: var(--settings-hairline);
   background: rgba(243, 243, 239, .34);
   color: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -440,7 +499,7 @@ details[open] > summary .disclosure-icon {
 .settings-ticker-count {
   flex: 0 0 auto;
   color: var(--ash);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
 }
 
@@ -468,7 +527,7 @@ details[open] > summary .disclosure-icon {
 
 .ticker-capsule small {
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ticker-capsule.is-starting {
@@ -486,7 +545,7 @@ details[open] > summary .disclosure-icon {
   padding: 0 16px;
   background: rgba(241, 241, 237, .58);
   color: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .76);
 }
@@ -504,14 +563,14 @@ details[open] > summary .disclosure-icon {
   width: 100%;
   margin: 2px 0;
   color: var(--mute);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
 .settings-disclaimer {
   margin: 12px 6px 0;
   color: var(--ash);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
   text-align: center;
 }
@@ -526,7 +585,7 @@ details[open] > summary .disclosure-icon {
 
 .settings-support p {
   margin: 0;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -536,7 +595,7 @@ details[open] > summary .disclosure-icon {
   align-items: center;
   padding: 0 10px;
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration-color: rgba(109, 109, 101, .38);
   text-decoration-thickness: 1px;
@@ -590,7 +649,7 @@ details[open] > summary .disclosure-icon {
 .glossary-sheet-header p {
   margin-bottom: 3px;
   color: var(--mute);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -691,7 +750,7 @@ details[open] > summary .disclosure-icon {
 
 .glossary-entry .glossary-guide::before {
   color: var(--red-deep);
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -718,7 +777,7 @@ details[open] > summary .disclosure-icon {
   border-radius: 14px;
   background: var(--canvas);
   color: var(--mute);
-  font-size: 9px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -726,7 +785,7 @@ details[open] > summary .disclosure-icon {
   display: block;
   margin-bottom: 3px;
   color: var(--ink);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .glossary-sources p {
@@ -736,7 +795,7 @@ details[open] > summary .disclosure-icon {
 .glossary-empty {
   margin: 28px 8px;
   color: var(--mute);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   text-align: center;
 }
@@ -751,7 +810,7 @@ details[open] > summary .disclosure-icon {
   border: 1px solid rgba(158, 10, 10, .1);
   border-radius: 14px;
   background: rgba(252, 235, 238, .86);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .settings-editor-actions {
@@ -798,7 +857,7 @@ details[open] > summary .disclosure-icon {
 }
 
 .sheet-editor-intro small {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -806,7 +865,7 @@ details[open] > summary .disclosure-icon {
   width: 34px;
   height: 34px;
   border-radius: 11px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .goal-editor-intro {
@@ -824,7 +883,7 @@ details[open] > summary .disclosure-icon {
 }
 
 .goal-editor-intro small {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .sheet-rule-editor {
@@ -866,7 +925,7 @@ details[open] > summary .disclosure-icon {
 
 .editor-rule-copy small {
   color: var(--ash);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 560;
   line-height: 1.3;
 }
@@ -903,7 +962,7 @@ details[open] > summary .disclosure-icon {
 
 .rule-input span {
   padding-right: 10px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .editor-rule-row.is-inherited .rule-input {
@@ -961,7 +1020,7 @@ details[open] > summary .disclosure-icon {
 
 .editor-advanced-rules > summary small {
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .editor-advanced-rules > .editor-rule-list {
@@ -986,7 +1045,7 @@ details[open] > summary .disclosure-icon {
 .ticker-goal-field legend {
   padding: 0;
   color: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -1009,7 +1068,7 @@ details[open] > summary .disclosure-icon {
 .ticker-fixed-strategy > span:first-child {
   padding: 0;
   color: var(--body);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 680;
 }
 
@@ -1024,7 +1083,7 @@ details[open] > summary .disclosure-icon {
   min-width: 0;
   min-height: 32px;
   padding: 0 9px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .ticker-fixed-strategy {
@@ -1055,7 +1114,7 @@ details[open] > summary .disclosure-icon {
 .editor-effective-note {
   margin: 0 3px 10px;
   color: var(--mute);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.45;
 }
 
@@ -1064,7 +1123,7 @@ details[open] > summary .disclosure-icon {
   margin-top: 14px;
   border-radius: 999px;
   background: rgba(255, 244, 246, .7);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -1111,7 +1170,7 @@ details[open] > summary .disclosure-icon {
   .layer-tabs button {
     min-width: 60px;
     padding-inline: 11px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .settings-rule-list {
@@ -1136,6 +1195,16 @@ details[open] > summary .disclosure-icon {
 
   .settings-ticker-tools {
     padding-inline: 16px;
+  }
+
+  .data-refresh-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-data-action.is-destructive {
+    width: max-content;
+    grid-column: 1 / -1;
+    justify-self: center;
   }
 
   .editor-rule-row {

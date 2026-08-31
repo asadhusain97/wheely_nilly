@@ -262,11 +262,11 @@ function candidateCard(viewModel) {
   const sections = [
     whyTrade(viewModel.reasons),
     detailSection('Contract metrics', [
-      detailRow('Bid / ask', candidate.bid == null || candidate.ask == null ? null : `${marketPrice(candidate.bid)} / ${marketPrice(candidate.ask)}`, 'Bid-ask prices'),
+      detailRow('Bid / ask', candidate.bid == null || candidate.ask == null ? null : `${marketPrice(candidate.bid)} / ${marketPrice(candidate.ask)}`, 'Executable option price'),
       detailRow('Spread', viewModel.execution.factors.spread.value == null ? null : percentagePoints(viewModel.execution.factors.spread.value, 2), 'Bid-ask spread'),
       detailRow('Market activity', candidate.open_interest == null || candidate.volume == null ? null : `${number(candidate.open_interest, 0)} OI · ${number(candidate.volume, 0)} volume`, 'Open interest / volume'),
       detailRow('Estimated fees', candidate.estimated_fees == null ? null : money(candidate.estimated_fees, 2), 'Estimated fee'),
-      detailRow('Capital required', money(viewModel.reward.capitalRequired), 'Capital at risk'),
+      detailRow('Capital required', money(viewModel.reward.capitalRequired), 'Capital required'),
       detailRow('Annualized return', percentagePoints(viewModel.reward.annualizedReturn, 1), 'Annualized return'),
       detailRow('Implied volatility', candidate.implied_volatility == null ? null : percent(candidate.implied_volatility), 'Implied volatility'),
       detailRow('Theta per day', candidate.theta_per_day == null ? null : number(candidate.theta_per_day, 4), 'Theta per day'),

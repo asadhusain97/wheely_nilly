@@ -69,6 +69,7 @@ describe('strategy settings model and persistence', () => {
     assert.equal(second.persistence.persisted, false);
     assert.equal(second.persistence.updatedAt, null);
     assert.equal(second.settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 0.85);
+    assert.equal(second.settings.goalProfiles.acquire.cashSecuredPut.rollReviewDte, 7);
     assert.equal('maxQuoteAgeSeconds' in second.settings.goalProfiles.acquire.cashSecuredPut, false);
   });
 
@@ -78,31 +79,31 @@ describe('strategy settings model and persistence', () => {
       minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
       targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-      closeAtProfitCapture: 0.35,
+      closeAtProfitCapture: 0.35, rollReviewDte: 10,
     });
     assert.deepEqual(profiles.income.coveredCall, {
       minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50,
+      closeAtProfitCapture: 0.50, rollReviewDte: 10,
     });
     assert.deepEqual(profiles.income.cashSecuredPut, {
       minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50,
+      closeAtProfitCapture: 0.50, rollReviewDte: 10,
     });
     assert.deepEqual(profiles.exit.coveredCall, {
       minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
       targetDeltaMin: 0.45, targetDeltaMax: 0.65, maxSpreadPercent: 0.10,
       minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.0025,
-      closeAtProfitCapture: 0.90,
+      closeAtProfitCapture: 0.90, rollReviewDte: 7,
     });
     assert.deepEqual(profiles.acquire.cashSecuredPut, {
       minDte: 7, maxDte: 28, minMoneyness: 0.97, maxMoneyness: 1,
       targetDeltaMin: 0.40, targetDeltaMax: 0.55, maxSpreadPercent: 0.10,
       minOpenInterest: 50, minVolume: 10, minPeriodReturn: 0.005,
-      closeAtProfitCapture: 0.85,
+      closeAtProfitCapture: 0.85, rollReviewDte: 7,
     });
   });
 
@@ -191,6 +192,8 @@ describe('strategy settings model and persistence', () => {
     assert.equal(migrated.goalProfiles.income.cashSecuredPut.minVolume, 50);
     assert.equal(migrated.goalProfiles.income.coveredCall.maxDte, 42);
     assert.equal(migrated.goalProfiles.protect.coveredCall.minDte, 30);
+    assert.equal(migrated.goalProfiles.protect.coveredCall.rollReviewDte, 10);
+    assert.equal(migrated.goalProfiles.exit.coveredCall.rollReviewDte, 7);
     assert.equal(migrated.globalRules, undefined);
   });
 
@@ -211,13 +214,14 @@ describe('strategy settings model and persistence', () => {
     assert.equal('maxQuoteAgeSeconds' in loaded.settings.goalProfiles.income.coveredCall, false);
   });
 
-  it('defaults a persisted schema-v2 document missing Close without discarding saved values', async () => {
+  it('defaults persisted schema-v2 Close and roll fields without discarding saved values', async () => {
     const { service } = await temporaryService();
     const olderV2 = builtInStrategySettings();
     olderV2.goalProfiles.protect.coveredCall.minVolume = 77;
     for (const profiles of Object.values(olderV2.goalProfiles)) {
       for (const rules of Object.values(profiles)) {
         delete rules.closeAtProfitCapture;
+        delete rules.rollReviewDte;
         rules.maxQuoteAgeSeconds = 123;
       }
     }
@@ -227,6 +231,8 @@ describe('strategy settings model and persistence', () => {
     const loaded = await service.load();
     assert.equal(loaded.settings.goalProfiles.protect.coveredCall.minVolume, 77);
     assert.equal(loaded.settings.goalProfiles.protect.coveredCall.closeAtProfitCapture, 0.5);
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.rollReviewDte, 10);
+    assert.equal(loaded.settings.goalProfiles.exit.coveredCall.rollReviewDte, 7);
     assert.equal('maxQuoteAgeSeconds' in loaded.settings.goalProfiles.protect.coveredCall, false);
     assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
   });
@@ -257,6 +263,17 @@ describe('strategy settings model and persistence', () => {
     settings.goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture = 1;
     assert.equal(normalizeStrategySettings(settings).goalProfiles.acquire.cashSecuredPut.closeAtProfitCapture, 1);
   });
+
+  it('validates roll review DTE as a whole number from zero through 365', () => {
+    for (const value of [-1, 2.5, 366]) {
+      const settings = builtInStrategySettings();
+      settings.goalProfiles.income.coveredCall.rollReviewDte = value;
+      assert.throws(() => normalizeStrategySettings(settings), /rollReviewDte/);
+    }
+    const settings = builtInStrategySettings();
+    settings.goalProfiles.income.coveredCall.rollReviewDte = 0;
+    assert.equal(normalizeStrategySettings(settings).goalProfiles.income.coveredCall.rollReviewDte, 0);
+  });
 });
 
 describe('effective strategy settings resolution', () => {
@@ -276,6 +293,8 @@ describe('effective strategy settings resolution', () => {
     assert.equal(effective.sourceMap.minMoneyness, 'goal');
     assert.equal(effective.sourceMap.minVolume, 'tickerOverride');
     assert.equal(effective.sourceMap.closeAtProfitCapture, 'goal');
+    assert.equal(effective.rules.rollReviewDte, 10);
+    assert.equal(effective.sourceMap.rollReviewDte, 'goal');
     assert.equal(effective.goal, 'income');
     assert.deepEqual(effective.priceGuard, { field: 'minNetSalePriceMinor', valueMinor: 12_345 });
   });
@@ -298,11 +317,28 @@ describe('effective strategy settings resolution', () => {
     assert.equal(effective.sourceMap.closeAtProfitCapture, 'tickerOverride');
   });
 
-  it('uses system rules and a disabled state for an unconfigured ticker', () => {
+  it('resolves a ticker-specific roll review window and source', () => {
+    const settings = addPlaybook(builtInStrategySettings());
+    settings.tickerPlaybooks.VOOG.coveredCall.overrides.rollReviewDte = 4;
+    const effective = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
+    assert.equal(effective.rules.rollReviewDte, 4);
+    assert.equal(effective.sourceMap.rollReviewDte, 'tickerOverride');
+  });
+
+  it('uses an income goal and a disabled state for an unconfigured stock ticker', () => {
     const effective = resolveEffectiveSettings(builtInStrategySettings(), { symbol: 'MSFT', leg: 'cashSecuredPut' });
     assert.equal(effective.enabled, false);
-    assert.equal(effective.goal, null);
-    assert.equal(effective.rules.minDte, 7);
-    assert.ok(Object.values(effective.sourceMap).every((source) => source === 'system'));
+    assert.equal(effective.goal, 'income');
+    assert.equal(effective.goalDefaulted, true);
+    assert.equal(effective.rules.minDte, 14);
+    assert.ok(Object.values(effective.sourceMap).every((source) => source === 'goal'));
+  });
+
+  it('uses Keep Shares for an unconfigured ETF covered call', () => {
+    const effective = resolveEffectiveSettings(builtInStrategySettings(), {
+      symbol: 'VOO', leg: 'coveredCall', instrumentType: 'ETF',
+    });
+    assert.equal(effective.goal, 'protect');
+    assert.equal(effective.rules.targetDeltaMax, 0.18);
   });
 });

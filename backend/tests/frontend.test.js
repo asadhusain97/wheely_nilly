@@ -54,6 +54,7 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /width:min\(100%,560px\)/);
     assert.match(css, /min-width:44px;min-height:44px/);
     assert.match(css, /backdrop-filter:blur\(var\(--glass-blur\)\) saturate\(var\(--glass-saturation\)\)/);
+    assert.match(css, /\.toast\{right:auto;left:50%;width:min\(calc\(100% - 24px\),536px\);max-width:none;margin:0;transform:translateX\(-50%\)\}/);
   });
   it('prevents app text selection while preserving editable field behavior', () => {
     assert.match(css, /\.app-shell\{[^}]*-webkit-user-select:none[^}]*user-select:none[^}]*-webkit-touch-callout:none/);
@@ -90,9 +91,9 @@ describe('responsive dashboard shell', () => {
     assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
   });
   it('can choose another account or fully disconnect and restart setup', () => {
-    assert.match(html, /data-reset-setup><span>Choose another account<\/span>/);
+    assert.match(html, /data-reset-setup[^>]*><span>Choose another account<\/span>/);
     assert.match(html, /Keep SnapTrade connected/);
-    assert.match(html, /data-restart-connection><span>Restart connection<\/span>/);
+    assert.match(html, /data-restart-connection[^>]*><span>Restart connection<\/span>/);
     assert.match(html, /data-onboarding-start-over/);
     assert.match(html, /data-refresh-brokerage/);
     assert.doesNotMatch(html, /data-market-interval|data-brokerage-interval|data-disconnect|data-erase-local/);
@@ -160,12 +161,16 @@ describe('responsive dashboard shell', () => {
       assert.match(js, new RegExp(`function ${component}`));
     }
     const cardSource = js.slice(js.indexOf('function renderOpenTrades'), js.indexOf('function renderDashboard'));
-    const hierarchy = ['contractHeader(trade, management)', 'recommendationSummary(management, rollReview)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
+    const hierarchy = ['contractHeader(trade, management, dashboard)', 'recommendationSummary(management, rollReview, rollAction)', 'economicsSummary(management)', 'premiumCaptureProgress(management)', 'details.footer', 'details.panel'];
     for (let index = 1; index < hierarchy.length; index += 1) {
       assert.ok(cardSource.indexOf(hierarchy[index - 1]) < cardSource.indexOf(hierarchy[index]));
     }
 
-    assert.match(js, /label: 'Review now'/);
+    assert.match(js, /label: 'Market data unavailable'/);
+    assert.match(js, /management\?\.lastUsableQuote/);
+    assert.match(js, /Stale quote/);
+    assert.match(js, /Last usable \$\{updatedAt\(timestamp\)\}/);
+    assert.match(css, /\.stale-market-tag\{[^}]*var\(--warning\)/);
     assert.match(js, /label: 'Close candidate'/);
     assert.match(js, /label: 'Hold'/);
     assert.match(js, /management\.effectiveSettings\.rules\.closeAtProfitCapture/);
@@ -184,8 +189,10 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /\.premium-progress\.is-met \.premium-progress-fill\{background:var\(--green\)\}/);
 
     assert.match(js, /const control = el\('button', 'contract-details-control'\)/);
-    assert.match(js, /Show position check/);
-    assert.match(js, /Hide position check/);
+    assert.doesNotMatch(js, /Show position check|Hide position check/);
+    assert.match(js, /controlLabel = `\$\{expanded \? 'Hide' : 'Show'\} position check for \$\{trade\.symbol\}`/);
+    assert.match(js, /control\.setAttribute\('aria-label', controlLabel\)/);
+    assert.match(js, /control\.title = controlLabel/);
     assert.match(js, /control\.setAttribute\('aria-expanded', 'false'\)/);
     assert.match(js, /control\.setAttribute\('aria-controls', panelId\)/);
     assert.match(js, /panel\.hidden = !expanded/);
@@ -205,10 +212,12 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /executionWarning/);
     assert.match(js, /calculateLiquidity/);
     assert.match(detailsSource, /positionCheck\(trade, management, updateTime, rollReview\)/);
-    assert.ok(detailsSource.indexOf("detailGroup('Trade'") < detailsSource.indexOf("detailGroup('Market'"));
-    for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Underlying price', 'Bid / ask', 'Delta', 'Implied volatility']) {
+    assert.match(detailsSource, /const metricsGrid = detailGrid\(\[/);
+    assert.doesNotMatch(detailsSource, /detailGroup|'Trade'|'Market'|contract-detail-group/);
+    for (const term of ['Premium received', 'Buyback estimate', 'Collateral', 'Breakeven price', 'Bid / ask', 'Delta', 'Implied volatility']) {
       assert.match(detailsSource, new RegExp(term.replace('/', '\\/')));
     }
+    assert.doesNotMatch(detailsSource, /Underlying price/);
     assert.doesNotMatch(detailsSource, /At the current ask|Shares committed|Cash secured/);
     assert.match(detailsSource, /filter\(Boolean\)\.join\(' · '\)/);
     for (const duplicate of ['Profit if closed', 'Premium captured', 'Earned per day', 'Strike price', 'Position state', 'Strike distance', 'Moneyness', 'Expiration', 'DTE', 'Days held', 'Theta / day', 'Extrinsic per day', 'Remaining annualized return', 'Open interest / volume']) {
@@ -229,8 +238,13 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /const metricsMissing = !management/);
     assert.match(js, /contract-metrics-loading/);
     assert.match(css, /\.trade-card\.is-metrics-loading/);
+    assert.match(js, /function effectiveContractGoal/);
+    assert.match(js, /management\?\.effectiveSettings\?\.goal/);
+    assert.match(js, /normalizedType === 'etf' \|\| normalizedType === 'mutualfund' \? 'protect' : 'income'/);
+    assert.match(js, /stockPriceTag\(management\?\.close\?\.metrics\?\.underlyingPrice \?\? trade\.stockPrice\)/);
+    assert.match(css, /\.contract-header-meta\{[^}]*justify-items:end/);
   });
-  it('keeps goal-aware roll review on Home and reveals broker-ready choices only when needed', () => {
+  it('keeps goal-aware roll review on Home while always allowing a candidate check', () => {
     assert.match(html, /href="\/assets\/css\/rolls\.css"/);
     assert.match(html, /id="roll-dialog"[^>]+hidden/);
     assert.match(html, /class="roll-sheet" role="dialog" aria-modal="true"/);
@@ -240,8 +254,16 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /rollController\.action\(trade, rollReview\)/);
     assert.match(js, /contract-goal goal-tone/);
     assert.match(js, /rollReview\?\.state === 'assignmentAligned'/);
-    assert.match(rollsJs, /if \(review\.state !== 'review'\) return null/);
-    assert.match(rollsJs, /See roll choices/);
+    assert.match(rollsJs, /if \(!review\?\.goal\) return null/);
+    assert.match(rollsJs, /review\.state === 'review'/);
+    assert.match(rollsJs, /Check roll candidates/);
+    assert.match(rollsJs, /Waiting for market data/);
+    assert.match(rollsJs, /button\.disabled = presentation\.disabled/);
+    assert.match(rollsCss, /\.roll-review-action button:disabled/);
+    assert.match(rollsCss, /\.roll-review-action\.is-recommended button/);
+    assert.match(js, /if \(rollAction\) summary\.append\(rollAction\)/);
+    assert.match(rollsCss, /\.roll-review-action button \{[^}]*text-decoration: underline/);
+    assert.match(js, /state: 'unavailable', goal, searchProfile: null/);
     assert.match(rollsJs, /\/api\/v1\/position-management\/rolls/);
     assert.match(rollsJs, /At your broker, look for/);
     assert.match(rollsJs, /Copy roll plan/);
@@ -390,7 +412,7 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /\.monitor-leg-picker legend, \.monitor-goal-picker legend \{[^}]*margin-bottom: 6px/);
     assert.match(screenerCss, /\.monitor-leg-picker\[hidden\] \{ display: none; \}/);
     assert.match(settingsCss, /\.goal-inline-strategy-tabs\s*\{[^}]*width: 108px[^}]*flex: 0 0 108px[^}]*margin: 0/);
-    assert.match(settingsCss, /\.goal-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 10px/);
+    assert.match(settingsCss, /\.goal-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 12px/);
     assert.match(goalSelectorCss, /prefers-reduced-transparency: reduce/);
     assert.match(screenerCss, /\.monitor-remove-button\.is-confirming/);
     assert.match(screenerCss, /\.monitor-symbol-mark \{[^}]*width: auto[^}]*white-space: nowrap/);
@@ -482,7 +504,7 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsCss, /\.ticker-price-guard \.editor-rule-controls\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 34px/);
     assert.match(settingsCss, /\.ticker-strategy-field\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 108px[^}]*align-items: center/);
     assert.match(settingsCss, /\.ticker-inline-strategy-tabs\s*\{[^}]*width: 108px[^}]*justify-self: end[^}]*margin: 0/);
-    assert.match(settingsCss, /\.ticker-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 10px/);
+    assert.match(settingsCss, /\.ticker-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 12px/);
     assert.match(settingsCss, /\.rule-separator\s*\{[^}]*color: inherit/);
     assert.match(settingsCss, /\.settings-rule-advanced > summary\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\) 20px/);
     assert.match(settingsCss, /\.disclosure-icon\s*\{[^}]*justify-self: end/);
@@ -511,6 +533,8 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /\{ glossaryTerms: true \}/);
     assert.match(settingsJs, /GLOSSARY_TERM_BY_RULE_KEY/);
     assert.match(settingsJs, /key: 'closeAtProfitCapture', label: 'Close when premium captured'[^\n]+scale: 100/);
+    assert.match(settingsJs, /key: 'rollReviewDte', label: 'Review rolls at or below DTE'/);
+    assert.match(settingsJs, /Starts the near-expiration roll review at this DTE/);
     assert.match(settingsJs, /closeAtProfitCapture: 0\.50/);
     assert.doesNotMatch(settingsJs, /maxQuoteAgeSeconds|Maximum quote age/);
     assert.match(settingsJs, /ruleSummary\(rules,[\s\S]*?\{ glossaryTerms: true \}\)/);

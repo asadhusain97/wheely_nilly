@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { rollActionPresentation } from "../assets/js/rolls.js";
 import { calculateAndRankRollCandidates, deriveRollReview, formatRollPlan } from "../src/roll-analysis";
 
 const effective = (goal: "protect" | "income" | "exit" | "acquire", overrides: Record<string, unknown> = {}) => ({
@@ -10,6 +11,7 @@ const effective = (goal: "protect" | "income" | "exit" | "acquire", overrides: R
     maxDte: goal === "protect" ? 60 : goal === "income" ? 35 : goal === "exit" ? 21 : 28,
     targetDeltaMin: goal === "protect" ? 0.08 : goal === "income" ? 0.30 : goal === "exit" ? 0.45 : 0.40,
     targetDeltaMax: goal === "protect" ? 0.18 : goal === "income" ? 0.45 : goal === "exit" ? 0.65 : 0.55,
+    rollReviewDte: goal === "protect" || goal === "income" ? 10 : 7,
     ...overrides,
   },
   priceGuard: { field: goal === "acquire" ? "maxNetPurchasePriceMinor" : "minNetSalePriceMinor", valueMinor: null },
@@ -21,6 +23,19 @@ const management = ({ goal = "protect" as const, moneyState = "ITM" as const, al
 });
 
 describe("goal-aware roll review", () => {
+  it("waits for a usable current quote before enabling roll candidates", () => {
+    const unavailable = rollActionPresentation({ state: "unavailable", reason: "exact contract has no usable ask" });
+    const ready = rollActionPresentation({ state: "notNeeded" });
+
+    assert.deepEqual(unavailable, {
+      disabled: true,
+      label: "Waiting for market data",
+      title: "exact contract has no usable ask",
+    });
+    assert.equal(ready.disabled, false);
+    assert.equal(ready.label, "Check roll candidates");
+  });
+
   it("reviews an ITM covered call when assignment conflicts with Keep Shares", () => {
     const result = deriveRollReview({ trade: { type: "cc", dte: 4 }, management: management() });
     assert.equal(result.state, "review");
@@ -44,6 +59,16 @@ describe("goal-aware roll review", () => {
   it("offers an income continuation when the close target is met", () => {
     const result = deriveRollReview({ trade: { type: "cc", dte: 18 }, management: management({ goal: "income", moneyState: "OTM", alignment: "neutral", dte: 18, delta: 0.35, signal: true }) });
     assert.equal(result.label, "Close or continue income");
+  });
+
+  it("uses the saved per-goal and strategy roll review DTE", () => {
+    const beforeWindow = management({ goal: "acquire", moneyState: "OTM", alignment: "neutral", dte: 6, delta: -0.2 });
+    beforeWindow.effectiveSettings.rules.rollReviewDte = 3;
+    assert.equal(deriveRollReview({ trade: { type: "csp", dte: 6 }, management: beforeWindow }).state, "notNeeded");
+
+    const insideWindow = management({ goal: "acquire", moneyState: "OTM", alignment: "neutral", dte: 3, delta: -0.2 });
+    insideWindow.effectiveSettings.rules.rollReviewDte = 3;
+    assert.equal(deriveRollReview({ trade: { type: "csp", dte: 3 }, management: insideWindow }).state, "review");
   });
 });
 

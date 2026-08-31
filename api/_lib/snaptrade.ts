@@ -72,6 +72,17 @@ const referenceSuffix = (value: unknown): string | null => {
 
 const optionalBoolean = (value: unknown): boolean | null => typeof value === "boolean" ? value : null;
 
+const instrumentType = (instrument: Record<string, any>, option: unknown): string | null => {
+  if (option) return "Option";
+  const value = text(instrument.type?.description ?? instrument.type ?? instrument.kind);
+  if (!value) return null;
+  const normalized = value.toLowerCase().replaceAll("_", " ");
+  if (normalized.includes("mutual") && normalized.includes("fund")) return "Mutual Fund";
+  if (normalized.includes("etf") || normalized.includes("exchange traded fund")) return "ETF";
+  if (normalized.includes("stock") || normalized.includes("equity")) return "Equity";
+  return value;
+};
+
 export const parseOccSymbol = (raw: unknown) => {
   const symbol = String(raw ?? "").replace(/\s/g, "").toUpperCase();
   const match = /^([A-Z0-9.]{1,6})(\d{6})([CP])(\d{8})$/.exec(symbol);
@@ -135,6 +146,8 @@ export const normalizePosition = (accountId: string, value: unknown) => {
     id: `${accountId}:${text(instrument.id) ?? option?.symbol ?? symbol}`,
     accountId,
     symbol,
+    name: text(instrument.description ?? instrument.name),
+    instrumentType: instrumentType(instrument, option),
     quantity: finite(position.units ?? position.quantity) ?? 0,
     price: finite(position.price),
     costBasis: finite(position.cost_basis),

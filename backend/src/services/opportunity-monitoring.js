@@ -90,7 +90,11 @@ function decorateTarget(target, settings, dashboard) {
   return {
     ...target,
     legs: target.legs.map((leg) => {
-      const effectiveSettings = resolveEffectiveSettings(settings, { symbol: target.symbol, leg });
+      const effectiveSettings = resolveEffectiveSettings(settings, {
+        symbol: target.symbol,
+        leg,
+        instrumentType: target.instrumentType,
+      });
       return { leg, goal: effectiveSettings.goal, effectiveSettings: { ...effectiveSettings, sourceSummary: sourceSummary(effectiveSettings.sourceMap) } };
     }),
   };

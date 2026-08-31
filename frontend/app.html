@@ -278,9 +278,15 @@
           </section>
         </div>
         <section class="data-refresh-settings" aria-label="Brokerage data actions">
-          <button class="settings-data-action is-primary" type="button" data-refresh-brokerage><span>Refresh brokerage</span><small>Get the latest positions and balances</small></button>
-          <button class="settings-data-action" type="button" data-reset-setup><span>Choose another account</span><small>Keep SnapTrade connected and run account setup again</small></button>
-          <button class="settings-data-action" type="button" data-restart-connection><span>Restart connection</span><small>Disconnect SnapTrade, clear this browser, and begin again</small></button>
+          <button class="settings-data-action is-refresh" type="button" data-refresh-brokerage
+            title="Get the latest positions and balances"><span>Refresh brokerage</span><small class="sr-only">Get the latest
+              positions and balances</small></button>
+          <button class="settings-data-action" type="button" data-reset-setup
+            title="Keep SnapTrade connected and run account setup again"><span>Choose another account</span><small
+              class="sr-only">Keep SnapTrade connected and run account setup again</small></button>
+          <button class="settings-data-action is-destructive" type="button" data-restart-connection
+            title="Disconnect SnapTrade, clear this browser, and begin again"><span>Restart connection</span><small
+              class="sr-only">Disconnect SnapTrade, clear this browser, and begin again</small></button>
         </section>
         <p class="setup-action-status" data-setup-action-status role="status" aria-live="polite" hidden></p>
         <p class="settings-disclaimer">Goal profiles are editable starting points, not trading recommendations.</p>
@@ -528,6 +534,15 @@
                   and Plan Entry 7–28. Radar favors the midpoint of the saved range, so each goal controls its own
                   ranking target. These are starting points, not a universal best window.</dd>
                 <dd class="glossary-formula">Minimum DTE ≤ days to expiration ≤ maximum DTE</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Roll review DTE <span>Management window</span></dt>
+                <dd>The inclusive days-to-expiration threshold that starts a near-expiration roll review for an open
+                  contract. A setting of 10 starts the review at 10 DTE and keeps it active below 10 DTE.</dd>
+                <dd class="glossary-guide">This threshold starts a review, not an automatic roll recommendation. A
+                  delta conflict with your assignment goal can start review earlier, and a credit alone never makes a
+                  roll suitable.</dd>
+                <dd class="glossary-formula">Near-expiration review starts when DTE ≤ saved roll review DTE</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Moneyness <span>Strike / stock</span></dt>
@@ -845,6 +860,14 @@
                 <dd class="glossary-formula">Cash-secured put = net contract credit ÷ (strike × 100 − net contract credit)</dd>
               </div>
               <div class="glossary-entry">
+                <dt>Capital required <span>Return collateral</span></dt>
+                <dd>The estimated capital backing one Radar candidate and used to calculate its return. A covered call
+                  uses the current value of 100 shares. A cash-secured put uses the strike obligation after subtracting
+                  the estimated net credit.</dd>
+                <dd class="glossary-formula">Covered call = underlying price × 100</dd>
+                <dd class="glossary-formula">Cash-secured put = strike × 100 − net contract credit</dd>
+              </div>
+              <div class="glossary-entry">
                 <dt>Net sale / breakeven price</dt>
                 <dd>The stock transaction price after spreading estimated net credit over 100 shares. Calls show what
                   you would effectively receive if assigned; puts show what you would effectively pay.</dd>
@@ -888,6 +911,23 @@
                 <dd class="glossary-guide">More negative is faster decay, not free profit. Theta changes and is often
                   strongest for short-dated ATM options, where stock-move risk is also concentrated.</dd>
                 <dd class="glossary-formula">Estimated one-day option change from time ≈ theta per day</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Gamma</dt>
+                <dd>Estimated change in delta for a $1 move in the stock, with other model inputs held still. Higher
+                  gamma means delta can change faster, so the option's price sensitivity is less stable.</dd>
+                <dd class="glossary-example">Example: a gamma of 0.04 suggests delta may rise by about 0.04 after a
+                  $1 stock increase at that moment.</dd>
+                <dd class="glossary-formula">Estimated delta change ≈ gamma × stock-price change</dd>
+              </div>
+              <div class="glossary-entry">
+                <dt>Vega</dt>
+                <dd>Estimated change in the option's per-share price for a one-percentage-point change in implied
+                  volatility, with other model inputs held still. Higher vega means the option price is more sensitive
+                  to changes in IV.</dd>
+                <dd class="glossary-example">Example: vega of 0.08 suggests a one-point IV increase may add about
+                  $0.08 per share, or $8 per standard contract, at that moment.</dd>
+                <dd class="glossary-formula">Estimated option-price change ≈ vega × IV-point change</dd>
               </div>
               <div class="glossary-entry">
                 <dt>Breakeven</dt>

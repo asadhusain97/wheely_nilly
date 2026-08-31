@@ -123,6 +123,7 @@ describe("SnapTrade MCP client", () => {
 
     assert.equal(position.quantity, -1);
     assert.equal(position.currency, "USD");
+    assert.equal(position.instrumentType, "Option");
     assert.deepEqual(position.option, {
       symbol: "RKLB260918C00070000",
       underlying: "RKLB",
@@ -134,6 +135,19 @@ describe("SnapTrade MCP client", () => {
     assert.equal(activity.action, "sell_to_open");
     assert.equal(activity.option?.symbol, position.option?.symbol);
     assert.equal(activity.amountMinor, 9000);
+  });
+
+  it("preserves the underlying instrument class used by goal defaults", () => {
+    const position = normalizePosition("account-1", {
+      instrument: { id: "fund-1", symbol: "VOO", description: "Vanguard S&P 500 ETF", type: { description: "ETF" } },
+      units: "100",
+      price: "500",
+      cost_basis: "450",
+      currency: "USD",
+    });
+
+    assert.equal(position.name, "Vanguard S&P 500 ETF");
+    assert.equal(position.instrumentType, "ETF");
   });
 
   it("uses SnapTrade cash-flow and unit direction for uncategorized option activity", () => {

@@ -37,6 +37,8 @@ export interface WheelyNillyPosition {
   id: string;
   accountId: string;
   symbol: string;
+  name?: string | null;
+  instrumentType?: string | null;
   quantity: number;
   price: number | null;
   costBasis: number | null;
@@ -92,17 +94,32 @@ export interface MarketQuote {
   unofficial: true;
 }
 
-export interface ExactContractQuote extends OptionIdentity {
-  bid: number | null;
-  ask: number | null;
-  last: number | null;
-  volume: number | null;
-  openInterest: number | null;
-  impliedVolatility: number | null;
-  underlyingPrice: number | null;
-  quoteTime: string | null;
-  fetchedAt: string;
-  provider: "yfinance";
+export interface ExactContractQuote {
+  contract: {
+    contract_symbol: string;
+    symbol: string;
+    option_type: "call" | "put";
+    expiration: string;
+    strike: number;
+  };
+  available: boolean;
+  unavailable_reason?: string | null;
+  bid?: number | null;
+  ask?: number | null;
+  volume?: number | null;
+  open_interest?: number | null;
+  implied_volatility?: number | null;
+  underlying_price?: number | null;
+  contract_quote_time?: string | null;
+  underlying_quote_time?: string | null;
+  fetched_at?: string | null;
+  provider?: "yfinance";
+}
+
+export interface MarketCache {
+  quotes: MarketQuote[];
+  contracts: ExactContractQuote[];
+  lastUsableContracts: ExactContractQuote[];
 }
 
 export interface PortfolioDiff {
@@ -123,6 +140,6 @@ export interface RefreshPolicy {
 
 export interface AppDataState {
   portfolio: RefreshSlice<BrokerageSnapshot>;
-  market: RefreshSlice<{ quotes: MarketQuote[]; contracts: ExactContractQuote[] }>;
+  market: RefreshSlice<MarketCache>;
   radar: RefreshSlice<unknown[]> & { calculatedAt: string | null };
 }

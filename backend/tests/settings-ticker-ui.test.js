@@ -36,6 +36,19 @@ describe('Settings ticker collection UI', () => {
     assert.equal(resolveTickerLeg(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'coveredCall');
   });
 
+  it('defaults unconfigured stocks to income and funds with covered calls to keep shares', () => {
+    const tickers = normalizeTrackedTickers([
+      { symbol: 'MSFT', preferredLeg: 'coveredCall', instrumentType: 'Equity' },
+      { symbol: 'VOO', preferredLeg: 'coveredCall', instrumentType: 'ETF' },
+      { symbol: 'VFIAX', preferredLeg: 'coveredCall', instrumentType: 'Mutual Fund' },
+      { symbol: 'SPY', preferredLeg: 'cashSecuredPut', instrumentType: 'ETF' },
+    ]);
+    assert.equal(tickers.get('MSFT').goal, 'income');
+    assert.equal(tickers.get('VOO').goal, 'protect');
+    assert.equal(tickers.get('VFIAX').goal, 'protect');
+    assert.equal(tickers.get('SPY').goal, 'income');
+  });
+
   it('sorts by recency, limits the default view to eight, and shows every search match', () => {
     const tickers = Array.from({ length: 11 }, (_, index) => ({
       symbol: `T${String(index).padStart(2, '0')}`,

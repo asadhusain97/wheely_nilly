@@ -98,7 +98,10 @@ export function deriveRollReview({ trade, management }: RollReviewInput): RollRe
 
   const metrics = close.metrics;
   const dte = finite(metrics.dte ?? trade.dte);
-  const timePressure = dte !== null && dte <= Math.min(10, searchProfile.minDte);
+  const configuredReviewDte = finite(management.effectiveSettings?.rules?.rollReviewDte);
+  // Older cached effective settings do not have rollReviewDte. Keep their former behavior.
+  const reviewDte = configuredReviewDte ?? Math.min(10, searchProfile.minDte);
+  const timePressure = dte !== null && dte <= reviewDte;
   const absoluteDelta = metrics.delta == null ? null : Math.abs(Number(metrics.delta));
   const deltaAboveGoal = absoluteDelta !== null && searchProfile.deltaMax !== null && absoluteDelta > searchProfile.deltaMax;
   const itm = metrics.moneyState === "ITM";

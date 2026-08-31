@@ -135,6 +135,7 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, stockPrice
   ].filter(Boolean));
 
   return [...symbols].map((symbol) => {
+    const holding = holdings.find((item) => item.symbol === symbol) ?? null;
     const tickerClosedTrades = closedTrades.filter((trade) => trade.option.underlying === symbol);
     const tickerOpenTrades = openTrades.filter((trade) => trade.symbol === symbol);
     const rates = performanceRates(tickerClosedTrades);
@@ -175,6 +176,7 @@ function buildTickerPerformance({ closedTrades, openTrades, holdings, stockPrice
 
     return {
       symbol,
+      instrumentType: holding?.instrumentType ?? null,
       stockPrice: fromMinor(stockPriceBySymbol.get(symbol)),
       bookedProfit: fromMinor(bookedProfitMinor),
       returnRate: rates.returnRate,
@@ -237,6 +239,7 @@ export function buildPerformanceDashboard(normalized, { now = new Date() } = {})
       id: position.option.symbol,
       accountId: position.accountId,
       symbol: position.option.underlying,
+      instrumentType: equityBySymbol.get(position.option.underlying)?.instrumentType ?? null,
       stockPrice: fromMinor(stockPriceBySymbol.get(position.option.underlying)),
       contractSymbol: position.option.symbol,
       type: position.option.optionType === 'put' ? 'csp' : 'cc',

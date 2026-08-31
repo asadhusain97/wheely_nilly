@@ -1,6 +1,6 @@
 import { RefreshCoordinator, DEFAULT_REFRESH_POLICY } from "./refresh-coordinator";
 import { localRepository } from "./storage";
-import type { BrokerageEvent, BrokerageSnapshot, ExactContractQuote, MarketQuote, PortfolioDiff, RefreshPolicy } from "./types";
+import type { BrokerageEvent, BrokerageSnapshot, ExactContractQuote, MarketCache, MarketQuote, PortfolioDiff, RefreshPolicy } from "./types";
 import { buildLocalCloseResults, buildLocalTargets, scanAllLocalTargets } from "./local-analysis";
 import { clearBrowserSetup, disconnectAndClearSetup } from "./setup-reset";
 
@@ -30,6 +30,34 @@ const optionContracts = (snapshot: BrokerageSnapshot | null) => [...new Map(
   (snapshot?.positions ?? []).flatMap((position) => position.option ? [[position.option.symbol, position.option] as const] : []),
 ).values()];
 const portfolioSymbols = (snapshot: BrokerageSnapshot | null) => [...new Set((snapshot?.positions ?? []).map((position) => position.option?.underlying ?? position.symbol).filter(Boolean))];
+const contractKey = (item: ExactContractQuote): string => item.contract.contract_symbol;
+const usableContractQuote = (item: ExactContractQuote): boolean => item.available === true
+  && typeof item.ask === "number"
+  && Number.isFinite(item.ask)
+  && item.ask > 0;
+
+export const mergeMarketCache = (
+  existing: Partial<MarketCache> | null | undefined,
+  incomingQuotes: MarketQuote[],
+  incomingContracts: ExactContractQuote[],
+  activeContractSymbols?: string[],
+): MarketCache => {
+  const active = activeContractSymbols ? new Set(activeContractSymbols) : null;
+  const keepActive = (item: ExactContractQuote) => !active || active.has(contractKey(item));
+  const contracts = [...new Map([...(existing?.contracts ?? []), ...incomingContracts]
+    .map((item) => [contractKey(item), item])).values()].filter(keepActive);
+  const lastUsableContracts = [...new Map([
+    ...(existing?.lastUsableContracts ?? []),
+    ...(existing?.contracts ?? []).filter(usableContractQuote),
+    ...incomingContracts.filter(usableContractQuote),
+  ].map((item) => [contractKey(item), item])).values()].filter(keepActive);
+  return {
+    quotes: [...new Map([...(existing?.quotes ?? []), ...incomingQuotes].map((quote) => [quote.symbol, quote])).values()],
+    contracts,
+    lastUsableContracts,
+  };
+};
+
 const HISTORY_REFRESH_INTERVAL_MS = 24 * 60 * 60_000;
 export const HISTORY_IMPORT_VERSION = 3;
 export const historyImportKey = (accountId: string) => `historyImported:${accountId}`;
@@ -138,16 +166,19 @@ export async function initializeDataRefresh(): Promise<void> {
       symbols.length ? json<{ quotes: MarketQuote[] }>("/api/market/quotes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ symbols }), signal }) : { quotes: [] },
       contracts.length ? json<{ results: ExactContractQuote[] }>("/api/market/contracts", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contracts: contracts.map((contract) => ({ contract_symbol: contract.symbol, symbol: contract.underlying, option_type: contract.optionType, expiration: contract.expiration, strike: contract.strike })) }), signal }) : { results: [] },
     ]);
-    const existing = (await localRepository.get<{ quotes: MarketQuote[]; contracts: ExactContractQuote[] }>("marketCache", "current").catch(() => null))?.value;
-    const mergedQuotes = [...new Map([...(existing?.quotes ?? []), ...quotesResult.quotes].map((quote) => [quote.symbol, quote])).values()];
-    const contractKey = (item: any) => item.contract?.contract_symbol ?? item.contractSymbol ?? item.symbol;
-    const mergedContracts = [...new Map([...(existing?.contracts ?? []), ...(contractsResult.results ?? [])].map((item) => [contractKey(item), item])).values()];
+    const existing = (await localRepository.get<MarketCache>("marketCache", "current").catch(() => null))?.value;
+    const merged = mergeMarketCache(
+      existing,
+      quotesResult.quotes,
+      contractsResult.results ?? [],
+      optionContracts(currentSnapshot).map((contract) => contract.symbol),
+    );
     marketUpdatedAt = new Date().toISOString();
     await Promise.all([
-      localRepository.put("marketCache", "current", { quotes: mergedQuotes, contracts: mergedContracts }),
+      localRepository.put("marketCache", "current", merged),
       localRepository.put("refreshMetadata", "marketUpdatedAt", marketUpdatedAt),
     ]);
-    const closeResults = await buildLocalCloseResults(mergedContracts);
+    const closeResults = await buildLocalCloseResults(merged.contracts, merged.lastUsableContracts);
     await localRepository.put("marketCache", "closeResults", closeResults);
     const radar = await scanAllLocalTargets(fetch).catch(() => null);
     if (radar) {
@@ -155,7 +186,7 @@ export async function initializeDataRefresh(): Promise<void> {
       document.dispatchEvent(new CustomEvent("wheely-radar-updated", { detail: radar }));
     }
     renderFreshness();
-    document.dispatchEvent(new CustomEvent("wheely-market-updated", { detail: { quotes: mergedQuotes, contracts: mergedContracts } }));
+    document.dispatchEvent(new CustomEvent("wheely-market-updated", { detail: merged }));
   };
 
   let historyRequest: Promise<void> | null = null;

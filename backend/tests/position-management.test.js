@@ -10,8 +10,9 @@ function effective({ target = 0.5, goal = 'acquire', source = 'goal' } = {}) {
   const settings = builtInStrategySettings();
   settings.goalProfiles[goal].cashSecuredPut.closeAtProfitCapture = target;
   settings.tickerPlaybooks.RKLB = {
-    coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-    cashSecuredPut: { enabled: true, goal, maxNetPurchasePriceMinor: null, overrides: source === 'tickerOverride' ? { closeAtProfitCapture: target } : {} },
+    goal,
+    coveredCall: { enabled: false, minNetSalePriceMinor: null, overrides: {} },
+    cashSecuredPut: { enabled: true, maxNetPurchasePriceMinor: null, overrides: source === 'tickerOverride' ? { closeAtProfitCapture: target } : {} },
   };
   return resolveEffectiveSettings(settings, { symbol: 'RKLB', leg: 'cashSecuredPut' });
 }
@@ -70,8 +71,9 @@ describe('binary Close calculations', () => {
   it('calculates ITM and OTM covered-call assignment metrics and assignment intent', () => {
     const settings = builtInStrategySettings();
     settings.tickerPlaybooks.RKLB = {
-      coveredCall: { enabled: true, goal: 'protect', minNetSalePriceMinor: null, overrides: {} },
-      cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+      goal: 'protect',
+      coveredCall: { enabled: true, minNetSalePriceMinor: null, overrides: {} },
+      cashSecuredPut: { enabled: false, maxNetPurchasePriceMinor: null, overrides: {} },
     };
     const ccEffective = resolveEffectiveSettings(settings, { symbol: 'RKLB', leg: 'coveredCall' });
     const itm = calculateCloseResult({
@@ -121,8 +123,9 @@ describe('position-management scan coverage', () => {
   it('evaluates untracked and disabled open shorts and preserves per-contract provider failures', async () => {
     const settings = builtInStrategySettings();
     settings.tickerPlaybooks.RKLB = {
-      coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-      cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+      goal: 'acquire',
+      coveredCall: { enabled: false, minNetSalePriceMinor: null, overrides: {} },
+      cashSecuredPut: { enabled: false, maxNetPurchasePriceMinor: null, overrides: {} },
     };
     const trades = [rklbTrade({ accountId: 'acct-1' }), rklbTrade({ accountId: 'acct-1', symbol: 'XYZ', contractSymbol: 'XYZ260918C00070000', type: 'cc', strike: '70.00' })];
     const service = createPositionManagementService({

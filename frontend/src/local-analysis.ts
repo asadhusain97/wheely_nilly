@@ -1,7 +1,7 @@
 import { buildDerivedModel } from "../../backend/src/services/wheel.js";
 import { localRepository } from "./storage";
 import type { BrokerageEvent, BrokerageSnapshot, MarketQuote, WheelyNillyPosition } from "./types";
-import { builtInSettingsDocument, SYSTEM_RULES } from "../assets/js/settings.js";
+import { builtInSettingsDocument, normalizeSettingsDocument, SYSTEM_RULES } from "../assets/js/settings.js";
 import { calculateCloseResult } from "../../backend/src/services/position-management.js";
 import { buildRollSearchProfile, calculateAndRankRollCandidates, GOAL_LABELS } from "./roll-analysis";
 
@@ -103,8 +103,9 @@ const defaultGoal = (leg: "coveredCall" | "cashSecuredPut", instrumentType: unkn
 };
 
 const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "cashSecuredPut", instrumentType: unknown = null) => {
-  const legSettings = settings.tickerPlaybooks?.[symbol]?.[leg] ?? null;
-  const goal = legSettings?.goal ?? defaultGoal(leg, instrumentType);
+  const playbook = settings.tickerPlaybooks?.[symbol] ?? null;
+  const legSettings = playbook?.[leg] ?? null;
+  const goal = playbook?.goal ?? defaultGoal(leg, instrumentType);
   const goalRules = settings.goalProfiles?.[goal]?.[leg] ?? SYSTEM_RULES;
   const rules = { ...goalRules, ...(legSettings?.overrides ?? {}) };
   const sourceMap = Object.fromEntries(Object.keys(rules).map((field) => [
@@ -118,7 +119,7 @@ const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "
     rules,
     enabled: legSettings?.enabled ?? false,
     goal,
-    goalDefaulted: !legSettings,
+    goalDefaulted: !playbook,
     priceGuard: { field: priceField, valueMinor: legSettings?.[priceField] ?? null },
     sourceMap,
     sourceSummary: sourceSummary(sourceMap),
@@ -130,7 +131,7 @@ export async function buildLocalTargets() {
     buildLocalModel(),
     localRepository.get<any>("tickerStrategies", "document").catch(() => null),
   ]);
-  const settings = settingsRecord?.value ?? builtInSettingsDocument();
+  const settings = normalizeSettingsDocument(settingsRecord?.value ?? builtInSettingsDocument());
   const bySymbol = new Map<string, any>();
   for (const holding of model.dashboard.opportunities.coveredCalls ?? []) {
     bySymbol.set(holding.symbol, {
@@ -236,7 +237,7 @@ export async function buildLocalCloseResults(contractResults: any[], lastUsableC
     buildLocalModel(),
     localRepository.get<any>("tickerStrategies", "document").catch(() => null),
   ]);
-  const settings = settingsRecord?.value ?? builtInSettingsDocument();
+  const settings = normalizeSettingsDocument(settingsRecord?.value ?? builtInSettingsDocument());
   const quotes = new Map(contractResults.map((item) => [item.contract?.contract_symbol, item]));
   const lastUsableQuotes = new Map(lastUsableContractResults.map((item) => [item.contract?.contract_symbol, item]));
   const scanTimestamp = new Date().toISOString();
@@ -266,7 +267,7 @@ export async function buildLocalRollResults(fetcher: typeof fetch, contractSymbo
   ]);
   const trade = model.dashboard.openTrades.find((item: any) => item.contractSymbol === contractSymbol);
   if (!trade) throw Object.assign(new Error("This contract is no longer open"), { status: 409 });
-  const settings = settingsRecord?.value ?? builtInSettingsDocument();
+  const settings = normalizeSettingsDocument(settingsRecord?.value ?? builtInSettingsDocument());
   const leg = trade.type === "csp" ? "cashSecuredPut" : "coveredCall";
   const effective = effectiveSettings(settings, trade.symbol, leg, trade.instrumentType);
   const profile = buildRollSearchProfile(effective);

@@ -17,23 +17,21 @@
   color: var(--warning);
 }
 
-.recommendation-summary.is-roll .recommendation-label::before {
-  background: var(--warning);
-  box-shadow: 0 0 0 4px #fff3df;
+.recommendation-summary.is-roll {
+  --decision-color: var(--warning);
 }
 
 .recommendation-summary.is-assignment .recommendation-label {
   color: var(--green);
 }
 
-.recommendation-summary.is-assignment .recommendation-label::before {
-  background: var(--green);
+.recommendation-summary.is-assignment {
+  --decision-color: var(--green);
 }
 
 .roll-review-action {
   display: flex;
   width: fit-content;
-  margin-top: 3px;
 }
 
 .roll-review-action button {

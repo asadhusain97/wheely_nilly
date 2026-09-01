@@ -887,10 +887,15 @@ function contractHeader(trade, management = null, dashboard = null) {
 function recommendationPresentation(management, rollReview) {
   const close = management?.close;
   if (!close?.available) {
+    const openingTradeMissing = close?.conditions?.some((condition) =>
+      condition.key === 'openingNetCredit' && condition.pass === false);
     return {
-      label: 'Market data unavailable',
+      eyebrow: 'Status',
+      label: openingTradeMissing ? 'Waiting for trade history' : 'Waiting for market data',
       tone: 'unavailable',
-      reason: close?.unavailableReason ?? 'Close guidance has not been calculated yet.',
+      reason: openingTradeMissing
+        ? 'Waiting for SnapTrade to return the opening trade.'
+        : 'Waiting for a usable option quote. If the market is closed, check again after it opens.',
     };
   }
   if (rollReview?.state === 'review') {
@@ -918,11 +923,12 @@ function recommendationSummary(management, rollReview, rollAction = null) {
   const summary = el('section', `recommendation-summary is-${recommendation.tone}`);
   if (rollReview?.goal) summary.dataset.goal = rollReview.goal;
   const heading = el('div', 'recommendation-heading');
+  const detail = el('div', 'recommendation-detail');
   heading.append(
-    el('span', 'recommendation-eyebrow', 'Recommendation'),
+    el('span', 'recommendation-eyebrow', recommendation.eyebrow ?? 'Recommendation'),
     el('strong', 'recommendation-label', recommendation.label),
   );
-  summary.append(heading, el('p', 'recommendation-reason', recommendation.reason));
+  detail.append(el('p', 'recommendation-reason', recommendation.reason));
   const staleQuote = management?.lastUsableQuote;
   if (!management?.close?.available && staleQuote) {
     const timestamp = staleQuote.quoteTimestamp ?? staleQuote.fetchedAt;
@@ -934,9 +940,10 @@ function recommendationSummary(management, rollReview, rollAction = null) {
       ? 'Bid / ask unavailable'
       : `${marketPrice(staleQuote.bidPerShare)} / ${marketPrice(staleQuote.askPerShare)} bid / ask`;
     note.append(tag, time, el('strong', '', prices));
-    summary.append(note);
+    detail.append(note);
   }
-  if (rollAction) summary.append(rollAction);
+  if (rollAction) detail.append(rollAction);
+  summary.append(heading, detail);
   return summary;
 }
 

@@ -89,6 +89,21 @@ describe("RefreshCoordinator", () => {
     await coordinator.refreshBrokerage({ manual: true });
   });
 
+  it("allows an immediate manual retry after a failed refresh", async () => {
+    let calls = 0;
+    const coordinator = new RefreshCoordinator(dependencies({
+      refreshBrokerage: async () => {
+        calls += 1;
+        if (calls === 1) throw new Error("temporary failure");
+        return emptySnapshot();
+      },
+    }));
+
+    await assert.rejects(coordinator.refreshBrokerage({ manual: true }), /temporary failure/);
+    await coordinator.refreshBrokerage({ manual: true });
+    assert.equal(calls, 2);
+  });
+
   it("uses cached brokerage freshness on startup without delaying the market clock", async () => {
     const now = Date.parse("2026-08-28T12:10:00.000Z");
     const cached = emptySnapshot("2026-08-28T12:05:00.000Z");

@@ -20,8 +20,8 @@ const RULE_FIELDS = [
 ];
 
 const FIELD_BY_KEY = Object.fromEntries(RULE_FIELDS.map((field) => [field.key, field]));
-const CORE_FIELDS = RULE_FIELDS.slice(0, 6);
-const ADVANCED_FIELDS = RULE_FIELDS.slice(6);
+const CORE_FIELDS = RULE_FIELDS.slice(0, 7);
+const ADVANCED_FIELDS = RULE_FIELDS.slice(7);
 const GLOSSARY_TERM_BY_RULE_KEY = {
   minDte: 'DTE',
   maxDte: 'DTE',
@@ -85,20 +85,20 @@ const BUILT_IN_GOAL_PROFILES = {
     minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
     targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
     minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-    closeAtProfitCapture: 0.35, rollReviewDte: 10,
+    closeAtProfitCapture: 0.35, rollReviewDte: 21,
   } },
   income: {
     coveredCall: {
       minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50, rollReviewDte: 10,
+      closeAtProfitCapture: 0.50, rollReviewDte: 21,
     },
     cashSecuredPut: {
       minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50, rollReviewDte: 10,
+      closeAtProfitCapture: 0.50, rollReviewDte: 21,
     },
   },
   exit: { coveredCall: {
@@ -114,9 +114,48 @@ const BUILT_IN_GOAL_PROFILES = {
     closeAtProfitCapture: 0.85, rollReviewDte: 7,
   } },
 };
+const PREVIOUS_GOAL_PROFILES = structuredClone(BUILT_IN_GOAL_PROFILES);
+PREVIOUS_GOAL_PROFILES.protect.coveredCall.rollReviewDte = 10;
+PREVIOUS_GOAL_PROFILES.income.coveredCall.rollReviewDte = 10;
+PREVIOUS_GOAL_PROFILES.income.cashSecuredPut.rollReviewDte = 10;
 
 export function builtInSettingsDocument() {
-  return { schemaVersion: 2, goalProfiles: structuredClone(BUILT_IN_GOAL_PROFILES), tickerPlaybooks: {} };
+  return { schemaVersion: 3, goalProfiles: structuredClone(BUILT_IN_GOAL_PROFILES), tickerPlaybooks: {} };
+}
+
+const legacyTickerGoal = (playbook) => {
+  const enabledGoals = Object.keys(LEG_LABELS)
+    .filter((leg) => playbook?.[leg]?.enabled)
+    .map((leg) => playbook[leg].goal);
+  const unique = [...new Set(enabledGoals)];
+  if (unique.length === 1) return unique[0];
+  if (unique.includes('income')) return 'income';
+  return unique[0] ?? playbook?.coveredCall?.goal ?? playbook?.cashSecuredPut?.goal ?? 'income';
+};
+
+export function normalizeSettingsDocument(input) {
+  const document = deepCopy(input ?? builtInSettingsDocument());
+  for (const [goal, profiles] of Object.entries(document.goalProfiles ?? {})) {
+    for (const [leg, rules] of Object.entries(profiles ?? {})) {
+      if (rules.rollReviewDte == null) rules.rollReviewDte = BUILT_IN_GOAL_PROFILES[goal]?.[leg]?.rollReviewDte ?? 7;
+      if (rules.closeAtProfitCapture == null) rules.closeAtProfitCapture = SYSTEM_RULES.closeAtProfitCapture;
+      delete rules.maxQuoteAgeSeconds;
+      const previous = PREVIOUS_GOAL_PROFILES[goal]?.[leg];
+      if (previous && Object.keys(previous).every((key) => Object.is(rules[key], previous[key]))) {
+        profiles[leg] = structuredClone(BUILT_IN_GOAL_PROFILES[goal][leg]);
+      }
+    }
+  }
+  document.tickerPlaybooks ??= {};
+  if (document.schemaVersion === 2) {
+    for (const playbook of Object.values(document.tickerPlaybooks)) {
+      playbook.goal = legacyTickerGoal(playbook);
+      delete playbook.coveredCall.goal;
+      delete playbook.cashSecuredPut.goal;
+    }
+  }
+  document.schemaVersion = 3;
+  return document;
 }
 
 const element = (tag, className, text) => {
@@ -196,9 +235,17 @@ function constrainNumericInput(input, { allowDecimal = true } = {}) {
 
 function defaultPlaybook() {
   return {
-    coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-    cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+    goal: 'income',
+    coveredCall: { enabled: false, minNetSalePriceMinor: null, overrides: {} },
+    cashSecuredPut: { enabled: false, maxNetPurchasePriceMinor: null, overrides: {} },
   };
+}
+
+function applyTickerGoal(playbook, goal, leg) {
+  playbook.goal = goal;
+  if (goal !== 'income') {
+    for (const candidate of Object.keys(LEG_LABELS)) playbook[candidate].enabled = candidate === leg;
+  } else playbook[leg].enabled = true;
 }
 
 export function settingsWithTicker(settings, symbol, leg, goal) {
@@ -207,8 +254,7 @@ export function settingsWithTicker(settings, symbol, leg, goal) {
   if (!draft.tickerPlaybooks[symbol]) {
     draft.tickerPlaybooks[symbol] = defaultPlaybook();
   }
-  draft.tickerPlaybooks[symbol][leg].enabled = true;
-  draft.tickerPlaybooks[symbol][leg].goal = goal;
+  applyTickerGoal(draft.tickerPlaybooks[symbol], goal, leg);
   return draft;
 }
 
@@ -219,9 +265,10 @@ export function settingsWithoutTicker(settings, symbol) {
 }
 
 function mergedRules(settings, symbol, leg) {
-  const ticker = settings.tickerPlaybooks[symbol]?.[leg];
-  const goalRules = ticker ? settings.goalProfiles[ticker.goal][leg] : SYSTEM_RULES;
-  return { ...goalRules, ...(ticker?.overrides ?? {}) };
+  const playbook = settings.tickerPlaybooks[symbol];
+  const legSettings = playbook?.[leg];
+  const goalRules = playbook ? settings.goalProfiles[playbook.goal]?.[leg] : SYSTEM_RULES;
+  return { ...(goalRules ?? SYSTEM_RULES), ...(legSettings?.overrides ?? {}) };
 }
 
 function rulesError(rules, scope) {
@@ -304,14 +351,14 @@ export function normalizeTrackedTickers(items = []) {
 }
 
 export function resolveTickerLeg(playbook, tracked) {
-  const preferredLeg = tracked?.preferredLeg ?? (playbook.coveredCall.enabled ? 'coveredCall' : 'cashSecuredPut');
+  const preferredLeg = tracked?.preferredLeg ?? GOAL_LEGS[playbook.goal]?.[0] ?? (playbook.coveredCall.enabled ? 'coveredCall' : 'cashSecuredPut');
   const firstEnabled = ['coveredCall', 'cashSecuredPut'].find((leg) => playbook[leg].enabled);
-  return playbook[preferredLeg].enabled ? preferredLeg : (firstEnabled ?? preferredLeg);
+  const compatibleLeg = GOAL_LEGS[playbook.goal]?.includes(preferredLeg) ? preferredLeg : GOAL_LEGS[playbook.goal]?.[0];
+  return playbook[preferredLeg].enabled ? preferredLeg : (firstEnabled ?? compatibleLeg ?? preferredLeg);
 }
 
 export function resolveTickerGoal(playbook, tracked) {
-  const leg = resolveTickerLeg(playbook, tracked);
-  return playbook[leg].enabled ? playbook[leg].goal : (tracked?.goal ?? playbook[leg].goal);
+  return playbook.goal ?? tracked?.goal ?? 'income';
 }
 
 export function visibleTickerEntries(tickers, query = '', expanded = false) {
@@ -504,7 +551,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
   function seededPlaybook(symbol) {
     const playbook = defaultPlaybook();
     const tracked = trackedTickers().get(symbol);
-    if (tracked) playbook[tracked.preferredLeg].goal = tracked.goal;
+    if (tracked) playbook.goal = tracked.goal;
     return playbook;
   }
 
@@ -513,7 +560,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     list.replaceChildren();
     const tracked = trackedTickers();
     for (const symbol of Object.keys(model.settings.tickerPlaybooks)) {
-      if (!tracked.has(symbol)) tracked.set(symbol, { symbol, recency: 0, preferredLeg: 'coveredCall', goal: model.settings.tickerPlaybooks[symbol].coveredCall.goal });
+      if (!tracked.has(symbol)) tracked.set(symbol, { symbol, recency: 0, preferredLeg: 'coveredCall', goal: model.settings.tickerPlaybooks[symbol].goal });
     }
     const query = model.tickerQuery.trim().toUpperCase();
     const { sorted: tickers, visible } = visibleTickerEntries([...tracked.values()], query, model.tickersExpanded);
@@ -854,11 +901,11 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     renderTabs(
       goalTabs,
       Object.entries(GOAL_LABELS),
-      legSettings.goal,
+      playbook.goal,
       (nextGoal) => {
         const nextLeg = GOAL_LEGS[nextGoal].includes(leg) ? leg : GOAL_LEGS[nextGoal][0];
         model.editor.leg = nextLeg;
-        playbook[nextLeg].goal = nextGoal;
+        applyTickerGoal(playbook, nextGoal, nextLeg);
         markEditorDirty();
         renderEditor();
       },
@@ -868,7 +915,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     goalField.append(goalTabs);
     panel.append(goalField);
 
-    if (legSettings.goal === 'income') {
+    if (playbook.goal === 'income') {
       const strategyField = element('div', 'ticker-strategy-field');
       const strategyLabel = element('span', 'ticker-strategy-label', 'Strategy');
       strategyLabel.id = 'ticker-strategy-label';
@@ -877,7 +924,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       strategyTabs.setAttribute('aria-labelledby', strategyLabel.id);
       renderTabs(strategyTabs, Object.entries(LEG_SHORT_LABELS), leg, (nextLeg) => {
         model.editor.leg = nextLeg;
-        playbook[nextLeg].goal = 'income';
+        applyTickerGoal(playbook, 'income', nextLeg);
         markEditorDirty();
         renderEditor();
       }, 'ticker-leg', 'ticker-rules-editor');
@@ -889,8 +936,8 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
       panel.append(strategyContext);
     }
 
-    const inherited = draft.goalProfiles[legSettings.goal][leg];
-    const inheritLabels = Object.fromEntries(RULE_FIELDS.map(({ key }) => [key, GOAL_LABELS[legSettings.goal]]));
+    const inherited = draft.goalProfiles[playbook.goal]?.[leg] ?? SYSTEM_RULES;
+    const inheritLabels = Object.fromEntries(RULE_FIELDS.map(({ key }) => [key, GOAL_LABELS[playbook.goal]]));
     const count = Object.keys(legSettings.overrides).length;
     const tickerRules = ruleEditor(legSettings.overrides, {
       partial: true,
@@ -901,7 +948,7 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     tickerRules.id = 'ticker-rules-editor';
     tickerRules.querySelector('.editor-rule-list').prepend(priceGuard(symbol, leg, legSettings));
     panel.append(
-      element('p', 'editor-effective-note', `Using ${GOAL_LABELS[legSettings.goal]} with ${count} ${symbol} change${count === 1 ? '' : 's'}.`),
+      element('p', 'editor-effective-note', `Using ${GOAL_LABELS[playbook.goal]} with ${count} ${symbol} change${count === 1 ? '' : 's'}.`),
       tickerRules,
     );
 
@@ -965,7 +1012,8 @@ export function createStrategySettingsController({ request, notify, getTrackedTi
     event.preventDefault();
     if (!model.editor) return;
     if (model.editor.kind === 'ticker' && !model.editor.removed) {
-      model.editor.draft.tickerPlaybooks[model.editor.symbol][model.editor.leg].enabled = true;
+      const playbook = model.editor.draft.tickerPlaybooks[model.editor.symbol];
+      applyTickerGoal(playbook, playbook.goal, model.editor.leg);
     }
     try {
       validateDraft(model.editor.draft);

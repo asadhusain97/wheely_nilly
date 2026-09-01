@@ -246,7 +246,6 @@ export const withAccessToken = async <T>(
       return await refreshTokens(session!);
     } catch (error) {
       if ([400, 401, 403].includes((error as { status?: number }).status ?? 0)) {
-        clearAuth(response);
         throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
       }
       throw error;

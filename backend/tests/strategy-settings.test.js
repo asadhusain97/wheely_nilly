@@ -34,16 +34,22 @@ function legacySettings() {
 }
 
 function addPlaybook(settings, symbol = 'VOOG') {
+  if (settings.schemaVersion === 1) {
+    settings.tickerPlaybooks[symbol] = {
+      coveredCall: { enabled: true, goal: 'income', minNetSalePriceMinor: 12_345, overrides: {} },
+      cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+    };
+    return settings;
+  }
   settings.tickerPlaybooks[symbol] = {
+    goal: 'income',
     coveredCall: {
       enabled: true,
-      goal: 'income',
       minNetSalePriceMinor: 12_345,
       overrides: {},
     },
     cashSecuredPut: {
       enabled: false,
-      goal: 'acquire',
       maxNetPurchasePriceMinor: null,
       overrides: {},
     },
@@ -79,19 +85,19 @@ describe('strategy settings model and persistence', () => {
       minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
       targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-      closeAtProfitCapture: 0.35, rollReviewDte: 10,
+      closeAtProfitCapture: 0.35, rollReviewDte: 21,
     });
     assert.deepEqual(profiles.income.coveredCall, {
       minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50, rollReviewDte: 10,
+      closeAtProfitCapture: 0.50, rollReviewDte: 21,
     });
     assert.deepEqual(profiles.income.cashSecuredPut, {
       minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
       targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-      closeAtProfitCapture: 0.50, rollReviewDte: 10,
+      closeAtProfitCapture: 0.50, rollReviewDte: 21,
     });
     assert.deepEqual(profiles.exit.coveredCall, {
       minDte: 7, maxDte: 21, minMoneyness: 0.95, maxMoneyness: 1.05,
@@ -150,9 +156,9 @@ describe('strategy settings model and persistence', () => {
     unknown.futureMetric = true;
     assert.throws(() => normalizeStrategySettings(unknown), StrategySettingsValidationError);
 
-    const incompatible = addPlaybook(builtInStrategySettings());
-    incompatible.tickerPlaybooks.VOOG.coveredCall.goal = 'acquire';
-    assert.throws(() => normalizeStrategySettings(incompatible), /goal/);
+    const invalidGoal = addPlaybook(builtInStrategySettings());
+    invalidGoal.tickerPlaybooks.VOOG.goal = 'invalid';
+    assert.throws(() => normalizeStrategySettings(invalidGoal), /goal/);
 
     const unsafeMoney = addPlaybook(builtInStrategySettings());
     unsafeMoney.tickerPlaybooks.VOOG.coveredCall.minNetSalePriceMinor = 12.5;
@@ -187,7 +193,7 @@ describe('strategy settings model and persistence', () => {
     legacy.goalPresets.income.rules.maxDte = 42;
     const migrated = migrateV1StrategySettings(legacy);
 
-    assert.equal(migrated.schemaVersion, 2);
+    assert.equal(migrated.schemaVersion, 3);
     assert.equal(migrated.goalProfiles.income.coveredCall.minVolume, 25);
     assert.equal(migrated.goalProfiles.income.cashSecuredPut.minVolume, 50);
     assert.equal(migrated.goalProfiles.income.coveredCall.maxDte, 42);
@@ -206,7 +212,7 @@ describe('strategy settings model and persistence', () => {
     await fs.writeFile(service.file, JSON.stringify({ ...legacy, updatedAt }));
 
     const loaded = await service.load();
-    assert.equal(loaded.settings.schemaVersion, 2);
+    assert.equal(loaded.settings.schemaVersion, 3);
     assert.equal(loaded.settings.goalProfiles.income.coveredCall.minVolume, 25);
     assert.equal(loaded.settings.tickerPlaybooks.VOOG.coveredCall.minNetSalePriceMinor, 12_345);
     assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
@@ -217,6 +223,7 @@ describe('strategy settings model and persistence', () => {
   it('defaults persisted schema-v2 Close and roll fields without discarding saved values', async () => {
     const { service } = await temporaryService();
     const olderV2 = builtInStrategySettings();
+    olderV2.schemaVersion = 2;
     olderV2.goalProfiles.protect.coveredCall.minVolume = 77;
     for (const profiles of Object.values(olderV2.goalProfiles)) {
       for (const rules of Object.values(profiles)) {
@@ -231,7 +238,7 @@ describe('strategy settings model and persistence', () => {
     const loaded = await service.load();
     assert.equal(loaded.settings.goalProfiles.protect.coveredCall.minVolume, 77);
     assert.equal(loaded.settings.goalProfiles.protect.coveredCall.closeAtProfitCapture, 0.5);
-    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.rollReviewDte, 10);
+    assert.equal(loaded.settings.goalProfiles.protect.coveredCall.rollReviewDte, 21);
     assert.equal(loaded.settings.goalProfiles.exit.coveredCall.rollReviewDte, 7);
     assert.equal('maxQuoteAgeSeconds' in loaded.settings.goalProfiles.protect.coveredCall, false);
     assert.deepEqual(loaded.persistence, { persisted: true, updatedAt });
@@ -277,6 +284,21 @@ describe('strategy settings model and persistence', () => {
 });
 
 describe('effective strategy settings resolution', () => {
+  it('uses one saved ticker goal for both open-contract strategies', () => {
+    const settings = addPlaybook(builtInStrategySettings());
+    settings.tickerPlaybooks.VOOG.goal = 'acquire';
+    settings.tickerPlaybooks.VOOG.coveredCall.enabled = false;
+    settings.tickerPlaybooks.VOOG.cashSecuredPut.enabled = true;
+
+    const call = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'coveredCall' });
+    const put = resolveEffectiveSettings(settings, { symbol: 'VOOG', leg: 'cashSecuredPut' });
+
+    assert.equal(call.goal, 'acquire');
+    assert.equal(put.goal, 'acquire');
+    assert.equal(call.sourceMap.rollReviewDte, 'system');
+    assert.equal(put.sourceMap.rollReviewDte, 'goal');
+  });
+
   it('resolves goal → ticker precedence with an accurate source map', () => {
     const settings = addPlaybook(builtInStrategySettings());
     settings.goalProfiles.income.coveredCall.minDte = 20;
@@ -293,7 +315,7 @@ describe('effective strategy settings resolution', () => {
     assert.equal(effective.sourceMap.minMoneyness, 'goal');
     assert.equal(effective.sourceMap.minVolume, 'tickerOverride');
     assert.equal(effective.sourceMap.closeAtProfitCapture, 'goal');
-    assert.equal(effective.rules.rollReviewDte, 10);
+    assert.equal(effective.rules.rollReviewDte, 21);
     assert.equal(effective.sourceMap.rollReviewDte, 'goal');
     assert.equal(effective.goal, 'income');
     assert.deepEqual(effective.priceGuard, { field: 'minNetSalePriceMinor', valueMinor: 12_345 });

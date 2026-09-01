@@ -15,7 +15,7 @@ The wheel strategy usually starts with a cash-secured put. If assignment leaves 
 - See open contracts, goal-aware roll review, and broker-ready replacement targets when a position needs attention.
 - Track booked wheel profit and loss by month and ticker.
 - Scan covered calls and cash-secured puts with Radar.
-- Save different goals and rules for each ticker and strategy leg.
+- Save one intent goal per ticker, with separate rules and price guards for each strategy leg.
 - Review account balances, positions, and trade history through a read-only brokerage connection.
 - Install the site as a progressive web app and reopen its saved view offline.
 

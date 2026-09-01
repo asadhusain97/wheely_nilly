@@ -145,12 +145,12 @@ export async function initializeDataRefresh(): Promise<void> {
     if (brokerageAlertCopy) brokerageAlertCopy.textContent = historyFailure
       ? "Booked results and opening contract details are incomplete. Try the history import again."
       : requestError.status === 401
-        ? "SnapTrade access expired. Reconnect to continue."
+        ? "SnapTrade could not confirm access. Your saved view is unchanged. Try again once, then reconnect if it still fails."
         : requestError.status === 409
           ? "Choose an available brokerage account to continue."
           : "SnapTrade is connected, but Wheely Nilly could not read the selected account. Your saved view is unchanged.";
     const authorizationExpired = requestError.status === 401;
-    if (retryAlignment) retryAlignment.hidden = authorizationExpired;
+    if (retryAlignment) retryAlignment.hidden = false;
     if (reconnectAlignment) reconnectAlignment.hidden = !authorizationExpired;
   };
 
@@ -363,10 +363,10 @@ export async function initializeDataRefresh(): Promise<void> {
     button.disabled = true;
     if (label) label.textContent = "Refreshing…";
     try { await coordinator.refreshBrokerage({ manual: true }); }
-    catch { if (brokerageStatus) brokerageStatus.textContent = "Try again in a few minutes"; }
+    catch { /* The coordinator keeps the saved view and presents the recovery action. */ }
     finally {
       button.disabled = false;
-      if (label) label.textContent = "Refresh brokerage";
+      if (label) label.textContent = "Refresh data";
     }
   });
   const setupStatus = document.querySelector<HTMLElement>("[data-setup-action-status]");

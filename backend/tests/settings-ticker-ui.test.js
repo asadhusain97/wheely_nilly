@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  builtInSettingsDocument,
+  normalizeSettingsDocument,
   normalizeTrackedTickers,
   resolveTickerGoal,
   resolveTickerLeg,
@@ -10,12 +12,35 @@ import {
 
 function playbook() {
   return {
-    coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-    cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+    goal: 'acquire',
+    coveredCall: { enabled: false, minNetSalePriceMinor: null, overrides: {} },
+    cashSecuredPut: { enabled: false, maxNetPurchasePriceMinor: null, overrides: {} },
   };
 }
 
 describe('Settings ticker collection UI', () => {
+  it('migrates saved browser settings before the editor validates them', () => {
+    const legacy = builtInSettingsDocument();
+    legacy.schemaVersion = 2;
+    for (const profiles of Object.values(legacy.goalProfiles)) {
+      for (const rules of Object.values(profiles)) delete rules.rollReviewDte;
+    }
+    legacy.tickerPlaybooks.RKLB = {
+      coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
+      cashSecuredPut: { enabled: true, goal: 'acquire', maxNetPurchasePriceMinor: null, overrides: {} },
+    };
+
+    const migrated = normalizeSettingsDocument(legacy);
+
+    assert.equal(migrated.schemaVersion, 3);
+    assert.equal(migrated.goalProfiles.protect.coveredCall.rollReviewDte, 21);
+    assert.equal(migrated.goalProfiles.income.cashSecuredPut.rollReviewDte, 21);
+    assert.equal(migrated.goalProfiles.acquire.cashSecuredPut.rollReviewDte, 7);
+    assert.equal(migrated.tickerPlaybooks.RKLB.goal, 'acquire');
+    assert.equal('goal' in migrated.tickerPlaybooks.RKLB.coveredCall, false);
+    assert.equal('goal' in migrated.tickerPlaybooks.RKLB.cashSecuredPut, false);
+  });
+
   it('normalizes symbols and keeps the most recent source for each ticker', () => {
     const tickers = normalizeTrackedTickers([
       { symbol: 'voog', preferredLeg: 'coveredCall', goal: 'income', lastActivityAt: '2026-08-01T00:00:00Z' },
@@ -31,7 +56,8 @@ describe('Settings ticker collection UI', () => {
     const settings = playbook();
     assert.equal(resolveTickerGoal(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'acquire');
     settings.coveredCall.enabled = true;
-    settings.coveredCall.goal = 'protect';
+    settings.goal = 'protect';
+    settings.coveredCall.enabled = true;
     assert.equal(resolveTickerGoal(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'protect');
     assert.equal(resolveTickerLeg(settings, { preferredLeg: 'cashSecuredPut', goal: 'acquire' }), 'coveredCall');
   });

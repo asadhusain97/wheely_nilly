@@ -91,9 +91,9 @@ describe('responsive dashboard shell', () => {
     assert.ok(serviceWorker.indexOf('fetch("/app.html", { cache: "no-cache" })') < serviceWorker.indexOf('caches.match("/app.html")'));
   });
   it('can choose another account or fully disconnect and restart setup', () => {
-    assert.match(html, /data-reset-setup[^>]*><span>Choose another account<\/span>/);
+    assert.match(html, /data-reset-setup[^>]*><span>Change account<\/span>/);
     assert.match(html, /Keep SnapTrade connected/);
-    assert.match(html, /data-restart-connection[^>]*><span>Restart connection<\/span>/);
+    assert.match(html, /data-restart-connection[^>]*><span>Reconnect<\/span>/);
     assert.match(html, /data-onboarding-start-over/);
     assert.match(html, /data-refresh-brokerage/);
     assert.doesNotMatch(html, /data-market-interval|data-brokerage-interval|data-disconnect|data-erase-local/);
@@ -101,9 +101,12 @@ describe('responsive dashboard shell', () => {
     assert.match(dataRefreshTs, /disconnectAndClearSetup/);
     assert.match(setupResetTs, /localRepository\.clearAllData\(\)/);
     assert.match(storageTs, /async clearAllData\(\)/);
+    assert.match(html, /class="connection-card-actions"/);
     assert.match(html, /data-reconnect-alignment[^>]+hidden>Reconnect SnapTrade/);
+    assert.match(dataRefreshTs, /SnapTrade could not confirm access\. Your saved view is unchanged\. Try again once/);
+    assert.match(dataRefreshTs, /retryAlignment\.hidden = false/);
     assert.match(dataRefreshTs, /reconnectAlignment\.hidden = !authorizationExpired/);
-    assert.match(onboardingTs, /SnapTrade access expired\. Reconnect to read your brokerage accounts\./);
+    assert.match(onboardingTs, /SnapTrade could not confirm access\. Try again once/);
     assert.match(onboardingTs, /textContent: "Reconnect SnapTrade"/);
     assert.match(appBootstrapTs, /startApp\(initializeDataRefresh, initializeOnboarding\)/);
     assert.match(appBootstrapTs, /Setup could not start\./);
@@ -166,7 +169,11 @@ describe('responsive dashboard shell', () => {
       assert.ok(cardSource.indexOf(hierarchy[index - 1]) < cardSource.indexOf(hierarchy[index]));
     }
 
-    assert.match(js, /label: 'Market data unavailable'/);
+    assert.match(js, /eyebrow: 'Status'/);
+    assert.match(js, /label: openingTradeMissing \? 'Waiting for trade history' : 'Waiting for market data'/);
+    assert.match(js, /Waiting for SnapTrade to return the opening trade\./);
+    assert.match(js, /If the market is closed, check again after it opens\./);
+    assert.match(js, /recommendation\.eyebrow \?\? 'Recommendation'/);
     assert.match(js, /management\?\.lastUsableQuote/);
     assert.match(js, /Stale quote/);
     assert.match(js, /Last usable \$\{updatedAt\(timestamp\)\}/);
@@ -254,14 +261,16 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /rollController\.action\(trade, rollReview\)/);
     assert.match(js, /contract-goal goal-tone/);
     assert.match(js, /rollReview\?\.state === 'assignmentAligned'/);
-    assert.match(rollsJs, /if \(!review\?\.goal\) return null/);
+    assert.match(rollsJs, /if \(!review\?\.goal \|\| review\.state === 'unavailable'\) return null/);
     assert.match(rollsJs, /review\.state === 'review'/);
     assert.match(rollsJs, /Check roll candidates/);
     assert.match(rollsJs, /Waiting for market data/);
     assert.match(rollsJs, /button\.disabled = presentation\.disabled/);
     assert.match(rollsCss, /\.roll-review-action button:disabled/);
     assert.match(rollsCss, /\.roll-review-action\.is-recommended button/);
-    assert.match(js, /if \(rollAction\) summary\.append\(rollAction\)/);
+    assert.match(js, /const detail = el\('div', 'recommendation-detail'\)/);
+    assert.match(js, /if \(rollAction\) detail\.append\(rollAction\)/);
+    assert.match(js, /summary\.append\(heading, detail\)/);
     assert.match(rollsCss, /\.roll-review-action button \{[^}]*text-decoration: underline/);
     assert.match(js, /state: 'unavailable', goal, searchProfile: null/);
     assert.match(rollsJs, /\/api\/v1\/position-management\/rolls/);
@@ -385,7 +394,7 @@ describe('responsive dashboard shell', () => {
     assert.doesNotMatch(screenerJs, /'Playbook'|provider-strip|Provider error:/);
     assert.match(settingsJs, /async function addTicker/);
     assert.match(settingsJs, /async function removeTicker/);
-    assert.match(settingsJs, /function settingsWithTicker[\s\S]*?tickerPlaybooks\[symbol\]\[leg\]\.enabled = true/);
+    assert.match(settingsJs, /function settingsWithTicker[\s\S]*?applyTickerGoal\(draft\.tickerPlaybooks\[symbol\], goal, leg\)/);
     assert.match(js, /getTrackedTickers:[\s\S]*?tickerPerformance[\s\S]*?screenedTickers/);
     assert.match(js, /name: typeof instrument === 'object' \? instrument\.name/);
     assert.match(js, /removeTicker: async[\s\S]*?forgetScreenedTicker\(symbol\)[\s\S]*?strategySettingsController\.refresh\(\)/);
@@ -480,7 +489,7 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /\['e', 'E', '\+', '-'\]\.includes\(event\.key\)/);
     assert.match(settingsJs, /input\.min = '0';[\s\S]*?input\.step = '0\.01'/);
     assert.doesNotMatch(settingsJs, /input\.type = 'text'/);
-    assert.match(settingsJs, /tickerPlaybooks\[model\.editor\.symbol\]\[model\.editor\.leg\]\.enabled = true/);
+    assert.match(settingsJs, /applyTickerGoal\(playbook, playbook\.goal, model\.editor\.leg\)/);
     assert.doesNotMatch(settingsJs, /Object\.values\(model\.editor\.draft\.tickerPlaybooks/);
     assert.match(settingsJs, /function resolveTickerGoal/);
     assert.match(settingsJs, /sorted\.slice\(0, 8\)/);
@@ -536,7 +545,8 @@ describe('responsive dashboard shell', () => {
     assert.match(settingsJs, /key: 'rollReviewDte', label: 'Review rolls at or below DTE'/);
     assert.match(settingsJs, /Starts the near-expiration roll review at this DTE/);
     assert.match(settingsJs, /closeAtProfitCapture: 0\.50/);
-    assert.doesNotMatch(settingsJs, /maxQuoteAgeSeconds|Maximum quote age/);
+    const editableRuleFields = settingsJs.slice(settingsJs.indexOf('const RULE_FIELDS'), settingsJs.indexOf('const FIELD_BY_KEY'));
+    assert.doesNotMatch(editableRuleFields, /maxQuoteAgeSeconds|Maximum quote age/);
     assert.match(settingsJs, /ruleSummary\(rules,[\s\S]*?\{ glossaryTerms: true \}\)/);
     assert.match(settingsJs, /createGlossaryTerm\(labelText, 'Net price guard', 'editor-rule-label'\)/);
     assert.match(settingsJs, /createGlossaryTerm\('Goal', 'Goal profiles', 'ticker-goal-label'\)/);

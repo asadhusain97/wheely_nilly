@@ -45,8 +45,10 @@
 
         <section class="connection-card" data-brokerage-alert hidden aria-labelledby="brokerage-alert-title">
           <div><p data-brokerage-alert-eyebrow>Brokerage alignment</p><h2 id="brokerage-alert-title" data-brokerage-alert-title>Reading your selected account…</h2><small data-brokerage-alert-copy>Your saved view will stay available while SnapTrade responds.</small></div>
-          <button type="button" data-retry-alignment hidden>Try again</button>
-          <a href="/api/auth/start?returnTo=/app" data-reconnect-alignment hidden>Reconnect SnapTrade</a>
+          <div class="connection-card-actions">
+            <button type="button" data-retry-alignment hidden>Try again</button>
+            <a href="/api/auth/start?returnTo=/app" data-reconnect-alignment hidden>Reconnect SnapTrade</a>
+          </div>
         </section>
 
         <div data-brokerage-content hidden>
@@ -279,13 +281,13 @@
         </div>
         <section class="data-refresh-settings" aria-label="Brokerage data actions">
           <button class="settings-data-action is-refresh" type="button" data-refresh-brokerage
-            title="Get the latest positions and balances"><span>Refresh brokerage</span><small class="sr-only">Get the latest
+            title="Get the latest positions and balances"><span>Refresh data</span><small class="sr-only">Get the latest
               positions and balances</small></button>
           <button class="settings-data-action" type="button" data-reset-setup
-            title="Keep SnapTrade connected and run account setup again"><span>Choose another account</span><small
+            title="Keep SnapTrade connected and run account setup again"><span>Change account</span><small
               class="sr-only">Keep SnapTrade connected and run account setup again</small></button>
           <button class="settings-data-action is-destructive" type="button" data-restart-connection
-            title="Disconnect SnapTrade, clear this browser, and begin again"><span>Restart connection</span><small
+            title="Disconnect SnapTrade, clear this browser, and begin again"><span>Reconnect</span><small
               class="sr-only">Disconnect SnapTrade, clear this browser, and begin again</small></button>
         </section>
         <p class="setup-action-status" data-setup-action-status role="status" aria-live="polite" hidden></p>
@@ -538,7 +540,7 @@
               <div class="glossary-entry">
                 <dt>Roll review DTE <span>Management window</span></dt>
                 <dd>The inclusive days-to-expiration threshold that starts a near-expiration roll review for an open
-                  contract. A setting of 10 starts the review at 10 DTE and keeps it active below 10 DTE.</dd>
+                  contract. A setting of 21 starts the review at 21 DTE and keeps it active below 21 DTE.</dd>
                 <dd class="glossary-guide">This threshold starts a review, not an automatic roll recommendation. A
                   delta conflict with your assignment goal can start review earlier, and a credit alone never makes a
                   roll suitable.</dd>

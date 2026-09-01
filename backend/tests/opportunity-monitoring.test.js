@@ -11,12 +11,14 @@ import { builtInStrategySettings, resolveEffectiveSettings } from '../src/servic
 function settingsFixture() {
   const settings = builtInStrategySettings();
   settings.tickerPlaybooks.AAPL = {
-    coveredCall: { enabled: true, goal: 'exit', minNetSalePriceMinor: 20_000, overrides: { minPeriodReturn: .02, maxDte: 28 } },
-    cashSecuredPut: { enabled: true, goal: 'acquire', maxNetPurchasePriceMinor: 18_000, overrides: {} },
+    goal: 'income',
+    coveredCall: { enabled: true, minNetSalePriceMinor: 20_000, overrides: { minPeriodReturn: .02, maxDte: 28 } },
+    cashSecuredPut: { enabled: true, maxNetPurchasePriceMinor: 18_000, overrides: {} },
   };
   settings.tickerPlaybooks.MSFT = {
-    coveredCall: { enabled: false, goal: 'income', minNetSalePriceMinor: null, overrides: {} },
-    cashSecuredPut: { enabled: true, goal: 'income', maxNetPurchasePriceMinor: null, overrides: {} },
+    goal: 'income',
+    coveredCall: { enabled: false, minNetSalePriceMinor: null, overrides: {} },
+    cashSecuredPut: { enabled: true, maxNetPurchasePriceMinor: null, overrides: {} },
   };
   return settings;
 }
@@ -67,7 +69,7 @@ describe('playbook-aware opportunity monitoring', () => {
     assert.equal(request.min_period_return, .02);
     assert.equal(request.max_dte, 28);
     assert.equal(request.min_net_sale_price, 200);
-    assert.equal(request.allow_itm_calls, true);
+    assert.equal(request.allow_itm_calls, false);
     assert.equal(request.covered_shares, 200);
     assert.equal(request.adjusted_basis_per_share, 175);
   });
@@ -107,6 +109,6 @@ describe('playbook-aware opportunity monitoring', () => {
     assert.equal(scan.targets.find(({ symbol }) => symbol === 'GOOG').stockPrice, 195.10);
     const aapl = calls.filter(({ symbol }) => symbol === 'AAPL');
     assert.equal(aapl.length, 2);
-    assert.deepEqual(aapl.map(({ chain_min_dte, chain_max_dte }) => [chain_min_dte, chain_max_dte]), [[7, 28], [7, 28]]);
+    assert.deepEqual(aapl.map(({ chain_min_dte, chain_max_dte }) => [chain_min_dte, chain_max_dte]), [[14, 35], [14, 35]]);
   });
 });

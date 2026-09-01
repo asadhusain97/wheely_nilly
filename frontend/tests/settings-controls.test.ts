@@ -11,14 +11,15 @@ test("settings keeps brokerage maintenance actions compact without changing thei
   assert.match(actions, /data-refresh-brokerage/);
   assert.match(actions, /data-reset-setup/);
   assert.match(actions, /data-restart-connection/);
-  assert.match(actions, /Refresh brokerage/);
-  assert.match(actions, /Choose another account/);
-  assert.match(actions, /Restart connection/);
+  assert.match(actions, /Refresh data/);
+  assert.match(actions, /Change account/);
+  assert.match(actions, /Reconnect/);
   assert.doesNotMatch(actions, /is-primary/);
 });
 
 test("settings brokerage actions share a row and wrap for narrow screens", () => {
   assert.match(settingsCss, /\.data-refresh-settings\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
   assert.match(settingsCss, /@media \(max-width: 380px\)[\s\S]*?\.data-refresh-settings\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(settingsCss, /\.settings-data-action\s*\{[\s\S]*?min-height:\s*42px/);
+  assert.match(settingsCss, /\.settings-data-action\s*\{[\s\S]*?min-height:\s*48px/);
+  assert.match(settingsCss, /\.settings-data-action span\s*\{[\s\S]*?white-space:\s*normal/);
 });

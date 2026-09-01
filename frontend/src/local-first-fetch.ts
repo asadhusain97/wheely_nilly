@@ -1,6 +1,6 @@
 import { localRepository, type StorageDomain } from "./storage";
 import { buildLocalModel, buildLocalRollResults, buildLocalTargets, scanAllLocalTargets, scanLocalTarget } from "./local-analysis";
-import { builtInSettingsDocument } from "../assets/js/settings.js";
+import { builtInSettingsDocument, normalizeSettingsDocument } from "../assets/js/settings.js";
 
 const nativeFetch = globalThis.fetch.bind(globalThis);
 
@@ -27,13 +27,17 @@ export function installLocalFirstFetch(): void {
     if (url.origin !== location.origin) return nativeFetch(request);
     if (url.pathname === "/api/v1/strategy-settings") {
       if (request.method === "PUT") {
-        const settings = await request.clone().json();
+        const settings = normalizeSettingsDocument(await request.clone().json());
         await localRepository.put("tickerStrategies", "document", settings);
         return Response.json({ settings, persistence: { persisted: true, storage: "indexeddb", updatedAt: new Date().toISOString() } });
       }
       if (request.method === "GET") {
         const saved = await localRepository.get<unknown>("tickerStrategies", "document").catch(() => null);
-        if (saved) return Response.json({ settings: saved.value, persistence: { persisted: true, storage: "indexeddb", updatedAt: saved.updatedAt } });
+        if (saved) {
+          const settings = normalizeSettingsDocument(saved.value);
+          if (JSON.stringify(settings) !== JSON.stringify(saved.value)) await localRepository.put("tickerStrategies", "document", settings);
+          return Response.json({ settings, persistence: { persisted: true, storage: "indexeddb", updatedAt: saved.updatedAt } });
+        }
         const settings = builtInSettingsDocument();
         await localRepository.put("tickerStrategies", "document", settings).catch(() => undefined);
         return Response.json({ settings, persistence: { persisted: true, storage: "indexeddb", updatedAt: new Date().toISOString() } });

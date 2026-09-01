@@ -36,8 +36,9 @@ async function appFixture() {
 function configuredSettings() {
   const settings = builtInStrategySettings();
   settings.tickerPlaybooks.VOOG = {
-    coveredCall: { enabled: true, goal: 'income', minNetSalePriceMinor: 18_000, overrides: { maxDte: 40 } },
-    cashSecuredPut: { enabled: false, goal: 'acquire', maxNetPurchasePriceMinor: 17_500, overrides: {} },
+    goal: 'income',
+    coveredCall: { enabled: true, minNetSalePriceMinor: 18_000, overrides: { maxDte: 40 } },
+    cashSecuredPut: { enabled: false, maxNetPurchasePriceMinor: 17_500, overrides: {} },
   };
   return settings;
 }
@@ -63,7 +64,7 @@ describe('strategy settings API', () => {
     const { app } = await appFixture();
     const initial = await request(app).get('/api/v1/strategy-settings');
     assert.equal(initial.status, 200);
-    assert.equal(initial.body.settings.schemaVersion, 2);
+    assert.equal(initial.body.settings.schemaVersion, 3);
     assert.equal(initial.body.persistence.persisted, false);
 
     const saved = await request(app).put('/api/v1/strategy-settings').send(configuredSettings());
@@ -80,7 +81,7 @@ describe('strategy settings API', () => {
     assert.equal(response.body.symbol, 'VOOG');
     assert.equal(response.body.rules.minDte, 14);
     assert.equal(response.body.rules.maxDte, 40);
-    assert.equal(response.body.rules.rollReviewDte, 10);
+    assert.equal(response.body.rules.rollReviewDte, 21);
     assert.equal(response.body.sourceMap.minDte, 'goal');
     assert.equal(response.body.sourceMap.maxDte, 'tickerOverride');
     assert.equal(response.body.sourceMap.rollReviewDte, 'goal');

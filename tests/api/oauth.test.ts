@@ -52,7 +52,7 @@ describe("stateless OAuth session sealing", () => {
     assert.equal(readSession({ headers: { cookie: `wheely_session=${encodeURIComponent(oldSession)}` }, query: {} }), null);
   });
 
-  it("clears an unusable session and requires reconnection when token refresh is rejected", async () => {
+  it("keeps the session cookie when token refresh is rejected so a concurrent refresh cannot erase a newer session", async () => {
     globalThis.fetch = async (input) => {
       const url = String(input);
       if (url.includes(".well-known")) {
@@ -72,9 +72,7 @@ describe("stateless OAuth session sealing", () => {
       () => withAccessToken({ headers: { cookie: expiredSessionCookie() }, query: {} }, response as any, async () => "unused"),
       (error: any) => error.status === 401 && error.code === "AUTH_REQUIRED",
     );
-    const cookies = response.headers.get("Set-Cookie");
-    assert.ok(Array.isArray(cookies));
-    assert.ok(cookies.some((cookie) => cookie.startsWith("wheely_session=;")));
+    assert.equal(response.headers.get("Set-Cookie"), undefined);
   });
 
   it("keeps the saved session when token refresh fails transiently", async () => {

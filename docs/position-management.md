@@ -19,7 +19,7 @@ Roll conditions are derived locally from the current position, its exact-contrac
 
 “Let assignment work” is a positive management decision, not a roll recommendation. The card still allows a manual candidate check, but keeps that action visually quiet because the current assignment already matches the ticker goal.
 
-The near-expiration window comes from the effective `rollReviewDte` rule. Its built-in value is 10 DTE for Keep Shares and both Earn Income legs, and 7 DTE for Plan Exit and Plan Entry. Roll review can also activate earlier when delta and assignment intent conflict. A credit alone never activates or validates a roll.
+The near-expiration window comes from the effective `rollReviewDte` rule. Its built-in value is 21 DTE for Keep Shares and both Earn Income legs, and 7 DTE for Plan Exit and Plan Entry. Roll review can also activate earlier when delta and assignment intent conflict. A credit alone never activates or validates a roll.
 
 The exact decision order is:
 

@@ -101,13 +101,13 @@ export class RefreshCoordinator {
       return Promise.reject(new Error("Brokerage refresh is cooling down"));
     }
     if (this.#brokerageRequest) return this.#brokerageRequest;
-    if (options.manual) this.#lastManualBrokerageAt = now;
     this.#brokerageAbort = new AbortController();
     const previous = this.dependencies.readPortfolio();
     this.#brokerageRequest = this.dependencies.refreshBrokerage(this.#brokerageAbort.signal)
       .then(async (snapshot) => {
         await this.dependencies.writePortfolio(snapshot);
         this.#lastBrokerageSuccessAt = (this.dependencies.now ?? Date.now)();
+        if (options.manual) this.#lastManualBrokerageAt = this.#lastBrokerageSuccessAt;
         const diff = diffPortfolio(previous, snapshot);
         if (diff.affectedSymbols.length || diff.affectedContracts.length) {
           await this.dependencies.refreshAffectedMarket(diff, this.#brokerageAbort!.signal);

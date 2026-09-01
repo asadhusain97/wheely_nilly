@@ -111,7 +111,7 @@ export async function initializeOnboarding(): Promise<void> {
     syncStatus.classList.toggle("is-warning", view.tone === "warning");
     syncStatus.textContent = view.status;
     syncActions.hidden = !syncFailure;
-    retrySync.hidden = !syncFailure || authorizationExpired;
+    retrySync.hidden = !syncFailure;
     reconnectSync.hidden = !authorizationExpired;
   };
   const updateNext = () => {
@@ -236,7 +236,7 @@ export async function initializeOnboarding(): Promise<void> {
       const requestError = error as { status?: number; code?: string; message?: string };
       const authorizationExpired = requestError.status === 401 || requestError.code === "AUTH_REQUIRED";
       const message = authorizationExpired
-        ? "SnapTrade access expired. Reconnect to read your brokerage accounts."
+        ? "SnapTrade could not confirm access. Try again once, then reconnect if it still fails."
         : !navigator.onLine
           ? "You’re offline. Reconnect, then try again."
         : error instanceof Error
@@ -244,21 +244,22 @@ export async function initializeOnboarding(): Promise<void> {
           : "SnapTrade is connected, but Wheely Nilly could not read the account list yet.";
       const copy = Object.assign(document.createElement("p"), { textContent: message });
       const actions = Object.assign(document.createElement("div"), { className: "onboarding-account-actions" });
+      const retry = Object.assign(document.createElement("button"), { type: "button", textContent: "Try again" });
+      retry.addEventListener("click", () => void loadAccounts());
+      actions.append(retry);
       if (authorizationExpired) {
         actions.append(Object.assign(document.createElement("a"), {
           href: "/api/auth/start?returnTo=/app",
           textContent: "Reconnect SnapTrade",
         }));
       } else {
-        const retry = Object.assign(document.createElement("button"), { type: "button", textContent: "Try again" });
         const dashboard = Object.assign(document.createElement("a"), {
           href: "https://dashboard.snaptrade.com",
           target: "_blank",
           rel: "noreferrer",
           textContent: "Open SnapTrade",
         });
-        retry.addEventListener("click", () => void loadAccounts());
-        actions.append(retry, dashboard);
+        actions.append(dashboard);
       }
       accountList.replaceChildren(copy, actions);
     } finally {

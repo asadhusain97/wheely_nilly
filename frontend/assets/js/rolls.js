@@ -288,7 +288,7 @@ export function createRollController({ request, notify }) {
   };
 
   const action = (trade, review) => {
-    if (!review?.goal) return null;
+    if (!review?.goal || review.state === 'unavailable') return null;
     const recommended = review.state === 'review';
     const presentation = rollActionPresentation(review);
     const wrapper = node('div', `roll-review-action${recommended ? ' is-recommended' : ''}`);

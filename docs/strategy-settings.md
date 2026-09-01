@@ -1,4 +1,4 @@
-# Strategy Settings v2
+# Strategy Settings v3
 
 Strategy settings provide the authoritative rules for Radar and Close. Radar resolves them for eligible new-trade targets. Close resolves them for every open short option, including untracked tickers and disabled legs. Neither feature places orders.
 
@@ -15,16 +15,16 @@ selected goal and strategy profile
 
 Goal profiles are complete rule sets. Removing a ticker override restores the selected goal value. The effective resolver reports `goal` or `tickerOverride`.
 
-Ticker playbooks contain both strategy legs. Each leg has its own enabled state, compatible goal, price guard, and partial rule overrides. An unconfigured ticker remains disabled and has no price guard, but it still resolves a goal profile. Stocks and unknown instrument types default to Earn Income. ETF and mutual-fund covered calls default to Keep Shares. Cash-secured puts default to Earn Income because Keep Shares is not compatible with puts. A saved ticker goal always wins.
+Ticker playbooks store one goal for the ticker. Their two strategy legs keep separate enabled states, price guards, and partial rule overrides. This prevents open calls and puts on the same ticker from receiving conflicting intent labels. An unconfigured ticker remains disabled and has no price guard, but it still resolves a default goal profile. Stocks and unknown instrument types default to Earn Income. ETF and mutual-fund covered calls default to Keep Shares. A saved ticker goal wins for every open contract on that ticker. If that goal has no entry profile for the contract's strategy, position management keeps the ticker goal for assignment intent and uses the conservative system rule set.
 
 The Settings UI populates its ticker collection from wheel-trade history, saved playbooks, and tickers added from Radar's circular plus action. Radar verifies the instrument and asks for the goal first. Keep Shares and Plan Exit infer CC. Plan Entry infers CSP. Earn Income reveals the CC/CSP choice. Plan Entry is the initial goal. A newly created playbook enables only the selected leg; adding or editing a leg preserves the other leg's enabled state and settings. Its small recent-ticker hint is stored locally under `wheely-nilly.screened-tickers.v1` and contains the symbol, instrument identity, selected leg, starting goal, and last-used timestamp. Removing a ticker from Radar deletes this hint and its saved playbook. A ticker with trade history remains visible in Settings because history is an independent source. Capsules are ordered by most recent activity, show eight initially, and can be searched or expanded.
 
 ## Document shape
 
-The editable document has `schemaVersion: 2` and two scopes:
+The editable document has `schemaVersion: 3` and two scopes:
 
 - `goalProfiles.protect`, `income`, `exit`, and `acquire` contain complete rule sets keyed by compatible strategy leg. Earn Income has separate covered-call and cash-secured-put profiles.
-- `tickerPlaybooks` is keyed by normalized uppercase symbols. Every playbook contains `coveredCall` and `cashSecuredPut` settings.
+- `tickerPlaybooks` is keyed by normalized uppercase symbols. Every playbook contains one `goal` plus `coveredCall` and `cashSecuredPut` settings.
 
 Covered calls allow the Keep Shares, Earn Income, and Plan Exit goals and may set `minNetSalePriceMinor`. Cash-secured puts allow Earn Income and Plan Entry and may set `maxNetPurchasePriceMinor`. Price guards are nullable, nonnegative, safe integers in cents. The Settings UI is the dollar boundary and parses at most two decimal places without floating-point accounting.
 
@@ -42,7 +42,7 @@ Each complete rule set resolves all of these fields:
 | `closeAtProfitCapture` | Close threshold as a decimal greater than 0 through 1 |
 | `rollReviewDte` | Inclusive DTE threshold that starts near-expiration roll review; integer from 0 through 365 |
 
-All objects reject unknown fields. Validation also rejects unsafe integers, malformed tickers, unsupported goal/leg pairs, out-of-range values, and effective DTE, moneyness, or delta inversions.
+All objects reject unknown fields. Validation also rejects unsafe integers, malformed tickers, unknown goals, out-of-range values, and effective DTE, moneyness, or delta inversions.
 
 ## Recommended profiles
 
@@ -65,13 +65,13 @@ The presets are aggressive toward their stated intention, not toward raw premium
 
 | Goal | Applicable leg | Roll review starts at |
 | --- | --- | ---: |
-| Keep Shares | Covered call | 10 DTE |
-| Earn Income | Covered call | 10 DTE |
-| Earn Income | Cash-secured put | 10 DTE |
+| Keep Shares | Covered call | 21 DTE |
+| Earn Income | Covered call | 21 DTE |
+| Earn Income | Cash-secured put | 21 DTE |
 | Plan Exit | Covered call | 7 DTE |
 | Plan Entry | Cash-secured put | 7 DTE |
 
-The choices follow the strategy mechanics rather than treating one delta or expiration as universally ideal. Higher out-of-the-money covered-call strikes retain more upside but collect less premium; an acceptable covered-call strike plus premium should also be an acceptable liquidation price. A cash-secured put is an acquisition strategy whose seller should be willing to own the shares at the strike. Shorter expirations usually require more management. Sources: [OIC covered call](https://www.optionseducation.org/strategies/all-strategies/covered-call-buy-write), [OIC cash-secured put](https://www.optionseducation.org/strategies/all-strategies/cash-secured-put), and [Fidelity on selecting a strike and expiration](https://www.fidelity.com/learning-center/investment-products/options/selecting-strike-price-expiration-date).
+The choices follow the strategy mechanics rather than treating one delta or expiration as universally ideal. Keep Shares and Earn Income start review at 21 DTE because near-expiration gamma rises while time decay accelerates, so a review at three weeks leaves time to compare choices. Plan Exit and Plan Entry wait until 7 DTE because assignment serves those goals; review is still available earlier when price, delta, or intent conflicts. These are review reminders, not automatic roll signals. Sources: [OIC on near-expiration gamma and theta](https://www.optionseducation.org/news/april-office-hours-faqs-options-strategy-time-decay-and-market-mechanics), [OIC covered call](https://www.optionseducation.org/strategies/all-strategies/covered-call-buy-write), [OIC cash-secured put](https://www.optionseducation.org/strategies/all-strategies/cash-secured-put), and [Fidelity on rolling covered calls](https://www.fidelity.com/learning-center/investment-products/options/rolling-covered-calls).
 
 Radar ranks delta and DTE against the midpoint of the saved goal range. A complete profile therefore controls both eligibility and fit ranking. The generic 0.25 delta and 30 DTE scoring targets apply only when a complete range is unavailable.
 
@@ -83,7 +83,7 @@ If no saved file exists, the service returns a fresh deterministic copy of these
 
 Saved profiles that still exactly match the former built-ins are upgraded to the current defaults when loaded. A profile with any customized metric remains untouched. Choosing `Reset to recommended` in the goal editor applies the current preset to that goal and leg.
 
-The loader accepts persisted version 1 documents and migrates them in memory. It merges each strategy's saved global rules with every compatible goal preset, producing complete version 2 profiles while preserving ticker overrides and the saved timestamp. It also accepts saved version 2 documents that predate `closeAtProfitCapture` or `rollReviewDte`. Missing Close thresholds become 0.50. A missing roll threshold becomes the former decision rule, `min(10, minDte)`, for that saved profile. Every saved current field remains intact. The retired `maxQuoteAgeSeconds` strategy-setting field is removed during compatibility loading. Radar retains its provider-side freshness behavior, but quote freshness is not user-configurable and never affects Close. The next save writes the current version 2 shape.
+The backend loader accepts persisted version 1 and version 2 documents and migrates them to version 3. The browser performs the same version 2 migration on its IndexedDB document before Settings renders or validates. Missing Close thresholds become 0.50. Missing roll thresholds receive the current goal default, and untouched former 10-DTE defaults move to the current 21-DTE review window. Version 2 per-leg goals collapse into one ticker goal. When only one leg was enabled, that leg's goal wins. Conflicting enabled goals resolve to Earn Income when present because it supports both strategies. Ticker overrides, price guards, and timestamps remain intact. The retired `maxQuoteAgeSeconds` field is removed during compatibility loading.
 
 ## Persistence
 
@@ -101,7 +101,7 @@ Returns:
 
 ```json
 {
-  "settings": { "schemaVersion": 2, "goalProfiles": {}, "tickerPlaybooks": {} },
+  "settings": { "schemaVersion": 3, "goalProfiles": {}, "tickerPlaybooks": {} },
   "persistence": { "persisted": false, "updatedAt": null }
 }
 ```

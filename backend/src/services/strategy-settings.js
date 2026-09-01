@@ -5,6 +5,7 @@ import path from 'node:path';
 import { z } from 'zod';
 
 export const STRATEGY_LEGS = ['coveredCall', 'cashSecuredPut'];
+export const GOALS = ['protect', 'income', 'exit', 'acquire'];
 export const GOAL_LEGS = {
   protect: ['coveredCall'],
   income: ['coveredCall', 'cashSecuredPut'],
@@ -101,30 +102,30 @@ const v1AcquirePresetSchema = z.object({
   rules: z.object(legacyRuleShape).partial().strict(),
 }).strict();
 
-const coveredCallPlaybookSchema = z.object({
+const v2CoveredCallPlaybookSchema = z.object({
   enabled: z.boolean(),
   goal: z.enum(['protect', 'income', 'exit']),
   minNetSalePriceMinor: safeNonnegativeInteger.nullable(),
   overrides: partialRuleSetSchema,
 }).strict();
-const cashSecuredPutPlaybookSchema = z.object({
+const v2CashSecuredPutPlaybookSchema = z.object({
   enabled: z.boolean(),
   goal: z.enum(['income', 'acquire']),
   maxNetPurchasePriceMinor: safeNonnegativeInteger.nullable(),
   overrides: partialRuleSetSchema,
 }).strict();
 
-const tickerPlaybookSchema = z.object({
-  coveredCall: coveredCallPlaybookSchema,
-  cashSecuredPut: cashSecuredPutPlaybookSchema,
+const v2TickerPlaybookSchema = z.object({
+  coveredCall: v2CoveredCallPlaybookSchema,
+  cashSecuredPut: v2CashSecuredPutPlaybookSchema,
 }).strict();
 
-const tickerPlaybooksSchema = z.record(tickerSymbolSchema, tickerPlaybookSchema);
+const v2TickerPlaybooksSchema = z.record(tickerSymbolSchema, v2TickerPlaybookSchema);
 
-const legacyCoveredCallPlaybookSchema = coveredCallPlaybookSchema.extend({
+const legacyCoveredCallPlaybookSchema = v2CoveredCallPlaybookSchema.extend({
   overrides: z.object(legacyRuleShape).partial().strict(),
 });
-const legacyCashSecuredPutPlaybookSchema = cashSecuredPutPlaybookSchema.extend({
+const legacyCashSecuredPutPlaybookSchema = v2CashSecuredPutPlaybookSchema.extend({
   overrides: z.object(legacyRuleShape).partial().strict(),
 });
 const legacyTickerPlaybooksSchema = z.record(tickerSymbolSchema, z.object({
@@ -189,8 +190,25 @@ const goalProfilesSchema = z.object({
   acquire: z.object({ cashSecuredPut: completeRuleSetSchema }).strict(),
 }).strict();
 
+const coveredCallPlaybookSchema = z.object({
+  enabled: z.boolean(),
+  minNetSalePriceMinor: safeNonnegativeInteger.nullable(),
+  overrides: partialRuleSetSchema,
+}).strict();
+const cashSecuredPutPlaybookSchema = z.object({
+  enabled: z.boolean(),
+  maxNetPurchasePriceMinor: safeNonnegativeInteger.nullable(),
+  overrides: partialRuleSetSchema,
+}).strict();
+const tickerPlaybookSchema = z.object({
+  goal: z.enum(GOALS),
+  coveredCall: coveredCallPlaybookSchema,
+  cashSecuredPut: cashSecuredPutPlaybookSchema,
+}).strict();
+const tickerPlaybooksSchema = z.record(tickerSymbolSchema, tickerPlaybookSchema);
+
 const editableDocumentShape = {
-  schemaVersion: z.literal(2),
+  schemaVersion: z.literal(3),
   goalProfiles: goalProfilesSchema,
   tickerPlaybooks: tickerPlaybooksSchema,
 };
@@ -200,15 +218,7 @@ export const strategySettingsDocumentSchema = z.object(editableDocumentShape).st
     for (const [symbol, playbook] of Object.entries(document.tickerPlaybooks)) {
       for (const leg of STRATEGY_LEGS) {
         const legSettings = playbook[leg];
-        const goalRules = document.goalProfiles[legSettings.goal]?.[leg];
-        if (!goalRules) {
-          context.addIssue({
-            code: 'custom',
-            path: ['tickerPlaybooks', symbol, leg, 'goal'],
-            message: `${legSettings.goal} is not compatible with ${leg}`,
-          });
-          continue;
-        }
+        const goalRules = document.goalProfiles[playbook.goal]?.[leg] ?? SYSTEM_RULE_DEFAULTS;
         addRangeIssues(
           { ...goalRules, ...legSettings.overrides },
           context,
@@ -217,6 +227,13 @@ export const strategySettingsDocumentSchema = z.object(editableDocumentShape).st
       }
     }
   });
+
+const v2EditableDocumentShape = {
+  schemaVersion: z.literal(2),
+  goalProfiles: goalProfilesSchema,
+  tickerPlaybooks: v2TickerPlaybooksSchema,
+};
+const v2DocumentSchema = z.object(v2EditableDocumentShape).strict();
 
 const persistedDocumentSchema = z.object({
   ...editableDocumentShape,
@@ -249,6 +266,11 @@ const persistedV1DocumentSchema = z.object({
   }
 });
 
+const persistedV2DocumentSchema = z.object({
+  ...v2EditableDocumentShape,
+  updatedAt: z.string().datetime({ offset: true }),
+}).strict();
+
 const SYSTEM_RULE_DEFAULTS = {
   minDte: 7,
   maxDte: 45,
@@ -264,36 +286,35 @@ const SYSTEM_RULE_DEFAULTS = {
   rollReviewDte: 7,
 };
 
-const completeProfile = (rules = {}) => {
+const completeProfile = (rules = {}, rollReviewDte = Math.min(10, rules.minDte ?? SYSTEM_RULE_DEFAULTS.minDte)) => {
   const profile = { ...SYSTEM_RULE_DEFAULTS, ...rules };
   return {
     ...profile,
-    // Before this field was saved, roll review used min(10, minDte).
-    rollReviewDte: rules.rollReviewDte ?? Math.min(10, profile.minDte),
+    rollReviewDte: rules.rollReviewDte ?? rollReviewDte,
   };
 };
 
 const BUILT_IN_SETTINGS = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   goalProfiles: {
     protect: { coveredCall: {
       minDte: 30, maxDte: 60, minMoneyness: 1.05, maxMoneyness: 1.25,
       targetDeltaMin: 0.08, targetDeltaMax: 0.18, maxSpreadPercent: 0.08,
       minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.002,
-      closeAtProfitCapture: 0.35, rollReviewDte: 10,
+      closeAtProfitCapture: 0.35, rollReviewDte: 21,
     } },
     income: {
       coveredCall: {
         minDte: 14, maxDte: 35, minMoneyness: 1, maxMoneyness: 1.1,
         targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
         minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-        closeAtProfitCapture: 0.50, rollReviewDte: 10,
+        closeAtProfitCapture: 0.50, rollReviewDte: 21,
       },
       cashSecuredPut: {
         minDte: 14, maxDte: 35, minMoneyness: 0.9, maxMoneyness: 1,
         targetDeltaMin: 0.30, targetDeltaMax: 0.45, maxSpreadPercent: 0.08,
         minOpenInterest: 100, minVolume: 20, minPeriodReturn: 0.01,
-        closeAtProfitCapture: 0.50, rollReviewDte: 10,
+        closeAtProfitCapture: 0.50, rollReviewDte: 21,
       },
     },
     exit: { coveredCall: {
@@ -312,7 +333,7 @@ const BUILT_IN_SETTINGS = {
   tickerPlaybooks: {},
 };
 
-const FORMER_BUILT_IN_GOAL_PROFILES = {
+const ORIGINAL_BUILT_IN_GOAL_PROFILES = {
   protect: { coveredCall: completeProfile({ minDte: 30, maxDte: 60, targetDeltaMin: 0.1, targetDeltaMax: 0.2 }) },
   income: {
     coveredCall: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }),
@@ -320,6 +341,16 @@ const FORMER_BUILT_IN_GOAL_PROFILES = {
   },
   exit: { coveredCall: completeProfile({ minDte: 7, maxDte: 30, targetDeltaMin: 0.35, targetDeltaMax: 0.7 }) },
   acquire: { cashSecuredPut: completeProfile({ minDte: 21, maxDte: 45, targetDeltaMin: 0.2, targetDeltaMax: 0.35 }) },
+};
+
+const PREVIOUS_BUILT_IN_GOAL_PROFILES = {
+  protect: { coveredCall: { ...BUILT_IN_SETTINGS.goalProfiles.protect.coveredCall, rollReviewDte: 10 } },
+  income: {
+    coveredCall: { ...BUILT_IN_SETTINGS.goalProfiles.income.coveredCall, rollReviewDte: 10 },
+    cashSecuredPut: { ...BUILT_IN_SETTINGS.goalProfiles.income.cashSecuredPut, rollReviewDte: 10 },
+  },
+  exit: structuredClone(BUILT_IN_SETTINGS.goalProfiles.exit),
+  acquire: structuredClone(BUILT_IN_SETTINGS.goalProfiles.acquire),
 };
 
 export function builtInStrategySettings() {
@@ -336,9 +367,9 @@ export function migrateV1StrategySettings(input) {
     ]));
   }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     goalProfiles,
-    tickerPlaybooks: normalizePlaybooks(settings.tickerPlaybooks),
+    tickerPlaybooks: migrateV2Playbooks(settings.tickerPlaybooks),
   };
 }
 
@@ -348,7 +379,7 @@ function withoutLegacyQuoteAge(rules) {
   return current;
 }
 
-function normalizePlaybooks(playbooks) {
+function normalizeV2Playbooks(playbooks) {
   if (!playbooks || typeof playbooks !== 'object' || Array.isArray(playbooks)) return playbooks;
   return Object.fromEntries(Object.entries(playbooks).map(([symbol, playbook]) => {
     if (!playbook || typeof playbook !== 'object' || Array.isArray(playbook)) return [symbol, playbook];
@@ -363,30 +394,69 @@ function normalizePlaybooks(playbooks) {
   }));
 }
 
+function legacyTickerGoal(playbook) {
+  const enabledGoals = STRATEGY_LEGS
+    .filter((leg) => playbook?.[leg]?.enabled)
+    .map((leg) => playbook[leg].goal);
+  const unique = [...new Set(enabledGoals)];
+  if (unique.length === 1) return unique[0];
+  if (unique.includes('income')) return 'income';
+  return unique[0] ?? playbook?.coveredCall?.goal ?? playbook?.cashSecuredPut?.goal ?? 'income';
+}
+
+function migrateV2Playbooks(playbooks) {
+  const normalized = normalizeV2Playbooks(playbooks);
+  if (!normalized || typeof normalized !== 'object' || Array.isArray(normalized)) return normalized;
+  return Object.fromEntries(Object.entries(normalized).map(([symbol, playbook]) => {
+    if (!playbook || typeof playbook !== 'object' || Array.isArray(playbook)) return [symbol, playbook];
+    const stripGoal = (leg) => {
+      if (!leg || typeof leg !== 'object' || Array.isArray(leg)) return leg;
+      const { goal: _goal, ...current } = leg;
+      return current;
+    };
+    return [symbol, {
+      goal: legacyTickerGoal(playbook),
+      coveredCall: stripGoal(playbook.coveredCall),
+      cashSecuredPut: stripGoal(playbook.cashSecuredPut),
+    }];
+  }));
+}
+
+export function migrateV2StrategySettings(input) {
+  const settings = v2DocumentSchema.parse(defaultPersistedV2(input));
+  return {
+    schemaVersion: 3,
+    goalProfiles: settings.goalProfiles,
+    tickerPlaybooks: migrateV2Playbooks(settings.tickerPlaybooks),
+  };
+}
+
 function defaultPersistedV2(input) {
   const settings = structuredClone(input);
-  for (const profiles of Object.values(settings.goalProfiles ?? {})) {
+  for (const [goal, profiles] of Object.entries(settings.goalProfiles ?? {})) {
     if (!profiles || typeof profiles !== 'object' || Array.isArray(profiles)) continue;
     for (const [leg, rules] of Object.entries(profiles)) {
       const compatible = withoutLegacyQuoteAge(rules);
       profiles[leg] = compatible && typeof compatible === 'object' && !Array.isArray(compatible)
-        ? completeProfile(compatible)
+        ? completeProfile(compatible, BUILT_IN_SETTINGS.goalProfiles[goal]?.[leg]?.rollReviewDte)
         : compatible;
     }
   }
-  settings.tickerPlaybooks = normalizePlaybooks(settings.tickerPlaybooks ?? {});
+  settings.tickerPlaybooks = normalizeV2Playbooks(settings.tickerPlaybooks ?? {});
   return settings;
 }
 
 function upgradeFormerBuiltInProfiles(input) {
   const settings = structuredClone(input);
-  for (const [goal, profiles] of Object.entries(FORMER_BUILT_IN_GOAL_PROFILES)) {
-    for (const [leg, formerRules] of Object.entries(profiles)) {
-      const savedRules = settings.goalProfiles?.[goal]?.[leg];
-      const stillFormerDefault = savedRules
-        && Object.keys(savedRules).length === RULE_FIELDS.length
-        && RULE_FIELDS.every((field) => Object.is(savedRules[field], formerRules[field]));
-      if (stillFormerDefault) settings.goalProfiles[goal][leg] = structuredClone(BUILT_IN_SETTINGS.goalProfiles[goal][leg]);
+  for (const formerProfiles of [ORIGINAL_BUILT_IN_GOAL_PROFILES, PREVIOUS_BUILT_IN_GOAL_PROFILES]) {
+    for (const [goal, profiles] of Object.entries(formerProfiles)) {
+      for (const [leg, formerRules] of Object.entries(profiles)) {
+        const savedRules = settings.goalProfiles?.[goal]?.[leg];
+        const stillFormerDefault = savedRules
+          && Object.keys(savedRules).length === RULE_FIELDS.length
+          && RULE_FIELDS.every((field) => Object.is(savedRules[field], formerRules[field]));
+        if (stillFormerDefault) settings.goalProfiles[goal][leg] = structuredClone(BUILT_IN_SETTINGS.goalProfiles[goal][leg]);
+      }
     }
   }
   return settings;
@@ -407,7 +477,12 @@ export class StrategySettingsValidationError extends Error {
 }
 
 export function normalizeStrategySettings(input) {
-  const compatible = input?.schemaVersion === 2 ? defaultPersistedV2(input) : input;
+  const migrated = input?.schemaVersion === 1
+    ? migrateV1StrategySettings(input)
+    : input?.schemaVersion === 2
+      ? migrateV2StrategySettings(input)
+      : input;
+  const compatible = upgradeFormerBuiltInProfiles(migrated);
   const result = strategySettingsDocumentSchema.safeParse(compatible);
   if (!result.success) {
     throw new StrategySettingsValidationError(issueMessage(result.error), result.error.issues);
@@ -431,13 +506,14 @@ export function resolveEffectiveSettings(input, { symbol, leg, instrumentType = 
   const normalizedSymbol = parsedSymbol.data;
   const playbook = settings.tickerPlaybooks[normalizedSymbol];
   const legSettings = playbook?.[parsedLeg.data] ?? null;
-  const goal = legSettings?.goal ?? defaultGoalForInstrument({ leg: parsedLeg.data, instrumentType });
+  const goal = playbook?.goal ?? defaultGoalForInstrument({ leg: parsedLeg.data, instrumentType });
   const goalRules = settings.goalProfiles[goal]?.[parsedLeg.data] ?? SYSTEM_RULE_DEFAULTS;
   const rules = {
     ...goalRules,
     ...(legSettings?.overrides ?? {}),
   };
-  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, 'goal']));
+  const rulesSource = settings.goalProfiles[goal]?.[parsedLeg.data] ? 'goal' : 'system';
+  const sourceMap = Object.fromEntries(RULE_FIELDS.map((field) => [field, rulesSource]));
   for (const field of Object.keys(legSettings?.overrides ?? {})) sourceMap[field] = 'tickerOverride';
 
   const priceGuardField = parsedLeg.data === 'coveredCall'
@@ -449,7 +525,7 @@ export function resolveEffectiveSettings(input, { symbol, leg, instrumentType = 
     rules,
     enabled: legSettings?.enabled ?? false,
     goal,
-    goalDefaulted: !legSettings,
+    goalDefaulted: !playbook,
     priceGuard: {
       field: priceGuardField,
       valueMinor: legSettings?.[priceGuardField] ?? null,
@@ -471,11 +547,25 @@ export function createStrategySettingsService({
   async function load() {
     try {
       const raw = JSON.parse(await fsImpl.readFile(file, 'utf8'));
-      const persisted = raw.schemaVersion === 1
-        ? persistedV1DocumentSchema.parse(raw)
-        : persistedDocumentSchema.parse(upgradeFormerBuiltInProfiles(defaultPersistedV2(raw)));
-      const { updatedAt, ...editable } = persisted;
-      const settings = editable.schemaVersion === 1 ? migrateV1StrategySettings(editable) : editable;
+      let updatedAt;
+      let settings;
+      if (raw.schemaVersion === 1) {
+        const persisted = persistedV1DocumentSchema.parse(raw);
+        ({ updatedAt } = persisted);
+        const { updatedAt: _timestamp, ...editable } = persisted;
+        settings = migrateV1StrategySettings(editable);
+      } else if (raw.schemaVersion === 2) {
+        const persisted = persistedV2DocumentSchema.parse(defaultPersistedV2(raw));
+        ({ updatedAt } = persisted);
+        const { updatedAt: _timestamp, ...editable } = persisted;
+        settings = migrateV2StrategySettings(editable);
+      } else {
+        const persisted = persistedDocumentSchema.parse(raw);
+        ({ updatedAt } = persisted);
+        const { updatedAt: _timestamp, ...editable } = persisted;
+        settings = editable;
+      }
+      settings = upgradeFormerBuiltInProfiles(settings);
       return { settings, persistence: { persisted: true, updatedAt } };
     } catch (error) {
       if (error.code === 'ENOENT') {

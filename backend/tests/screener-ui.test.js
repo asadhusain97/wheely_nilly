@@ -120,11 +120,12 @@ it('adds the selected ticker playbook to the settings document', () => {
   const settings = builtInStrategySettings();
   const added = settingsWithTicker(settings, 'AAPL', 'cashSecuredPut', 'acquire');
   assert.equal(added.tickerPlaybooks.AAPL.cashSecuredPut.enabled, true);
-  assert.equal(added.tickerPlaybooks.AAPL.cashSecuredPut.goal, 'acquire');
+  assert.equal(added.tickerPlaybooks.AAPL.goal, 'acquire');
   assert.equal(added.tickerPlaybooks.AAPL.coveredCall.enabled, false);
   assert.equal(settings.tickerPlaybooks.AAPL, undefined);
 
   const withCall = settingsWithTicker(added, 'AAPL', 'coveredCall', 'income');
+  assert.equal(withCall.tickerPlaybooks.AAPL.goal, 'income');
   assert.equal(withCall.tickerPlaybooks.AAPL.cashSecuredPut.enabled, true);
   assert.equal(withCall.tickerPlaybooks.AAPL.coveredCall.enabled, true);
 });

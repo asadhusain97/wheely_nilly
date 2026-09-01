@@ -9,4 +9,11 @@ python_bin="$("$uv_bin" python find)"
 PATH="$(dirname "$uv_bin"):$(dirname "$python_bin"):$PATH"
 export PATH
 
-exec npx vercel dev --listen 3000 "$@"
+# The dev server needs the linked project's settings, but not Vercel's
+# background update and telemetry requests. Those requests can reset after the
+# server is ready and take the long-running CLI process down with them.
+NO_UPDATE_NOTIFIER=1
+VERCEL_TELEMETRY_DISABLED=1
+export NO_UPDATE_NOTIFIER VERCEL_TELEMETRY_DISABLED
+
+exec npx --yes vercel@59.10.0 dev --listen 3000 "$@"

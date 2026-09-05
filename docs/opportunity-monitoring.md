@@ -1,10 +1,10 @@
 # Playbook-aware opportunity monitoring
 
-Radar discovers eligible targets, resolves saved strategy settings on the Node backend, and sends only validated snake_case rules to the Python sidecar. The browser keeps the latest successful result for each ticker and strategy leg across reloads, then replaces it after a successful scan. A failed refresh retains and labels the previous result. Results for targets that are no longer eligible are removed. When alerts are enabled, the backend also runs market-hours scans and sends deduplicated ntfy notifications for the top passing candidate in each symbol and leg. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
+Radar discovers eligible targets and resolves saved strategy settings in the browser. It sends validated snake_case rules to the Vercel market function. The browser keeps the latest successful result for each ticker and strategy leg across reloads, then replaces it after a successful scan. A failed refresh retains and labels the previous result. Results for targets that are no longer eligible are removed. Radar runs only while the app is open. It does not place orders, create open-contract recommendations, evaluate rolls, or compare historical scans.
 
 ## Target discovery
 
-The backend builds one deduplicated record per symbol from:
+The browser builds one deduplicated record per symbol from:
 
 - Current holdings with at least one uncovered 100-share lot.
 - Saved ticker playbooks with covered calls enabled.
@@ -12,11 +12,11 @@ The backend builds one deduplicated record per symbol from:
 
 An owned symbol and a saved playbook merge into one target. Covered-call scans always receive the actual uncovered-share count from the dashboard projection; a tracked ticker without uncovered shares cannot pass share coverage. CSP scans receive current USD cash from that same projection, and each contract must fit the existing `strike × 100` cash-collateral convention.
 
-The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user chooses a goal first. Keep Shares and Plan Exit infer CC, Plan Entry infers CSP, and Earn Income reveals a CC/CSP choice. Plan Entry is selected initially. Adding writes the playbook immediately through the Phase 1 `PUT /api/v1/strategy-settings` document contract, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
+The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user chooses a goal first. Keep Shares and Plan Exit infer CC, Plan Entry infers CSP, and Earn Income reveals a CC/CSP choice. Plan Entry is selected initially. Adding writes the playbook to IndexedDB through the app's local request adapter, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
 
 ## Effective rules and trust boundary
 
-For every symbol and leg, Node loads Phase 1 settings and applies selected goal profile → ticker override resolution. Browser requests identify only `symbol` and `leg`; browser-supplied thresholds are rejected. The resolved camelCase fields are translated to the sidecar's validated snake_case fields.
+For every symbol and leg, the browser loads the saved settings and applies selected goal profile → ticker override resolution. It translates the resolved camelCase fields to the market function's validated snake_case request fields. The Vercel function validates every screening limit before requesting provider data.
 
 Each successful result includes the complete effective settings, per-field `sourceMap`, grouped source summary, applicable rules, price guard, provider identity, unofficial-data flag, quote timestamp, cache state, assumptions, and named exclusion counts.
 
@@ -51,7 +51,7 @@ There is no composite score.
 
 ## Provider and caching behavior
 
-Scan all computes one compatible DTE envelope per symbol. The sidecar shares an in-flight fetch and cached snapshot for requests using that envelope, so covered-call and CSP evaluation reuse one chain. Cache entries are used only within their TTL. Provider calls are bounded by the sidecar semaphore and backend scan workers. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics. A chain whose relevant contracts have no usable, timely bid-ask quote is unavailable rather than a successful empty result.
+Scan all computes one compatible DTE envelope per symbol. The Vercel market function shares an in-flight fetch and cached snapshot within a warm function instance, so covered-call and CSP evaluation can reuse one chain. Cache entries are used only within their TTL. Provider calls are bounded by the market service semaphore, while the browser runs at most three target jobs at once. A failed symbol/leg returns an explicit error entry without candidates; successful targets remain visible and a failure is never converted to zero-valued metrics. A chain whose relevant contracts have no usable, timely bid-ask quote is unavailable rather than a successful empty result.
 
 Yahoo Finance supplies option chains, underlying snapshots, and instrument search through the market-data provider boundary. Responses identify the provider that supplied each snapshot.
 
@@ -64,7 +64,7 @@ Yahoo Finance supplies option chains, underlying snapshots, and instrument searc
 | Bid, ask, volume, open interest, IV | Provider quote fields. Missing volume/OI remain unavailable. A missing field passes when its minimum is zero and is conservatively excluded when its configured minimum is positive. |
 | Executable option price per share | Estimated bid/ask midpoint after the spread gate; not contract credit. |
 | Gross contract credit | Executable per-share price × 100. |
-| Estimated fees | Configured sidecar fee estimate; marked estimated. |
+| Estimated fees | Market-function fee estimate; marked estimated. |
 | Net contract credit | Gross contract credit less estimated fees; the primary credit displayed in collapsed results. |
 | Period return | Calculated for the candidate's actual term and used as the primary return metric. |
 | Annualized return | Simple period return × 365 ÷ DTE; shown only in expanded details. |
@@ -76,7 +76,7 @@ Yahoo Finance supplies option chains, underlying snapshots, and instrument searc
 | Downside buffer | `(underlying − strike) ÷ underlying`. |
 | Strike distance | `(strike − underlying) ÷ underlying`. |
 | Net sale / breakeven price | Calculated from strike and net credit per share using the formulas above. |
-| Applied rules and guard | Backend-resolved Phase 1 configuration, including source lineage. |
+| Applied rules and guard | Browser-resolved configuration, including source lineage. |
 | Exclusion counts | Named hard-gate failures accumulated across evaluated contracts. |
 
 The workspace distinguishes provider values, estimated execution/fees/Greeks, delayed data, stale quotes, and provider failures in plain wording.

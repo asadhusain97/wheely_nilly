@@ -44,8 +44,6 @@ Browser
 
 The app renders its cached shell and local data first. Market and brokerage refreshes then run independently. Market data refreshes every 2 minutes while the app is visible. Brokerage data refreshes every 30 minutes while visible.
 
-The earlier Raspberry Pi server remains in `backend/` as a migration reference and local fallback. Vercel does not run its filesystem snapshots, scheduled jobs, notification outbox, Docker files, or process launcher.
-
 ## Run it locally
 
 You need:
@@ -112,7 +110,6 @@ The JavaScript and TypeScript checks run after `npm install`:
 npm run typecheck
 npm run build
 npm test
-npm --prefix backend test
 ```
 
 Set up the Python test environment once:
@@ -148,9 +145,7 @@ After deployment, verify the homepage, `/app`, the SnapTrade return flow, the se
 | `frontend/` | Vite app, PWA shell, styles, browser storage, and UI tests |
 | `api/` | Vercel OAuth, brokerage, and market-data functions |
 | `sidecar/` | Python market-data and options-screening code |
-| `backend/` | Retained Node server, scheduled jobs, snapshots, and tests |
 | `docs/` | Strategy settings, position management, schema, and Radar details |
-| `docker/`, `deploy/` | Legacy self-hosting files |
 | `vercel.json` | Production routes, function limits, and response headers |
 
 ## License

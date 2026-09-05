@@ -1,6 +1,6 @@
 # Position management, Close guidance, and roll review
 
-The home page evaluates every derived open short call and put in place. It does not build a second position list or match opening lots again. The backend uses the dashboard's existing open-trade projection, including its aggregate opening net credit and earliest matched opening date.
+The home page evaluates every derived open short call and put in place. It does not build a second position list or match opening lots again. The browser uses the dashboard's existing open-trade projection, including its aggregate opening net credit and earliest matched opening date.
 
 Close and roll guidance are analysis only. The card explains the current decision and never places or prepares an order. Roll review stays on Home because it manages an existing contract; Radar remains dedicated to finding a new wheel trade.
 
@@ -68,15 +68,15 @@ Assignment intent, Greeks, liquidity, moneyness, and timestamps are informationa
 
 ## Exact-contract quotes
 
-Node sends every current OCC identity to `POST /v1/contracts/quotes` on the loopback sidecar. The sidecar groups identities by underlying symbol and requests one expiration envelope per symbol through the existing chain cache. It matches the normalized OCC contract symbol exactly. Entry DTE, moneyness, delta, liquidity, and quote-age filters do not run on current positions. Today-expiring contracts and contracts outside the entry DTE range remain eligible for lookup.
+The browser sends every current OCC identity to `POST /api/market/contracts` on the Vercel market function. The market service groups identities by underlying symbol and requests one expiration envelope per symbol through its chain cache. It matches the normalized OCC contract symbol exactly. Entry DTE, moneyness, delta, liquidity, and quote-age filters do not run on current positions. Today-expiring contracts and contracts outside the entry DTE range remain eligible for lookup.
 
 Each result returns the identity, bid, ask, underlying price, strike, expiration, option type, volume, open interest, IV, estimated delta and theta when possible, the option trade time, the underlying bar time, the provider fetch time, and cache metadata. A symbol-level provider failure produces unavailable results only for that symbol. Contract and underlying timestamps pass through as data and are never Close conditions.
 
 Yahoo Finance is the exact-contract source. The option trade time is the available contract timestamp, not a guaranteed live quote time. The current ask is an estimated immediate buyback input and should be confirmed with a broker.
 
-## Backend formulas
+## Close formulas
 
-Values remain numeric in the API. The browser supplies currency and percentage formatting.
+The browser calculates these values and supplies currency and percentage formatting.
 
 The built-in closing-fee estimate is $0.65 per contract, matching the sidecar's existing option-fee assumption. Tests can inject another assumption, including zero for calculation fixtures.
 
@@ -102,13 +102,13 @@ CSP breakevenPrice = strike − openingNetCreditPerShare
 CC breakevenPrice = (brokerShareBasisPerShare or underlyingPrice) − openingNetCreditPerShare
 ```
 
-The service also returns ITM or OTM state and distance, strike/spot moneyness, signed distance from strike, effective assignment price, and assignment distance. A CSP's effective purchase price is strike minus opening net credit per share. Its breakeven cushion is spot minus that purchase price. A covered call's effective sale price is strike plus opening net credit per share. Its sale-price distance is that price minus spot. Both percentages use spot as the denominator.
+The browser also derives ITM or OTM state and distance, strike/spot moneyness, signed distance from strike, effective assignment price, and assignment distance. A CSP's effective purchase price is strike minus opening net credit per share. Its breakeven cushion is spot minus that purchase price. A covered call's effective sale price is strike plus opening net credit per share. Its sale-price distance is that price minus spot. Both percentages use spot as the denominator.
 
 Assignment alignment follows the saved goal identifier. `acquire` aligns with CSP assignment. `exit` aligns with covered-call assignment. `protect` conflicts with covered-call assignment. `income` and an unconfigured ticker are neutral.
 
-## Node API
+## Browser-local request contract
 
-`GET /api/v1/position-management` returns the latest in-memory batch and performs the first scan if no scheduled or manual result exists. `POST /api/v1/position-management/scan` performs a new scan. Both endpoints are private and non-cacheable.
+The app keeps its existing `/api/v1/position-management` request shape for the UI, but the browser intercepts it and returns the latest Close results from IndexedDB. This is not a deployed Vercel endpoint. Market-data requests go to `/api/market/contracts` and `/api/market/rolls`.
 
 Each result contains:
 
@@ -119,10 +119,8 @@ Each result contains:
 - `close.available`, nullable binary `close.signal`, numeric `close.metrics`, and `unavailableReason`.
 - A stable conditions list with actual value, configured value, pass status, source, and a `decisive` marker. Only `premiumCapture` is decisive.
 
-In the local-first browser path, `POST /api/v1/position-management/rolls` accepts one open OCC contract symbol. It resolves the position and settings from IndexedDB, calls `POST /api/market/rolls` for one sanitized market snapshot, and calculates cumulative roll economics locally.
+`POST /api/v1/position-management/rolls` is also handled by the browser-local adapter. It accepts one open OCC contract symbol, resolves the position and settings from IndexedDB, calls `POST /api/market/rolls` for one sanitized market snapshot, and calculates cumulative roll economics locally.
 
-## Refresh and scheduling
+## Refresh behavior
 
-The top-right refresh runs one ordered workflow: SnapTrade refresh, dashboard reload, Close scan, Radar scan, then render. Each step reports partial failure. A Close failure does not replace dashboard or Radar data with invented values.
-
-Scheduled Close evaluation uses the existing market-hours Radar cron and timezone. It does not add another cron task. Scheduled Close and Radar failures are caught independently, so one cannot suppress the other.
+The browser refresh coordinator updates market data every two minutes and brokerage data every 30 minutes while the page is visible. It stops both timers and aborts active requests when the page is hidden. A brokerage change triggers market refreshes only for affected symbols and contracts. Each data slice reports failures independently and keeps the last usable local result.

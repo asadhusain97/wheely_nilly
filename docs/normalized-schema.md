@@ -1,6 +1,6 @@
-# Normalized Ledger Schema v1
+# Normalized ledger schema v1
 
-Phase 2 derives a deterministic ledger from the latest immutable snapshots. Raw files remain the source of truth; normalized records are reproducible projections and retain `sourceId`, `sourceHash`, and `snapshotHash`.
+The browser derives a deterministic ledger from the latest brokerage snapshot and activity history stored in IndexedDB. Brokerage responses remain the source facts. The normalized records are reproducible projections and retain their provider identifiers.
 
 Activity ingestion requests the full transaction history known to SnapTrade and paginates every result. Orders remain a recent, non-authoritative execution aid; they do not limit the authoritative activity ledger.
 
@@ -24,6 +24,6 @@ The dashboard projection selects the account using current option positions firs
 
 Calculation version `wheel-v2` pairs short-option opens and closes FIFO by OCC contract and quantity. Booked option profit includes only matched, closed quantities after fees; credit attached to an open quantity remains unrealized. Put collateral is strike × multiplier × contracts. Covered-call return collateral uses broker per-share cost basis × multiplier × contracts and is excluded when that basis is unavailable. Aggregate return on collateral is qualified realized profit divided by summed entry collateral. Annualized return uses capital-days: qualified realized profit ÷ Σ(collateral × days held / 365). Same-day trades use a minimum holding period of one day. The dashboard projection also emits the same metrics per ticker, current CSP/share capital, current contracts, and FIFO-matched closed-contract history so ticker totals reconcile with Home. The API reports calculation coverage and unmatched close quantities rather than silently estimating missing inputs.
 
-## Migration approach
+## Versioning
 
-`schemaVersion` and `calculationVersion` are independent. A future schema change adds a new normalizer and migrator rather than mutating raw snapshots. Calculation-only changes increment `calculationVersion`; both old and new calculations can be regenerated from retained source hashes for golden comparison before promotion.
+`schemaVersion` and `calculationVersion` are independent. A schema change updates the browser normalizer and its IndexedDB migration. A calculation-only change increments `calculationVersion`, which makes the applied calculation rules explicit without changing stored brokerage facts.

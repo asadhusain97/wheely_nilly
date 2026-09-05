@@ -5,7 +5,6 @@
 
 # Node
 node_modules/
-backend/node_modules/
 npm-debug.log*
 
 # Python
@@ -17,9 +16,10 @@ sidecar/venv/
 .mypy_cache/
 .ruff_cache/
 
-# Runtime data and logs
+# Retired local runtime data may remain on developer machines.
 data/*
-!data/.gitkeep
+
+# Logs
 *.log
 logs/
 

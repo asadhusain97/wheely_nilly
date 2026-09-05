@@ -1,8 +1,8 @@
-import { buildDerivedModel } from "../../backend/src/services/wheel.js";
+import { buildDerivedModel } from "./domain/wheel.js";
 import { localRepository } from "./storage";
 import type { BrokerageEvent, BrokerageSnapshot, MarketCache, MarketQuote, WheelyNillyPosition } from "./types";
 import { builtInSettingsDocument, normalizeSettingsDocument, SYSTEM_RULES } from "../assets/js/settings.js";
-import { calculateCloseResult } from "../../backend/src/services/position-management.js";
+import { calculateCloseResult } from "./domain/close-analysis.js";
 import { buildRollSearchProfile, calculateAndRankRollCandidates, GOAL_LABELS, rollPreferenceMisses } from "./roll-analysis";
 import { prepareRadarCandidates } from "../assets/js/radar-scoring.js";
 

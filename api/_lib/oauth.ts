@@ -32,6 +32,9 @@ export interface LoginState {
 }
 
 let metadataCache: { value: OAuthMetadata; expiresAt: number } | null = null;
+const REFRESH_RESULT_TTL_MS = 15_000;
+const refreshRequests = new Map<string, Promise<OAuthTokens>>();
+const recentRefreshes = new Map<string, { tokens: OAuthTokens; expiresAt: number }>();
 
 const requiredEnv = (name: string): string => {
   const value = process.env[name]?.trim();
@@ -192,13 +195,15 @@ const tokenRequest = async (body: URLSearchParams, clientId: string, previousRef
     body,
     signal: AbortSignal.timeout(12_000),
   });
+  const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
   if (!response.ok) {
     throw Object.assign(new Error(`SnapTrade token request failed with ${response.status}`), {
       status: response.status,
       code: "OAUTH_TOKEN_REQUEST_FAILED",
+      oauthError: typeof payload?.error === "string" ? payload.error : null,
     });
   }
-  return parseTokens(await response.json() as Record<string, unknown>, clientId, previousRefreshToken);
+  return parseTokens(payload ?? {}, clientId, previousRefreshToken);
 };
 
 export const exchangeCode = (code: string, codeVerifier: string, clientId: string): Promise<OAuthTokens> => tokenRequest(new URLSearchParams({
@@ -212,6 +217,33 @@ export const refreshTokens = (session: OAuthTokens): Promise<OAuthTokens> => tok
   grant_type: "refresh_token",
   refresh_token: session.refreshToken,
 }), session.clientId, session.refreshToken);
+
+const refreshKey = (session: OAuthTokens): string => crypto
+  .createHash("sha256")
+  .update(`${session.clientId}\0${session.refreshToken}`)
+  .digest("base64url");
+
+const refreshTokensOnce = async (session: OAuthTokens): Promise<OAuthTokens> => {
+  const now = Date.now();
+  for (const [key, value] of recentRefreshes) {
+    if (value.expiresAt <= now) recentRefreshes.delete(key);
+  }
+  const key = refreshKey(session);
+  const recent = recentRefreshes.get(key);
+  if (recent) return recent.tokens;
+  const active = refreshRequests.get(key);
+  if (active) return active;
+  const request = refreshTokens(session).then((tokens) => {
+    recentRefreshes.set(key, { tokens, expiresAt: Date.now() + REFRESH_RESULT_TTL_MS });
+    return tokens;
+  });
+  refreshRequests.set(key, request);
+  try {
+    return await request;
+  } finally {
+    if (refreshRequests.get(key) === request) refreshRequests.delete(key);
+  }
+};
 
 export const revokeTokens = async (session: OAuthTokens): Promise<void> => {
   const metadata = await oauthMetadata();
@@ -243,10 +275,17 @@ export const withAccessToken = async <T>(
   if (!session) throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
   const refreshSession = async (): Promise<OAuthTokens> => {
     try {
-      return await refreshTokens(session!);
+      return await refreshTokensOnce(session!);
     } catch (error) {
-      if ([400, 401, 403].includes((error as { status?: number }).status ?? 0)) {
-        throw Object.assign(new Error("SnapTrade authorization required"), { status: 401, code: "AUTH_REQUIRED" });
+      const refreshError = error as { status?: number; oauthError?: string | null };
+      const rejected = [401, 403].includes(refreshError.status ?? 0)
+        || (refreshError.status === 400 && ["access_denied", "invalid_client", "invalid_grant", "unauthorized_client"].includes(refreshError.oauthError ?? ""));
+      if (rejected) {
+        throw Object.assign(new Error("SnapTrade authorization required"), {
+          status: 401,
+          code: "AUTH_REQUIRED",
+          authReason: refreshError.oauthError ?? `http_${refreshError.status}`,
+        });
       }
       throw error;
     }

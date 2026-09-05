@@ -19,6 +19,24 @@ describe("SnapTrade MCP client", () => {
     });
   });
 
+  it("retries one transient read failure within the request budget", async () => {
+    let calls = 0;
+    globalThis.fetch = async (_input, init = {}) => {
+      calls += 1;
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
+      if (calls === 1) return new Response(null, { status: 503, headers: { "retry-after": "0" } });
+      if (body?.method === "initialize") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { protocolVersion: "2025-11-25" } }, { headers: { "mcp-session-id": "session-1" } });
+      }
+      if (body?.method === "notifications/initialized") return new Response(null, { status: 202 });
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "[]" }] } });
+    };
+
+    const client = new SnapTradeMcpClient("private-token");
+    assert.deepEqual(await client.callTool("Connections_listBrokerageAuthorizations"), []);
+    assert.equal(calls, 4);
+  });
+
   it("unwraps the response containers used by MCP and SnapTrade", () => {
     const accounts = [{ id: "account-1" }];
     assert.deepEqual(payloadItems({ result: accounts }), accounts);

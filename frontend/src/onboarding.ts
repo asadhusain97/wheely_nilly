@@ -1,6 +1,7 @@
 import { localRepository } from "./storage";
 import type { BrokerageSnapshot, SafeError, WheelyNillyAccount } from "./types";
 import { disconnectAndClearSetup } from "./setup-reset";
+import { fetchWithAuthRecovery } from "./auth-recovery";
 
 interface AccountCatalog {
   accounts: WheelyNillyAccount[];
@@ -40,7 +41,7 @@ const json = async <T>(path: string, timeoutMs = 58_000): Promise<T> => {
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(path, { headers: { accept: "application/json" }, signal: controller.signal });
+    response = await fetchWithAuthRecovery(path, { headers: { accept: "application/json" }, signal: controller.signal });
   } catch (error) {
     if ((error as { name?: string }).name === "AbortError") {
       throw Object.assign(new Error("SnapTrade took too long to return the account list. Try again."), { code: "REQUEST_TIMEOUT" });

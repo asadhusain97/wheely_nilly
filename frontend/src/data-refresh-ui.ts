@@ -3,9 +3,10 @@ import { localRepository } from "./storage";
 import type { BrokerageEvent, BrokerageSnapshot, ExactContractQuote, MarketCache, MarketQuote, PortfolioDiff, RefreshPolicy } from "./types";
 import { buildLocalCloseResults, buildLocalTargets, scanAllLocalTargets } from "./local-analysis";
 import { clearBrowserSetup, disconnectAndClearSetup } from "./setup-reset";
+import { fetchWithAuthRecovery } from "./auth-recovery";
 
 const json = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(path, { ...init, headers: { accept: "application/json", ...(init?.headers ?? {}) } });
+  const response = await fetchWithAuthRecovery(path, { ...init, headers: { accept: "application/json", ...(init?.headers ?? {}) } });
   if (response.status === 204) return undefined as T;
   const payload = await response.json().catch(() => null) as { error?: { code?: string; message?: string } } | null;
   if (!response.ok) {

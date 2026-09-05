@@ -1,6 +1,7 @@
 import { MCP_RESOURCE } from "./oauth.js";
 
 const PROTOCOL_VERSION = "2025-11-25";
+const TRANSIENT_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 interface JsonRpcResponse {
   jsonrpc: "2.0";
@@ -85,7 +86,7 @@ export class SnapTradeMcpClient {
       protocolVersion: PROTOCOL_VERSION,
       capabilities: {},
       clientInfo: { name: "Wheely Nilly", version: "0.2.0" },
-    }, true) as { protocolVersion?: string };
+    }, true, true) as { protocolVersion?: string };
     if (typeof result?.protocolVersion === "string") this.#protocolVersion = result.protocolVersion;
     this.#opened = true;
     await this.#notify("notifications/initialized");
@@ -93,12 +94,12 @@ export class SnapTradeMcpClient {
 
   async listTools(): Promise<unknown> {
     await this.open();
-    return this.#request("tools/list", {});
+    return this.#request("tools/list", {}, false, true);
   }
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
     await this.open();
-    return extractToolPayload(await this.#request("tools/call", { name, arguments: args }));
+    return extractToolPayload(await this.#request("tools/call", { name, arguments: args }, false, name !== "request_connection_link"));
   }
 
   async close(): Promise<void> {
@@ -113,39 +114,62 @@ export class SnapTradeMcpClient {
   }
 
   async #notify(method: string): Promise<void> {
-    await this.#post({ jsonrpc: "2.0", method }, null, false);
+    await this.#post({ jsonrpc: "2.0", method }, null, false, true);
   }
 
-  async #request(method: string, params: Record<string, unknown>, initializing = false): Promise<unknown> {
+  async #request(method: string, params: Record<string, unknown>, initializing = false, retryable = false): Promise<unknown> {
     const id = this.#nextId++;
-    return this.#post({ jsonrpc: "2.0", id, method, params }, id, initializing);
+    return this.#post({ jsonrpc: "2.0", id, method, params }, id, initializing, retryable);
   }
 
-  async #post(message: Record<string, unknown>, expectedId: number | null, initializing: boolean): Promise<unknown> {
-    const remainingMs = this.#deadlineAt - Date.now();
-    if (remainingMs <= 0) throw new McpHttpError(504, "SnapTrade MCP request timed out");
-    let response: Response;
-    try {
-      response = await fetch(MCP_RESOURCE, {
-        method: "POST",
-        headers: this.#headers(initializing),
-        body: JSON.stringify(message),
-        signal: AbortSignal.timeout(Math.min(18_000, remainingMs)),
-      });
-    } catch (error) {
-      if ((error as { name?: string }).name === "TimeoutError" || (error as { name?: string }).name === "AbortError") {
-        throw new McpHttpError(504, "SnapTrade MCP request timed out");
+  async #post(message: Record<string, unknown>, expectedId: number | null, initializing: boolean, retryable: boolean): Promise<unknown> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const remainingMs = this.#deadlineAt - Date.now();
+      if (remainingMs <= 0) throw new McpHttpError(504, "SnapTrade MCP request timed out");
+      let response: Response;
+      try {
+        response = await fetch(MCP_RESOURCE, {
+          method: "POST",
+          headers: this.#headers(initializing),
+          body: JSON.stringify(message),
+          signal: AbortSignal.timeout(Math.min(18_000, remainingMs)),
+        });
+      } catch (error) {
+        const requestError = (error as { name?: string }).name === "TimeoutError" || (error as { name?: string }).name === "AbortError"
+          ? new McpHttpError(504, "SnapTrade MCP request timed out")
+          : error;
+        if (retryable && attempt === 0 && await this.#pauseBeforeRetry(250)) continue;
+        throw requestError;
       }
-      throw error;
+      if (!response.ok) {
+        const requestError = new McpHttpError(response.status, `SnapTrade MCP request failed with ${response.status}`);
+        if (retryable && attempt === 0 && TRANSIENT_STATUSES.has(response.status) && await this.#pauseBeforeRetry(this.#retryDelay(response))) continue;
+        throw requestError;
+      }
+      const sessionId = response.headers.get("mcp-session-id");
+      if (sessionId) this.#sessionId = sessionId;
+      if (expectedId === null) return null;
+      const payload = (await jsonMessages(response)).find((item) => item.id === expectedId);
+      if (!payload) throw new Error("SnapTrade MCP response did not include the requested result");
+      if (payload.error) throw new Error(`SnapTrade MCP error ${payload.error.code ?? "unknown"}: ${payload.error.message ?? "request failed"}`);
+      return payload.result;
     }
-    if (!response.ok) throw new McpHttpError(response.status, `SnapTrade MCP request failed with ${response.status}`);
-    const sessionId = response.headers.get("mcp-session-id");
-    if (sessionId) this.#sessionId = sessionId;
-    if (expectedId === null) return null;
-    const payload = (await jsonMessages(response)).find((item) => item.id === expectedId);
-    if (!payload) throw new Error("SnapTrade MCP response did not include the requested result");
-    if (payload.error) throw new Error(`SnapTrade MCP error ${payload.error.code ?? "unknown"}: ${payload.error.message ?? "request failed"}`);
-    return payload.result;
+    throw new McpHttpError(504, "SnapTrade MCP request timed out");
+  }
+
+  #retryDelay(response: Response): number {
+    const header = response.headers.get("retry-after");
+    if (!header) return 250;
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return Math.min(2_000, Math.max(0, seconds * 1000));
+    const at = Date.parse(header);
+    return Number.isFinite(at) ? Math.min(2_000, Math.max(0, at - Date.now())) : 250;
+  }
+
+  async #pauseBeforeRetry(delayMs: number): Promise<boolean> {
+    if (this.#deadlineAt - Date.now() <= delayMs) return false;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    return true;
   }
 
   #headers(initializing: boolean): Record<string, string> {

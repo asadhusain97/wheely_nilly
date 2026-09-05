@@ -218,7 +218,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   } catch (error) {
     const upstreamStatus = (error as { status?: number }).status;
     const status = upstreamStatus === 401 ? 401 : upstreamStatus === 409 ? 409 : upstreamStatus === 504 ? 504 : 502;
-    console.error(JSON.stringify({ event: "brokerage_request_failed", route, provider: useMock ? "mock" : "snaptrade", tool: (error as { tool?: string }).tool ?? null, kind: error instanceof Error ? error.name : typeof error, upstreamStatus: upstreamStatus ?? null }));
+    console.error(JSON.stringify({ event: "brokerage_request_failed", route, provider: useMock ? "mock" : "snaptrade", tool: (error as { tool?: string }).tool ?? null, kind: error instanceof Error ? error.name : typeof error, errorCode: (error as { code?: string }).code ?? null, authReason: (error as { authReason?: string }).authReason ?? null, upstreamStatus: upstreamStatus ?? null }));
     const code = status === 401 ? "AUTH_REQUIRED" : status === 409 ? "ACCOUNT_SELECTION_REQUIRED" : status === 504 ? "BROKERAGE_TIMEOUT" : "BROKERAGE_UNAVAILABLE";
     const message = status === 401 ? "Connect SnapTrade to continue" : status === 409 ? "Choose an available brokerage account" : status === 504 ? "SnapTrade took too long to respond. Try again." : useMock ? "Mock brokerage data could not be loaded" : "SnapTrade is connected, but brokerage data could not be aligned";
     response.status(status).json({ error: { code, message } });

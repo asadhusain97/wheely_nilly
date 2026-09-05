@@ -14,9 +14,9 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-const expiredSessionCookie = () => `wheely_session=${encodeURIComponent(seal({
+const expiredSessionCookie = (refreshToken = "expired-refresh") => `wheely_session=${encodeURIComponent(seal({
   accessToken: "expired-access",
-  refreshToken: "expired-refresh",
+  refreshToken,
   expiresAt: Date.now() - 60_000,
   scope: "read",
   sub: null,
@@ -88,5 +88,46 @@ describe("stateless OAuth session sealing", () => {
       (error: any) => error.status === 503 && error.code === "OAUTH_TOKEN_REQUEST_FAILED",
     );
     assert.equal(response.headers.get("Set-Cookie"), undefined);
+  });
+
+  it("does not turn a temporary OAuth error returned as HTTP 400 into a reconnect", async () => {
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url === "https://snaptrade.test/token") return Response.json({ error: "temporarily_unavailable" }, { status: 400 });
+      throw new Error(`Unexpected request: ${url}`);
+    };
+    const response = responseStub();
+
+    await assert.rejects(
+      () => withAccessToken({ headers: { cookie: expiredSessionCookie("temporary-error-refresh") }, query: {} }, response as any, async () => "unused"),
+      (error: any) => error.status === 400 && error.code === "OAUTH_TOKEN_REQUEST_FAILED" && error.oauthError === "temporarily_unavailable",
+    );
+    assert.equal(response.headers.get("Set-Cookie"), undefined);
+  });
+
+  it("shares one rotating refresh across concurrent requests with the same session", async () => {
+    let tokenRequests = 0;
+    globalThis.fetch = async (input) => {
+      const url = String(input);
+      if (url === "https://snaptrade.test/token") {
+        tokenRequests += 1;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return Response.json({ access_token: "fresh-access", refresh_token: "fresh-refresh", expires_in: 3600 });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    };
+    const cookie = expiredSessionCookie("shared-refresh");
+    const firstResponse = responseStub();
+    const secondResponse = responseStub();
+
+    const results = await Promise.all([
+      withAccessToken({ headers: { cookie }, query: {} }, firstResponse as any, async (accessToken) => accessToken),
+      withAccessToken({ headers: { cookie }, query: {} }, secondResponse as any, async (accessToken) => accessToken),
+    ]);
+
+    assert.deepEqual(results, ["fresh-access", "fresh-access"]);
+    assert.equal(tokenRequests, 1);
+    assert.ok(firstResponse.headers.get("Set-Cookie"));
+    assert.ok(secondResponse.headers.get("Set-Cookie"));
   });
 });

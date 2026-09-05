@@ -54,7 +54,7 @@ CC effective sale price = replacement strike + cumulativeOptionCash per share
 CSP effective purchase price = replacement strike − cumulativeOptionCash per share
 ```
 
-The sheet labels the two legs as Buy to close and Sell to open. It shows the conservative ask-and-bid assumption beside the contracts, followed by estimated net credit or debit, added days, and effective assignment price. Midpoint, liquidity, and quote context stay behind “Show how this was chosen.” “Copy roll plan” creates a two-leg text handoff for the broker. The user must confirm both contracts, a net limit price, fees, buying-power effects, and live quotes with the broker.
+The sheet labels the two legs as Buy to close and Sell to open. It shows the conservative ask-and-bid assumption beside the contracts, followed by estimated net credit or debit, added days, and effective assignment price. The preferred contract appears first. Other options use the same details in collapsible cards. Midpoint, liquidity, and quote context stay behind "Show how this was chosen." The user must confirm both contracts, a net limit price, fees, buying-power effects, and live quotes with the broker.
 
 ## Binary rule
 

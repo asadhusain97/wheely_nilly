@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { rollActionPresentation } from "../assets/js/rolls.js";
+import { groupRollChoices, rollActionPresentation } from "../assets/js/rolls.js";
 import { calculateAndRankRollCandidates, deriveRollReview, formatRollPlan, rollPreferenceMisses } from "../src/roll-analysis";
 
 const effective = (goal: "protect" | "income" | "exit" | "acquire", overrides: Record<string, unknown> = {}) => ({
@@ -23,6 +23,20 @@ const management = ({ goal = "protect" as const, moneyState = "ITM" as const, al
 });
 
 describe("goal-aware roll review", () => {
+  it("keeps the first rule match preferred and groups every remaining quote as another option", () => {
+    const preferred = { contractSymbol: "PREFERRED" };
+    const secondMatch = { contractSymbol: "SECOND-MATCH" };
+    const alternative = { contractSymbol: "ALTERNATIVE" };
+
+    assert.deepEqual(groupRollChoices({ candidates: [preferred, secondMatch], alternatives: [alternative] }), {
+      preferred: { candidate: preferred, outsideRules: false },
+      others: [
+        { candidate: secondMatch, outsideRules: false },
+        { candidate: alternative, outsideRules: true },
+      ],
+    });
+  });
+
   it("waits for a usable current quote before enabling roll candidates", () => {
     const unavailable = rollActionPresentation({ state: "unavailable", reason: "exact contract has no usable ask" });
     const ready = rollActionPresentation({ state: "notNeeded" });

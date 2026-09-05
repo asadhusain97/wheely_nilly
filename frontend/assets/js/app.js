@@ -192,7 +192,7 @@ const strategySettingsController = createStrategySettingsController({
   ],
 });
 strategySettingsController.initialize();
-const rollController = createRollController({ request: json, notify: toast });
+const rollController = createRollController({ request: json });
 const screenerController = createScreenerController({
   request: json,
   notify: toast,

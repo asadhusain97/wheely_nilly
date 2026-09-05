@@ -1,5 +1,3 @@
-import { formatRollPlan } from '../../src/roll-analysis.ts';
-
 const node = (tag, className, text) => {
   const item = document.createElement(tag);
   if (className) item.className = className;
@@ -50,37 +48,6 @@ export function rollActionPresentation(review) {
   };
 }
 
-function strikeGuidance(profile, strategy) {
-  if (profile.strikeDirection === 'higher') return 'Higher call strike';
-  if (profile.strikeDirection === 'lower') return 'Near or below spot';
-  if (profile.strikeDirection === 'nearSpot') return 'Near-spot put';
-  return strategy === 'cc' ? 'Saved call range' : 'Saved put range';
-}
-
-function searchProfileView(profile, strategy) {
-  const section = node('section', 'roll-search-profile');
-  section.append(node('p', 'roll-section-eyebrow', 'At your broker, look for'));
-  const grid = node('dl', 'roll-search-grid');
-  const values = [
-    ['Strike', strikeGuidance(profile, strategy)],
-    ['Expiration', `${profile.minDte}–${profile.maxDte} DTE`],
-    ['Delta', profile.deltaMin == null && profile.deltaMax == null ? 'Any delta' : `${profile.deltaMin ?? 0}–${profile.deltaMax ?? 1}`],
-  ];
-  for (const [label, value] of values) {
-    const item = node('div');
-    item.append(node('dt', '', label), node('dd', '', value));
-    grid.append(item);
-  }
-  section.append(grid);
-  if (profile.priceGuardMinor != null) {
-    const copy = profile.priceGuardField === 'minNetSalePriceMinor'
-      ? `Keep the effective sale price at or above ${price(profile.priceGuardMinor / 100)}.`
-      : `Keep the effective purchase price at or below ${price(profile.priceGuardMinor / 100)}.`;
-    section.append(node('p', 'roll-price-guard', copy));
-  }
-  return section;
-}
-
 function rollCash(value) {
   const amount = Number(value);
   return `${price(Math.abs(amount))} ${amount >= 0 ? 'credit' : 'debit'}`;
@@ -123,22 +90,35 @@ function swapView(result, candidate) {
   return section;
 }
 
-function choiceTabs(result, activeGroup, select) {
-  if (!(result.candidates?.length && result.alternatives?.length)) return null;
+function choiceTabs(activeGroup, otherCount, select) {
   const tabs = node('div', 'roll-choice-tabs');
   tabs.setAttribute('role', 'tablist');
   tabs.setAttribute('aria-label', 'Roll choice type');
   for (const [group, label, count] of [
-    ['matches', 'Rule matches', result.candidates.length],
-    ['alternatives', 'Other quoted', result.alternatives.length],
+    ['preferred', 'Preferred choice', null],
+    ['others', 'Other options', otherCount],
   ]) {
-    const button = node('button', group === activeGroup ? 'is-active' : '', `${label} ${count}`);
+    const active = group === activeGroup;
+    const button = node('button', active ? 'is-active' : '', count == null ? label : `${label} ${count}`);
     button.type = 'button';
     button.setAttribute('role', 'tab');
-    button.setAttribute('aria-selected', String(group === activeGroup));
+    button.id = `roll-${group}-tab`;
+    button.dataset.rollGroup = group;
+    button.setAttribute('aria-controls', `roll-${group}-panel`);
+    button.setAttribute('aria-selected', String(active));
+    if (group === 'others' && count === 0) button.disabled = true;
     button.addEventListener('click', () => select(group));
     tabs.append(button);
   }
+  tabs.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    const group = event.key === 'ArrowLeft' ? 'preferred' : 'others';
+    const target = tabs.querySelector(`[data-roll-group="${group}"]:not([disabled])`);
+    if (!target) return;
+    event.preventDefault();
+    target.click();
+    target.focus();
+  });
   return tabs;
 }
 
@@ -154,17 +134,14 @@ function alternativeNote(candidate) {
   return note;
 }
 
-function candidateButton(candidate, selected, select) {
-  const button = node('button', `roll-candidate${selected ? ' is-selected' : ''}`);
-  button.type = 'button';
-  button.setAttribute('aria-pressed', String(selected));
+function optionSummary(candidate) {
+  const summary = node('summary', 'roll-option-summary');
   const identity = node('span', 'roll-candidate-identity');
   identity.append(node('strong', '', `${price(candidate.strike)} ${candidate.optionType === 'call' ? 'Call' : 'Put'}`), node('small', '', `${date(candidate.expiration)} · ${candidate.dte} DTE`));
   const outcome = node('span', `roll-candidate-outcome${candidate.naturalRollCash < 0 ? ' is-debit' : ''}`);
   outcome.append(node('strong', '', rollCash(candidate.naturalRollCash)), node('small', '', candidate.direction));
-  button.append(identity, outcome);
-  button.addEventListener('click', select);
-  return button;
+  summary.append(identity, outcome, node('span', 'roll-option-chevron', '⌄'));
+  return summary;
 }
 
 function auditView(result, candidate) {
@@ -189,20 +166,28 @@ function auditView(result, candidate) {
   return details;
 }
 
-function copyText(text) {
-  if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text);
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.append(textarea);
-  textarea.select();
-  const copied = document.execCommand('copy');
-  textarea.remove();
-  return copied ? Promise.resolve() : Promise.reject(new Error('Copy unavailable'));
+function optionBody(result, candidate, outsideRules) {
+  const content = node('div', 'roll-option-body');
+  if (outsideRules) content.append(alternativeNote(candidate));
+  content.append(swapView(result, candidate), auditView(result, candidate));
+  return content;
 }
 
-export function createRollController({ request, notify }) {
+function optionCard(result, choice, collapsible) {
+  if (!collapsible) return optionBody(result, choice.candidate, choice.outsideRules);
+  const details = node('details', 'roll-option-card');
+  details.append(optionSummary(choice.candidate), optionBody(result, choice.candidate, choice.outsideRules));
+  return details;
+}
+
+export function groupRollChoices(result) {
+  const matches = (result.candidates ?? []).map((candidate) => ({ candidate, outsideRules: false }));
+  const alternatives = (result.alternatives ?? []).map((candidate) => ({ candidate, outsideRules: true }));
+  const choices = [...matches, ...alternatives];
+  return { preferred: choices[0] ?? null, others: choices.slice(1) };
+}
+
+export function createRollController({ request }) {
   const dialog = document.querySelector('#roll-dialog');
   const sheet = dialog.querySelector('.roll-sheet');
   const body = document.querySelector('#roll-sheet-body');
@@ -212,8 +197,7 @@ export function createRollController({ request, notify }) {
   let opener = null;
   let sequence = 0;
   let current = null;
-  let selectedIndex = 0;
-  let selectedGroup = 'matches';
+  let selectedGroup = 'preferred';
 
   const setBackgroundInert = (inert) => {
     for (const item of document.querySelectorAll('.app-bar, main, .bottom-nav, #settings-editor-dialog, #monitor-add-dialog, #glossary-dialog')) item.inert = inert;
@@ -236,16 +220,15 @@ export function createRollController({ request, notify }) {
   };
 
   const renderResult = () => {
-    body.replaceChildren(searchProfileView(current.searchProfile, current.strategy));
+    body.replaceChildren();
     if (!current.currentQuote?.available) {
       const unavailable = node('section', 'roll-empty is-warning');
-      unavailable.append(node('strong', '', 'Current price unavailable'), node('p', '', 'Use the contract targets above in your broker and confirm the roll price there.'));
+      unavailable.append(node('strong', '', 'Current price unavailable'), node('p', '', 'Confirm the current buyback price with your broker before choosing a roll.'));
       body.append(unavailable);
       return;
     }
-    const matches = current.candidates ?? [];
-    const alternatives = current.alternatives ?? [];
-    if (!matches.length && !alternatives.length) {
+    const { preferred, others } = groupRollChoices(current);
+    if (!preferred) {
       const empty = node('section', 'roll-empty');
       empty.append(node('strong', '', `No verified roll fits ${current.goalLabel} right now.`));
       const filters = [...new Set(Object.entries(current.exclusions ?? {}).filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1]).map(([key]) => EXCLUSIONS[key] ?? key.replaceAll('_', ' ')))].slice(0, 3);
@@ -253,49 +236,32 @@ export function createRollController({ request, notify }) {
       body.append(empty);
       return;
     }
-    if (selectedGroup === 'matches' && !matches.length) selectedGroup = 'alternatives';
-    if (selectedGroup === 'alternatives' && !alternatives.length) selectedGroup = 'matches';
-    const groupTabs = choiceTabs(current, selectedGroup, (group) => {
+    if (selectedGroup === 'others' && !others.length) selectedGroup = 'preferred';
+    let preferredPanel;
+    let othersPanel;
+    const tabs = choiceTabs(selectedGroup, others.length, (group) => {
       selectedGroup = group;
-      selectedIndex = 0;
-      renderResult();
-    });
-    if (groupTabs) body.append(groupTabs);
-    const choices = selectedGroup === 'matches' ? matches : alternatives;
-    const candidate = choices[selectedIndex] ?? choices[0];
-    if (selectedGroup === 'alternatives') body.append(alternativeNote(candidate));
-    body.append(swapView(current, candidate));
-    if (choices.length > 1) {
-      const otherChoices = node('section', 'roll-alternatives');
-      otherChoices.append(node('p', 'roll-section-eyebrow', selectedGroup === 'matches' ? 'Other matches' : 'Other quoted choices'));
-      const list = node('div', 'roll-candidate-list');
-      choices.forEach((item, index) => {
-        if (index === selectedIndex) return;
-        list.append(candidateButton(item, false, () => {
-          selectedIndex = index;
-          renderResult();
-        }));
-      });
-      otherChoices.append(list);
-      body.append(otherChoices);
-    }
-    body.append(auditView(current, candidate));
-    const copy = node('button', 'roll-copy', 'Copy roll plan');
-    copy.type = 'button';
-    copy.addEventListener('click', async () => {
-      const plan = formatRollPlan({
-        symbol: current.symbol, strategy: current.strategy, quantity: current.quantity,
-        currentStrike: current.currentStrike, currentExpiration: current.currentExpiration,
-        candidate, goal: current.goal, quoteTimestamp: current.quoteTimestamp,
-      });
-      try {
-        await copyText(plan);
-        notify('Roll plan copied. Confirm it with your broker.', 'success');
-      } catch {
-        notify('Copy unavailable. Use the contract details shown here.', 'error');
+      for (const button of tabs.querySelectorAll('[role="tab"]')) {
+        const active = button.dataset.rollGroup === group;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-selected', String(active));
       }
+      preferredPanel.hidden = group !== 'preferred';
+      othersPanel.hidden = group !== 'others';
     });
-    body.append(copy, node('p', 'roll-readonly-note', 'Wheely Nilly does not place or prepare an order. Confirm the net price, fees, and buying-power effect with your broker.'));
+    preferredPanel = node('section', 'roll-preferred-panel');
+    preferredPanel.id = 'roll-preferred-panel';
+    preferredPanel.setAttribute('role', 'tabpanel');
+    preferredPanel.setAttribute('aria-labelledby', 'roll-preferred-tab');
+    preferredPanel.hidden = selectedGroup !== 'preferred';
+    preferredPanel.append(optionCard(current, preferred, false));
+    othersPanel = node('section', 'roll-options-panel');
+    othersPanel.id = 'roll-others-panel';
+    othersPanel.setAttribute('role', 'tabpanel');
+    othersPanel.setAttribute('aria-labelledby', 'roll-others-tab');
+    othersPanel.hidden = selectedGroup !== 'others';
+    for (const choice of others) othersPanel.append(optionCard(current, choice, true));
+    body.append(tabs, preferredPanel, othersPanel);
   };
 
   const open = async (trade, review, source) => {
@@ -303,12 +269,11 @@ export function createRollController({ request, notify }) {
     opener = source;
     opener.setAttribute('aria-expanded', 'true');
     current = null;
-    selectedIndex = 0;
-    selectedGroup = 'matches';
+    selectedGroup = 'preferred';
     title.textContent = `Roll ${trade.symbol} ${trade.type === 'cc' ? 'call' : 'put'}`;
     description.textContent = goalGuidance(review.goal);
     status.textContent = 'Checking the current contract and later expirations.';
-    body.replaceChildren(...[review.searchProfile ? searchProfileView(review.searchProfile, trade.type) : null].filter(Boolean));
+    body.replaceChildren();
     const loading = node('div', 'roll-loading');
     loading.append(node('span', '', 'Checking matching contracts'), node('i'), node('i'));
     body.append(loading);
@@ -327,19 +292,17 @@ export function createRollController({ request, notify }) {
       current = result;
       const matchCount = result.candidates?.length ?? 0;
       const alternativeCount = result.alternatives?.length ?? 0;
-      selectedGroup = matchCount ? 'matches' : 'alternatives';
-      status.textContent = matchCount
-        ? `${matchCount} rule ${matchCount === 1 ? 'match' : 'matches'}${alternativeCount ? ` and ${alternativeCount} other quoted ${alternativeCount === 1 ? 'choice' : 'choices'}` : ''} found.`
-        : alternativeCount
-          ? `No exact rule matches. ${alternativeCount} other quoted ${alternativeCount === 1 ? 'choice is' : 'choices are'} available.`
-          : 'No usable later contracts found.';
+      const totalCount = matchCount + alternativeCount;
+      status.textContent = totalCount
+        ? `One preferred choice and ${Math.max(0, totalCount - 1)} other ${totalCount === 2 ? 'option' : 'options'} found.`
+        : 'No usable later contracts found.';
       renderResult();
     } catch (error) {
       if (requestSequence !== sequence) return;
       status.textContent = 'Roll choices unavailable.';
-      body.replaceChildren(...[review.searchProfile ? searchProfileView(review.searchProfile, trade.type) : null].filter(Boolean));
+      body.replaceChildren();
       const unavailable = node('section', 'roll-empty is-warning');
-      unavailable.append(node('strong', '', 'Roll choices could not be verified'), node('p', '', error.status === 409 ? 'This contract is no longer open. Refresh Home to see the latest position.' : 'Use the contract targets above in your broker and confirm current prices there.'));
+      unavailable.append(node('strong', '', 'Roll choices could not be verified'), node('p', '', error.status === 409 ? 'This contract is no longer open. Refresh Home to see the latest position.' : 'Try again after market quotes refresh.'));
       body.append(unavailable);
     }
   };

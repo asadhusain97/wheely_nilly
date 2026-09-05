@@ -7,8 +7,8 @@ import {
   exactInstrumentIdentity,
   exclusionSummary,
   failedScanEntry,
+  goalsForLeg,
   hydrateTargetIdentities,
-  legForGoal,
   loadStoredScanResults,
   marketDateTime,
   providerName,
@@ -27,13 +27,10 @@ it('explains the candidate period return as a term-specific return on capital', 
   assert.equal(candidateReturnCaption({ period_return: .0313, dte: 23 }), 'Estimated 23-day return on capital: 3.13%');
 });
 
-it('infers strategy from the goal and asks only when Earn Income is ambiguous', () => {
-  assert.equal(legForGoal('protect'), 'coveredCall');
-  assert.equal(legForGoal('exit'), 'coveredCall');
-  assert.equal(legForGoal('acquire'), 'cashSecuredPut');
-  assert.equal(legForGoal('income'), 'cashSecuredPut');
-  assert.equal(legForGoal('income', 'coveredCall'), 'coveredCall');
-  assert.equal(legForGoal('income', 'invalid'), null);
+it('offers only goals supported by the selected strategy', () => {
+  assert.deepEqual(goalsForLeg('coveredCall'), ['protect', 'income', 'exit']);
+  assert.deepEqual(goalsForLeg('cashSecuredPut'), ['income', 'acquire']);
+  assert.deepEqual(goalsForLeg('invalid'), []);
 });
 
 it('uses plain scan metadata and summarizes no-match filters without counts', () => {

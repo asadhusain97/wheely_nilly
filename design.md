@@ -50,6 +50,7 @@ Radar's single job is to find wheel trades that fit the user's saved rules. Its 
 ```text
 Radar
 Find your next wheel trade
+Screen covered calls and cash-secured puts that fit your saved goals and rules.
                                                    (+)
                                               Scan all
 
@@ -62,7 +63,7 @@ Manually tracked tickers
 Customize ticker rules on Settings.
 ```
 
-Adding a ticker opens a glass sheet. The flow asks for a provider-verified instrument and goal. Keep Shares and Plan Exit imply CC, Plan Entry implies CSP, and only Earn Income asks the user to choose CC or CSP. Plan Entry is selected initially. It saves through the existing strategy-settings document and does not expose advanced rule controls. Instrument results show the symbol, recognizable name, type, and an exchange when the provider supplies one. Never present a country or region as an exchange.
+Adding a ticker opens a glass sheet. After the user chooses a provider-verified instrument, the flow asks what they have available. Shares lead to a covered call and cash collateral leads to a cash-secured put. The chosen strategy reveals a second question about the trade goal. Covered calls offer Keep Shares, Earn Income, and Plan Exit. Cash-secured puts offer Earn Income and Plan Entry. Each goal includes a short explanation, and nothing is selected initially. The flow saves through the existing strategy-settings document and does not expose advanced rule controls. Instrument results show the symbol, recognizable name, type, and an exchange when the provider supplies one. Never present a country or region as an exchange.
 
 Goal identity is consistent wherever a goal appears: Keep Shares is blue, Earn Income is green, Plan Exit is red, and Plan Entry is violet. Goal choices use segmented tabs rather than native dropdowns in focused creation flows.
 

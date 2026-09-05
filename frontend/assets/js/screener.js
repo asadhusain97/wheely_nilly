@@ -14,6 +14,12 @@ const GOAL_LEGS = {
   exit: ['coveredCall'],
   acquire: ['cashSecuredPut'],
 };
+const GOAL_DESCRIPTIONS = {
+  protect: 'Collect premium while choosing calls less likely to take your shares away.',
+  income: 'Prioritize option income within your saved risk and return rules.',
+  exit: 'Collect premium while setting a price where you are ready to sell your shares.',
+  acquire: 'Collect premium while targeting a price where you are ready to buy shares.',
+};
 const SCAN_RESULTS_KEY = 'wheely-nilly.radar-scan-results.v1';
 const SCAN_RESULT_KEY = /^[A-Z][A-Z0-9.-]{0,9}:(coveredCall|cashSecuredPut)$/;
 
@@ -315,9 +321,8 @@ function scanResultView(entry) {
   return container;
 }
 
-export function legForGoal(goal, incomeLeg = 'cashSecuredPut') {
-  if (goal === 'income') return GOAL_LEGS.income.includes(incomeLeg) ? incomeLeg : null;
-  return GOAL_LEGS[goal]?.[0] ?? null;
+export function goalsForLeg(leg) {
+  return Object.keys(GOAL_LABELS).filter((goal) => GOAL_LEGS[goal].includes(leg));
 }
 
 export function createScreenerController({ request, notify, addTicker, removeTicker, rememberTicker, getTickerIdentity, openSettings, stockPriceTag, storage }) {
@@ -573,21 +578,29 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     }
   }
 
-  function renderGoals() {
+  function renderGoals(leg = '') {
     const tabs = document.querySelector('#monitor-goal-tabs');
-    const previous = tabs.querySelector('input[name="goal"]:checked')?.value;
-    const goals = Object.keys(GOAL_LABELS);
-    tabs.replaceChildren(...goals.map((goal, index) => {
+    tabs.replaceChildren(...goalsForLeg(leg).map((goal) => {
       const label = node('label', 'monitor-goal-option');
       const input = document.createElement('input');
       input.type = 'radio'; input.name = 'goal'; input.value = goal;
-      input.checked = goals.includes(previous) ? goal === previous : goal === 'acquire';
-      const copy = node('span', 'goal-chip', GOAL_LABELS[goal]);
+      const copy = node('span', 'goal-chip');
       copy.dataset.goal = goal;
+      copy.append(node('strong', '', GOAL_LABELS[goal]), node('small', '', GOAL_DESCRIPTIONS[goal]));
       label.append(input, copy);
       return label;
     }));
-    document.querySelector('#monitor-leg-picker').hidden = tabs.querySelector('input[name="goal"]:checked')?.value !== 'income';
+  }
+
+  function resetTradeQuestions() {
+    document.querySelectorAll('#monitor-leg-tabs input, #monitor-goal-tabs input').forEach((input) => { input.checked = false; });
+    document.querySelector('#monitor-leg-picker').hidden = true;
+    document.querySelector('#monitor-goal-picker').hidden = true;
+    document.querySelector('.monitor-add-guidance').hidden = true;
+    const submit = document.querySelector('#monitor-add-submit');
+    submit.hidden = true;
+    submit.disabled = true;
+    renderGoals();
   }
 
   function selectInstrument(instrument) {
@@ -602,7 +615,8 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     results.replaceChildren();
     const exchange = exchangeLabel(instrument);
     document.querySelector('#instrument-search-status').textContent = `${instrument.name} · ${instrument.instrument_type}${exchange ? ` · ${exchange}` : ''}`;
-    document.querySelector('#monitor-add-submit').disabled = false;
+    resetTradeQuestions();
+    document.querySelector('#monitor-leg-picker').hidden = false;
     input.blur();
   }
 
@@ -651,9 +665,8 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     document.querySelector('#instrument-search-results').hidden = true;
     document.querySelector('#instrument-search-status').textContent = 'Type a symbol or company name.';
     document.querySelector('#monitor-add-error').hidden = true;
-    document.querySelector('#monitor-add-submit').disabled = true;
     document.querySelector('#screener-add-symbol').setAttribute('aria-expanded', 'false');
-    renderGoals();
+    resetTradeQuestions();
   }
 
   function openAdd() {
@@ -695,12 +708,25 @@ export function createScreenerController({ request, notify, addTicker, removeTic
     document.querySelector('#monitor-open-settings').addEventListener('click', openSettings);
     for (const close of document.querySelectorAll('[data-monitor-add-close]')) close.addEventListener('click', closeAdd);
     document.querySelector('#monitor-add-dialog').addEventListener('keydown', keepFocusInAddDialog);
+    document.querySelector('#monitor-leg-tabs').addEventListener('change', (event) => {
+      if (event.target.name !== 'leg') return;
+      renderGoals(event.target.value);
+      document.querySelector('#monitor-goal-picker').hidden = false;
+      document.querySelector('.monitor-add-guidance').hidden = true;
+      document.querySelector('#monitor-add-submit').hidden = true;
+      document.querySelector('#monitor-add-error').hidden = true;
+    });
     document.querySelector('#monitor-goal-tabs').addEventListener('change', (event) => {
-      if (event.target.name === 'goal') document.querySelector('#monitor-leg-picker').hidden = event.target.value !== 'income';
+      if (event.target.name !== 'goal') return;
+      document.querySelector('.monitor-add-guidance').hidden = false;
+      const submit = document.querySelector('#monitor-add-submit');
+      submit.hidden = false;
+      submit.disabled = false;
+      document.querySelector('#monitor-add-error').hidden = true;
     });
     document.querySelector('#screener-add-symbol').addEventListener('input', (event) => {
       state.selectedInstrument = null;
-      document.querySelector('#monitor-add-submit').disabled = true;
+      resetTradeQuestions();
       clearTimeout(state.searchTimer);
       const query = event.currentTarget.value.trim();
       const sequence = ++state.searchSequence;
@@ -719,9 +745,9 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       if (!state.selectedInstrument || state.selectedInstrument.symbol !== values.symbol.trim().toUpperCase()) {
         error.textContent = 'Select a verified instrument from the results.'; error.hidden = false; return;
       }
-      const leg = legForGoal(values.goal, values.leg);
-      if (!leg) {
-        error.textContent = 'Choose CC or CSP for Earn Income.'; error.hidden = false; return;
+      const leg = values.leg;
+      if (!GOAL_LEGS[values.goal]?.includes(leg)) {
+        error.textContent = 'Choose what you have available and your goal for this trade.'; error.hidden = false; return;
       }
       const submit = document.querySelector('#monitor-add-submit');
       submit.disabled = true; submit.textContent = 'Adding…'; error.hidden = true;

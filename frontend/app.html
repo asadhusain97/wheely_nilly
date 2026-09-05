@@ -194,6 +194,7 @@
           <div>
             <p>Radar</p>
             <h1 id="screener-title">Find your next wheel trade</h1>
+            <small class="monitor-intro">Screen covered calls and cash-secured puts that fit your saved goals and rules.</small>
           </div>
           <button class="monitor-add-button" id="open-monitor-add" type="button" aria-haspopup="dialog"
             aria-controls="monitor-add-dialog" aria-expanded="false"><span aria-hidden="true">+</span><span
@@ -359,23 +360,25 @@
             </div>
             <p id="instrument-search-status" role="status" aria-live="polite">Type a symbol or company name.</p>
           </div>
-          <fieldset class="monitor-goal-picker">
-            <legend>Goal</legend>
-            <div class="goal-picker" id="monitor-goal-tabs"></div>
-          </fieldset>
           <fieldset class="monitor-leg-picker" id="monitor-leg-picker" hidden>
-            <legend>Strategy</legend>
-            <div class="layer-tabs strategy-tabs" id="monitor-leg-tabs">
-              <label class="strategy-option"><input type="radio" name="leg" value="cashSecuredPut"
-                  checked><span>CSP</span></label>
-              <label class="strategy-option"><input type="radio" name="leg"
-                  value="coveredCall"><span>CC</span></label>
+            <legend>Do you have shares or cash collateral?</legend>
+            <div class="monitor-leg-tabs" id="monitor-leg-tabs">
+              <label class="monitor-leg-option"><input type="radio" name="leg" value="coveredCall"><span>
+                  <small>Sell a call option</small><strong>CC</strong><em>100 shares available</em>
+                </span></label>
+              <label class="monitor-leg-option"><input type="radio" name="leg" value="cashSecuredPut"><span>
+                  <small>Sell a put option</small><strong>CSP</strong><em>Cash collateral available</em>
+                </span></label>
             </div>
           </fieldset>
-          <p class="monitor-add-guidance">You can customize monitoring configs for this ticker from the Settings page.
+          <fieldset class="monitor-goal-picker" id="monitor-goal-picker" hidden>
+            <legend>What is your goal with this trade?</legend>
+            <div class="goal-picker" id="monitor-goal-tabs"></div>
+          </fieldset>
+          <p class="monitor-add-guidance" hidden>You can fine-tune this ticker's rules later in Settings.
           </p>
           <p class="monitor-add-error" id="monitor-add-error" role="alert" hidden></p>
-          <button class="monitor-add-submit" id="monitor-add-submit" type="submit" disabled>Add to Radar</button>
+          <button class="monitor-add-submit" id="monitor-add-submit" type="submit" disabled hidden>Add to Radar</button>
         </form>
       </section>
     </div>

@@ -12,7 +12,7 @@ The browser builds one deduplicated record per symbol from:
 
 An owned symbol and a saved playbook merge into one target. Covered-call scans always receive the actual uncovered-share count from the dashboard projection; a tracked ticker without uncovered shares cannot pass share coverage. CSP scans receive current USD cash from that same projection, and each contract must fit the existing `strike × 100` cash-collateral convention.
 
-The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user chooses a goal first. Keep Shares and Plan Exit infer CC, Plan Entry infers CSP, and Earn Income reveals a CC/CSP choice. Plan Entry is selected initially. Adding writes the playbook to IndexedDB through the app's local request adapter, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
+The circular plus action in Radar opens a focused add sheet. A provider-backed search verifies the symbol and displays the instrument name and type before the user can continue. The user first chooses whether shares or cash collateral are available, which selects a covered call or cash-secured put. That choice reveals only the compatible goals, with a short explanation for each. Nothing is selected initially. Adding writes the playbook to IndexedDB through the app's local request adapter, so it appears in Settings without a second settings store. The selected leg is enabled; a newly created playbook leaves the other leg disabled. Detailed customization remains in Settings.
 
 ## Effective rules and trust boundary
 

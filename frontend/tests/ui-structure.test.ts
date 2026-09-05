@@ -313,11 +313,15 @@ describe('responsive dashboard shell', () => {
     for (const id of ['open-monitor-add', 'monitor-add-dialog', 'screener-add-ticker', 'screener-add-symbol', 'monitor-leg-tabs', 'monitor-goal-tabs', 'owned-monitor-group', 'owned-monitor-targets', 'tracked-monitor-targets', 'monitor-open-settings']) {
       assert.match(html, new RegExp(`id="${id}"`));
     }
-    assert.match(html, /<p>Radar<\/p>[\s\S]*?<h1 id="screener-title">Find your next wheel trade<\/h1>/);
+    assert.match(html, /<p>Radar<\/p>[\s\S]*?<h1 id="screener-title">Find your next wheel trade<\/h1>[\s\S]*?Screen covered calls and cash-secured puts that fit your saved goals and rules/);
     assert.match(html, /Find your next wheel trade/);
-    assert.match(html, /value="cashSecuredPut"\s+checked/);
+    assert.doesNotMatch(html, /name="leg"[^>]+checked/);
+    assert.match(html, /Do you have shares or cash collateral\?/);
+    assert.match(html, /Sell a call option[\s\S]*?>CC<[\s\S]*?100 shares available/);
+    assert.match(html, /Sell a put option[\s\S]*?>CSP<[\s\S]*?Cash collateral available/);
+    assert.match(html, /What is your goal with this trade\?/);
     assert.doesNotMatch(html, /id="screener-add-goal"|class="monitor-goal-field"/);
-    assert.match(html, /You can customize monitoring configs for this ticker from the Settings page/);
+    assert.match(html, /You can fine-tune this ticker's rules later in Settings/);
     assert.match(html, /Search by ticker or company name/);
     assert.doesNotMatch(html, /selected-instrument|verified-mark|Add a valid instrument/);
     assert.doesNotMatch(html, /monitor-last-scan|monitor-freshness|monitor-target-count|Targets use current holdings|Edit playbook/);
@@ -340,6 +344,12 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerJs, /const sequence = \+\+state\.searchSequence/);
     assert.match(screenerJs, /results\.hidden = true;[\s\S]*?results\.replaceChildren\(\);/);
     assert.match(screenerJs, /input\.type = 'radio'; input\.name = 'goal'/);
+    for (const explanation of ['less likely to take your shares away', 'saved risk and return rules', 'ready to sell your shares', 'ready to buy shares']) {
+      assert.match(screenerJs, new RegExp(explanation));
+    }
+    assert.match(screenerJs, /goalsForLeg\(leg\)/);
+    assert.match(screenerJs, /document\.querySelector\('#monitor-goal-picker'\)\.hidden = false/);
+    assert.doesNotMatch(screenerJs, /function legForGoal/);
     assert.match(screenerJs, /keepFocusInAddDialog/);
     assert.match(screenerJs, /setAttribute\('inert'/);
     assert.match(screenerJs, /owned-monitor-group'\)\.hidden = ownedTargets\.length === 0/);
@@ -414,10 +424,11 @@ describe('responsive dashboard shell', () => {
     assert.match(screenerCss, /backdrop-filter: blur\(22px\) saturate\(165%\)/);
     assert.doesNotMatch(html, /id="goal-leg-tabs"/);
     assert.match(settingsJs, /className = 'layer-tabs strategy-tabs goal-inline-strategy-tabs'/);
-    assert.match(html, /class="layer-tabs strategy-tabs" id="monitor-leg-tabs"/);
-    assert.ok(html.indexOf('id="monitor-goal-tabs"') < html.indexOf('id="monitor-leg-tabs"'));
+    assert.match(html, /class="monitor-leg-tabs" id="monitor-leg-tabs"/);
+    assert.ok(html.indexOf('id="monitor-leg-tabs"') < html.indexOf('id="monitor-goal-tabs"'));
     assert.match(html, /id="monitor-leg-picker" hidden/);
-    assert.match(screenerJs, /legForGoal/);
+    assert.match(html, /id="monitor-goal-picker" hidden/);
+    assert.match(screenerJs, /GOAL_LEGS\[values\.goal\]\?\.includes\(leg\)/);
     assert.match(settingsCss, /\.layer-tabs button,[\s\S]*?\.layer-tabs \.strategy-option > span/);
     assert.match(settingsCss, /\.layer-tabs button,\s*\.layer-tabs \.strategy-option > span\s*\{\s*min-height: 38px/);
     assert.match(settingsCss, /\.strategy-tabs > button,[\s\S]*?flex: 1 1 0/);
@@ -430,7 +441,7 @@ describe('responsive dashboard shell', () => {
     assert.match(html, /class="layer-tabs goal-tabs goal-picker" id="goal-preset-tabs"/);
     assert.match(html, /class="goal-picker" id="monitor-goal-tabs"/);
     assert.match(screenerCss, /\.monitor-leg-picker legend, \.monitor-goal-picker legend \{[^}]*margin-bottom: 6px/);
-    assert.match(screenerCss, /\.monitor-leg-picker\[hidden\] \{ display: none; \}/);
+    assert.match(screenerCss, /\.monitor-leg-picker\[hidden\], \.monitor-goal-picker\[hidden\] \{ display: none; \}/);
     assert.match(settingsCss, /\.goal-inline-strategy-tabs\s*\{[^}]*width: 108px[^}]*flex: 0 0 108px[^}]*margin: 0/);
     assert.match(settingsCss, /\.goal-inline-strategy-tabs > button\s*\{[^}]*min-height: 32px[^}]*font-size: 12px/);
     assert.match(goalSelectorCss, /prefers-reduced-transparency: reduce/);

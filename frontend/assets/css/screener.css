@@ -8,6 +8,7 @@
 
 .monitor-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 2px 4px 20px; }
 .monitor-header > div:first-child { min-width: 0; }
+.monitor-intro { max-width: 470px; display: block; margin-top: 8px; color: var(--mute); font-size: 12px; line-height: 1.5; }
 .monitor-add-button { min-height: 44px; border: 1px solid rgba(255, 255, 255, .8); background: linear-gradient(145deg, rgba(255, 255, 255, .88), rgba(255, 255, 255, .55)); box-shadow: 0 5px 16px rgba(24, 24, 20, .07), inset 0 1px 0 rgba(255, 255, 255, .94); -webkit-backdrop-filter: blur(18px) saturate(160%); backdrop-filter: blur(18px) saturate(160%); cursor: pointer; }
 .monitor-add-button { width: 44px; min-width: 44px; display: grid; place-items: center; border-radius: 50%; padding: 0; color: var(--ink); }
 .monitor-add-button > span:first-child { margin-top: -2px; font-size: 27px; font-weight: 350; line-height: 1; }
@@ -154,7 +155,7 @@
 .monitor-add-close { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .74); border-radius: 50%; padding: 0; background: rgba(235, 235, 230, .68); color: var(--body); cursor: pointer; }
 .monitor-add-form { display: grid; gap: 20px; padding: 20px 18px max(20px, env(safe-area-inset-bottom)); }
 .instrument-search-field { position: relative; display: grid; gap: 8px; }
-.instrument-search-field > label, .monitor-leg-picker legend, .monitor-goal-picker legend { color: var(--body); font-size: 12px; font-weight: 740; }
+.instrument-search-field > label { color: var(--body); font-size: 12px; font-weight: 740; }
 .instrument-search-control { overflow: hidden; border: 1px solid rgba(38, 38, 34, .11); border-radius: 18px; background: rgba(255, 255, 255, .7); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .96), 0 5px 16px rgba(29, 29, 25, .045); }
 .instrument-search-control:focus-within { border-color: rgba(67, 94, 229, .46); box-shadow: 0 0 0 3px rgba(67, 94, 229, .1), inset 0 1px 0 rgba(255, 255, 255, .96); }
 .instrument-search-input { height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 14px; }
@@ -170,12 +171,24 @@
 .instrument-result span { overflow: hidden; font-size: 12px; font-weight: 680; text-overflow: ellipsis; white-space: nowrap; }
 .instrument-result small { color: var(--mute); font-size: 12px; }
 .monitor-leg-picker, .monitor-goal-picker { min-width: 0; display: grid; gap: 8px; margin: 0; border: 0; padding: 0; }
-.monitor-leg-picker[hidden] { display: none; }
-.monitor-leg-picker legend, .monitor-goal-picker legend { margin-bottom: 6px; padding: 0; }
-.monitor-leg-picker .layer-tabs { width: 100%; margin: 0; }
+.monitor-leg-picker[hidden], .monitor-goal-picker[hidden] { display: none; }
+.monitor-leg-picker legend, .monitor-goal-picker legend { margin-bottom: 6px; padding: 0; color: var(--ink); font-size: 16px; font-weight: 780; letter-spacing: -.25px; }
+.monitor-leg-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.monitor-leg-option { min-width: 0; cursor: pointer; }
 .monitor-leg-picker input, .monitor-goal-option input { position: absolute; opacity: 0; pointer-events: none; }
+.monitor-leg-option > span { min-height: 104px; display: grid; align-content: center; justify-items: start; gap: 3px; border: 1px solid rgba(38, 38, 34, .08); border-radius: 18px; padding: 13px; background: rgba(255, 255, 255, .54); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .88); }
+.monitor-leg-option small { color: var(--body); font-size: 12px; font-style: normal; font-weight: 700; }
+.monitor-leg-option strong { color: var(--red-deep); font-size: 20px; letter-spacing: -.45px; }
+.monitor-leg-option em { color: var(--mute); font-size: 12px; font-style: normal; line-height: 1.3; }
+.monitor-leg-option:hover > span, .monitor-leg-option input:checked + span { border-color: rgba(230, 0, 35, .18); background: rgba(255, 255, 255, .84); box-shadow: 0 5px 16px rgba(29, 29, 25, .06), inset 3px 0 0 rgba(230, 0, 35, .7); }
+.monitor-leg-option input:focus-visible + span { outline: 3px solid rgba(67, 94, 229, .3); outline-offset: 2px; }
 .monitor-goal-option input:focus-visible + span { outline: 3px solid rgba(67, 94, 229, .3); outline-offset: 2px; }
 .monitor-goal-option { min-width: 0; }
+.monitor-goal-picker #monitor-goal-tabs { grid-template-columns: 1fr; gap: 7px; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; }
+#monitor-goal-tabs .goal-chip { min-height: 62px; place-items: start; align-content: center; gap: 3px; border-color: rgba(38, 38, 34, .07); border-radius: 16px; padding: 10px 13px; background: rgba(255, 255, 255, .48); text-align: left; }
+#monitor-goal-tabs .goal-chip strong { color: var(--goal-color); font-size: 13px; }
+#monitor-goal-tabs .goal-chip small { color: var(--mute); font-size: 12px; font-weight: 560; line-height: 1.4; }
+#monitor-goal-tabs input:checked + .goal-chip { border-color: color-mix(in srgb, var(--goal-color) 18%, transparent); background: rgba(255, 255, 255, .84); box-shadow: 0 4px 13px rgba(29, 29, 25, .055), inset 3px 0 0 color-mix(in srgb, var(--goal-color) 72%, transparent); }
 .monitor-add-guidance { margin: -2px 2px 0; color: var(--mute); font-size: 12px; line-height: 1.5; }
 .monitor-add-error { margin: 0; padding: 10px 11px; border-radius: 12px; background: rgba(252, 237, 239, .86); color: var(--error); font-size: 12px; line-height: 1.4; }
 .monitor-add-submit { min-height: 50px; border: 0; border-radius: 15px; background: var(--red); color: #fff; font-size: 12px; font-weight: 780; box-shadow: 0 7px 18px rgba(230, 0, 35, .18); cursor: pointer; }

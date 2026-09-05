@@ -60,7 +60,11 @@ export const extractToolPayload = (result: unknown): unknown => {
     const message = tool.content?.find((item) => item.type === "text" && item.text)?.text ?? "SnapTrade MCP tool failed";
     throw new Error(message);
   }
-  if (tool.structuredContent !== undefined) return tool.structuredContent;
+  if (tool.structuredContent !== undefined) {
+    return typeof tool.structuredContent === "string"
+      ? parseToolText(tool.structuredContent)
+      : tool.structuredContent;
+  }
   const values = (tool.content ?? [])
     .filter((item) => item.type === "text" && typeof item.text === "string")
     .map((item) => parseToolText(item.text!));

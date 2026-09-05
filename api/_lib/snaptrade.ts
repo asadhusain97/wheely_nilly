@@ -40,8 +40,18 @@ export const payloadRecord = (payload: unknown): Record<string, unknown> => {
   const visited = new Set<object>();
   let fallback: Record<string, unknown> = {};
   const numberKeys = ["number", "account_number", "accountNumber", "masked_number", "maskedNumber", "number_suffix", "numberSuffix"];
+  const accountKeys = ["name", "display_name", "displayName", "institution_name", "institutionName", "institution_account_id", "institutionAccountId"];
+  const hasText = (value: unknown) => (typeof value === "string" && Boolean(value.trim())) || typeof value === "number";
   while (queue.length) {
     const candidate = queue.shift();
+    if (typeof candidate === "string" && /^\s*[\[{]/.test(candidate)) {
+      try {
+        queue.push(JSON.parse(candidate));
+      } catch {
+        // Tool text is sometimes explanatory prose rather than JSON.
+      }
+      continue;
+    }
     if (!candidate || typeof candidate !== "object" || visited.has(candidate)) continue;
     visited.add(candidate);
     if (Array.isArray(candidate)) {
@@ -49,12 +59,12 @@ export const payloadRecord = (payload: unknown): Record<string, unknown> => {
       continue;
     }
     const record = candidate as Record<string, unknown>;
-    if (numberKeys.some((key) => key in record)) return record;
-    if (!Object.keys(fallback).length
-      && "id" in record
-      && ["name", "display_name", "displayName", "institution_name", "institutionName"].some((key) => key in record)) fallback = record;
-    for (const key of ["account", "data", "result", "structuredContent"]) {
-      if (record[key] && typeof record[key] === "object") queue.push(record[key]);
+    const accountLike = "id" in record && accountKeys.some((key) => key in record);
+    if (accountLike && numberKeys.some((key) => hasText(record[key]))) return record;
+    if (accountLike && (!Object.keys(fallback).length
+      || accountKeys.some((key) => hasText(record[key]) && key.toLowerCase().includes("account")))) fallback = record;
+    for (const value of Object.values(record)) {
+      if (value && (typeof value === "object" || typeof value === "string")) queue.push(value);
     }
   }
   return fallback;
@@ -122,6 +132,8 @@ export const normalizeAccount = (value: unknown) => {
     ?? account.number_suffix
     ?? account.numberSuffix,
   );
+  const institutionIdSuffix = referenceSuffix(account.institution_account_id ?? account.institutionAccountId);
+  const connectedAccountSuffix = referenceSuffix(account.id);
   const syncStatus = account.sync_status ?? account.syncStatus;
   const transactions = asRecord(syncStatus?.transactions);
   return {
@@ -131,7 +143,11 @@ export const normalizeAccount = (value: unknown) => {
     numberSuffix,
     referenceLabel: numberSuffix
       ? `Account number •••• ${numberSuffix}`
-      : "Account number unavailable",
+      : institutionIdSuffix
+        ? `Institution ID •••• ${institutionIdSuffix}`
+        : connectedAccountSuffix
+          ? `Connected account •••• ${connectedAccountSuffix}`
+          : "Account identifier unavailable",
     syncStatus: text(syncStatus) ?? text(account.status),
     transactionSyncComplete: optionalBoolean(transactions.initial_sync_completed),
   };

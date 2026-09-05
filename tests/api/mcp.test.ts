@@ -79,6 +79,32 @@ describe("SnapTrade MCP client", () => {
     assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 2087");
   });
 
+  it("finds account details inside arbitrary MCP wrappers and JSON text", () => {
+    const detail = payloadRecord({ output: { content: [{ type: "text", text: JSON.stringify({ account_detail: {
+      id: "account-1",
+      name: "Robinhood Individual",
+      institution_name: "Robinhood",
+      number: "****7291",
+    } }) }] } });
+
+    assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 7291");
+  });
+
+  it("skips empty wrapper numbers when a nested account has a usable number", () => {
+    const detail = payloadRecord({
+      id: "tool-result-1",
+      name: "Account result",
+      number: null,
+      result: { account: {
+        id: "account-1",
+        name: "Robinhood Individual",
+        number: "****6184",
+      } },
+    });
+
+    assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 6184");
+  });
+
   it("prefers a nested account number over an MCP wrapper identifier", () => {
     const detail = payloadRecord({
       id: "tool-result-1",
@@ -93,7 +119,7 @@ describe("SnapTrade MCP client", () => {
     assert.equal(normalizeAccount(detail).referenceLabel, "Account number •••• 3914");
   });
 
-  it("does not present provider identifiers as brokerage account numbers", () => {
+  it("labels institution identifiers honestly when the brokerage number is missing", () => {
     const account = normalizeAccount({
       id: "917c8734-8470-4a3e-a18f-57c3f2ee6631",
       name: "Robinhood Individual",
@@ -103,7 +129,19 @@ describe("SnapTrade MCP client", () => {
     });
 
     assert.equal(account.numberSuffix, null);
-    assert.equal(account.referenceLabel, "Account number unavailable");
+    assert.equal(account.referenceLabel, "Institution ID •••• 3432");
+  });
+
+  it("keeps accounts distinguishable when SnapTrade omits every institution identifier", () => {
+    const account = normalizeAccount({
+      id: "917c8734-8470-4a3e-a18f-57c3f2ee6631",
+      name: "Robinhood Individual",
+      institution_name: "Robinhood",
+      number: null,
+    });
+
+    assert.equal(account.numberSuffix, null);
+    assert.equal(account.referenceLabel, "Connected account •••• 6631");
   });
 
   it("carries the brokerage transaction-sync state into the selected account", () => {
@@ -197,6 +235,11 @@ describe("SnapTrade MCP client", () => {
 
   it("prefers structured tool results", () => {
     assert.deepEqual(extractToolPayload({ structuredContent: { results: [{ id: "account-1" }] } }), { results: [{ id: "account-1" }] });
+  });
+
+  it("parses JSON returned as string structured content", () => {
+    const payload = extractToolPayload({ structuredContent: "{\"account\":{\"id\":\"account-1\"}}" });
+    assert.deepEqual(payload, { account: { id: "account-1" } });
   });
 
   it("parses JSON from text tool results", () => {

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from .models import ChainSnapshot, ExactContractsRequest, RollRequest, ScreenRequest
 
-CALCULATION_VERSION = "screener-2.2.0"
+CALCULATION_VERSION = "screener-2.3.0"
 
 
 def _normal_cdf(value: float) -> float:
@@ -213,8 +213,24 @@ class ScreenerService:
             if quote.symbol.replace(" ", "").upper() != current.contract_symbol.replace(" ", "").upper()
             and quote.expiration > current.expiration
         ]})
-        candidates, exclusions = screen(later_snapshot, candidate_request, now)
-        candidates = candidates[:request.limit]
+        matching_candidates, exclusions = screen(later_snapshot, candidate_request, now)
+        candidates = matching_candidates[:request.limit]
+        quoted_request = ScreenRequest(
+            symbol=current.symbol, leg=leg, min_dte=request.min_dte, max_dte=request.max_dte,
+            min_moneyness=0.01, max_moneyness=3,
+            min_open_interest=0, min_volume=0, max_spread_percent=1,
+            target_delta_min=None, target_delta_max=None, cash_available=1_000_000_000,
+            covered_shares=1_000_000, estimated_fee_per_contract=request.estimated_fee_per_contract,
+            risk_free_rate=request.risk_free_rate, dividend_yield=request.dividend_yield,
+            max_quote_age_seconds=request.max_quote_age_seconds, min_period_return=0,
+            allow_itm_calls=request.allow_itm_calls, limit=100,
+        )
+        quoted_candidates, _ = screen(later_snapshot, quoted_request, now)
+        matched_symbols = {candidate["contract_symbol"] for candidate in matching_candidates}
+        alternatives = [
+            candidate for candidate in quoted_candidates
+            if candidate["contract_symbol"] not in matched_symbols
+        ][:request.limit]
         return {
             "schema_version": 1,
             "calculation_version": CALCULATION_VERSION,
@@ -228,6 +244,7 @@ class ScreenerService:
             "cache": {"hit": cache_hit, "age_seconds": cache_age},
             "current_quote": current_payload,
             "candidates": candidates,
+            "alternatives": alternatives,
             "exclusions": exclusions,
             "duration_ms": round((time.monotonic() - started) * 1000, 2),
         }

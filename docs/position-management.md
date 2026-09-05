@@ -40,7 +40,7 @@ Every open-contract card with a resolved goal includes `Check roll candidates` b
 
 Opening the Home sheet requests the exact current contract and later candidate expirations in one chain snapshot. The browser keeps the opening credit, position size, goal, and price guard local. The market bridge receives only the technical contract identity and screening limits.
 
-Candidates must expire after the current contract and pass the saved DTE, moneyness, delta, liquidity, quote-age, and return rules. A usable, fresh ask is required for the current buyback. The shortlist contains at most three goal-ranked replacements. It does not redirect to Radar.
+The sheet separates exact rule matches from other quoted contracts. Exact matches must expire after the current contract and pass the saved DTE, moneyness, delta, liquidity, quote-age, and return rules. When those filters remove every match, the second group keeps later contracts that have a usable, fresh quote and pass any effective assignment-price guard. It labels the saved rules each contract misses instead of presenting it as a match. A usable, fresh ask is required for the current buyback. Each group contains at most three goal-ranked replacements. It does not redirect to Radar.
 
 The primary estimate is deliberately conservative:
 
@@ -54,7 +54,7 @@ CC effective sale price = replacement strike + cumulativeOptionCash per share
 CSP effective purchase price = replacement strike − cumulativeOptionCash per share
 ```
 
-The sheet shows the current and replacement contracts, estimated net credit or debit, added days, and effective assignment price. Midpoint, liquidity, and quote context stay behind “Show how this was chosen.” “Copy roll plan” creates a two-leg text handoff for the broker. The user must confirm both contracts, a net limit price, fees, buying-power effects, and live quotes with the broker.
+The sheet labels the two legs as Buy to close and Sell to open. It shows the conservative ask-and-bid assumption beside the contracts, followed by estimated net credit or debit, added days, and effective assignment price. Midpoint, liquidity, and quote context stay behind “Show how this was chosen.” “Copy roll plan” creates a two-leg text handoff for the broker. The user must confirm both contracts, a net limit price, fees, buying-power effects, and live quotes with the broker.
 
 ## Binary rule
 

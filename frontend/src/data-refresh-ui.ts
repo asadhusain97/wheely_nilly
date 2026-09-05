@@ -35,6 +35,9 @@ const usableContractQuote = (item: ExactContractQuote): boolean => item.availabl
   && typeof item.ask === "number"
   && Number.isFinite(item.ask)
   && item.ask > 0;
+const usableStockQuote = (item: MarketQuote): boolean => typeof item.price === "number"
+  && Number.isFinite(item.price)
+  && item.price > 0;
 
 export const mergeMarketCache = (
   existing: Partial<MarketCache> | null | undefined,
@@ -51,8 +54,15 @@ export const mergeMarketCache = (
     ...(existing?.contracts ?? []).filter(usableContractQuote),
     ...incomingContracts.filter(usableContractQuote),
   ].map((item) => [contractKey(item), item])).values()].filter(keepActive);
+  const quotesBySymbol = new Map((existing?.quotes ?? []).map((quote) => [quote.symbol, quote]));
+  for (const quote of incomingQuotes) {
+    const previous = quotesBySymbol.get(quote.symbol);
+    if (usableStockQuote(quote) || !previous || !usableStockQuote(previous)) {
+      quotesBySymbol.set(quote.symbol, quote);
+    }
+  }
   return {
-    quotes: [...new Map([...(existing?.quotes ?? []), ...incomingQuotes].map((quote) => [quote.symbol, quote])).values()],
+    quotes: [...quotesBySymbol.values()],
     contracts,
     lastUsableContracts,
   };
@@ -180,13 +190,13 @@ export async function initializeDataRefresh(): Promise<void> {
     ]);
     const closeResults = await buildLocalCloseResults(merged.contracts, merged.lastUsableContracts);
     await localRepository.put("marketCache", "closeResults", closeResults);
+    renderFreshness();
+    document.dispatchEvent(new CustomEvent("wheely-market-updated", { detail: merged }));
     const radar = await scanAllLocalTargets(fetch).catch(() => null);
     if (radar) {
       await localRepository.put("radarCache", "current", radar);
       document.dispatchEvent(new CustomEvent("wheely-radar-updated", { detail: radar }));
     }
-    renderFreshness();
-    document.dispatchEvent(new CustomEvent("wheely-market-updated", { detail: merged }));
   };
 
   let historyRequest: Promise<void> | null = null;

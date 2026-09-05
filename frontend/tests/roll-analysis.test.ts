@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { rollActionPresentation } from "../assets/js/rolls.js";
-import { calculateAndRankRollCandidates, deriveRollReview, formatRollPlan } from "../src/roll-analysis";
+import { calculateAndRankRollCandidates, deriveRollReview, formatRollPlan, rollPreferenceMisses } from "../src/roll-analysis";
 
 const effective = (goal: "protect" | "income" | "exit" | "acquire", overrides: Record<string, unknown> = {}) => ({
   goal,
@@ -104,6 +104,31 @@ describe("roll candidate economics", () => {
     assert.deepEqual(result, []);
   });
 
+  it("explains which saved rules a quoted alternative misses", () => {
+    const misses = rollPreferenceMisses({
+      contract_symbol: "XYZ261016C00105000", option_type: "call", expiration: "2026-10-16", dte: 32,
+      strike: 105, underlying_price: 100, bid: 4.5, ask: 5.5, delta: null,
+      spread_percent: 0.2, open_interest: 4, volume: 2, period_return: 0.003,
+    }, { effectiveSettings: effective("protect", { minOpenInterest: 100, minVolume: 10, maxSpreadPercent: 0.1, minPeriodReturn: 0.01 }) });
+
+    assert.deepEqual(misses, ["delta range", "bid-ask spread", "open interest", "volume", "term return"]);
+  });
+
+  it("can preserve Radar order for fallback contracts", () => {
+    const result = calculateAndRankRollCandidates({
+      trade: { type: "cc", strike: 100, expiration: "2026-09-18", contracts: 1, openingCredit: 250 },
+      management: management(),
+      currentQuote: { bid: 3.8, ask: 4 },
+      preserveCandidateOrder: true,
+      candidates: [
+        { contract_symbol: "RADAR-FIRST", option_type: "call", expiration: "2026-10-16", dte: 32, strike: 105, bid: 4.5, ask: 4.7 },
+        { contract_symbol: "HIGHER-STRIKE", option_type: "call", expiration: "2026-10-16", dte: 32, strike: 115, bid: 4.5, ask: 4.7 },
+      ],
+    });
+
+    assert.equal(result[0].contractSymbol, "RADAR-FIRST");
+  });
+
   it("formats a broker handoff with both option legs", () => {
     const candidate = {
       contractSymbol: "XYZ261016C00110000", optionType: "call" as const, expiration: "2026-10-16", dte: 32,
@@ -111,6 +136,7 @@ describe("roll candidate economics", () => {
       periodReturn: 0.01, closeDebit: 400.65, newOpenCredit: 449.35, naturalRollCash: 48.7, midpointRollCash: 68.7,
       cumulativeOptionCash: 298.7, effectiveAssignmentPrice: 112.987, addedDays: 28,
       direction: "Up and out" as const, fitSummary: "Raises the call-away price.",
+      ruleStatus: "match" as const, preferenceMisses: [],
     };
     const plan = formatRollPlan({ symbol: "XYZ", strategy: "cc", quantity: 1, currentStrike: 100, currentExpiration: "2026-09-18", candidate, goal: "protect" });
     assert.match(plan, /Buy to close:\n1 2026-09-18 \$100\.00 call/);

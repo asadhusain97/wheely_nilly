@@ -191,6 +191,8 @@ interface RollCandidateInput {
   currentQuote: { bid?: number | null; ask?: number | null };
   candidates: RollMarketCandidate[];
   estimatedFeePerContract?: number;
+  preserveCandidateOrder?: boolean;
+  ruleStatus?: RollCandidateView["ruleStatus"];
 }
 
 export interface RollCandidateView {
@@ -215,6 +217,8 @@ export interface RollCandidateView {
   addedDays: number;
   direction: "Up and out" | "Down and out" | "Straight out";
   fitSummary: string;
+  ruleStatus: "match" | "alternative";
+  preferenceMisses: string[];
 }
 
 function utcDay(value: string): number {
@@ -223,7 +227,50 @@ function utcDay(value: string): number {
 
 const roundMoney = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
-export function calculateAndRankRollCandidates({ trade, management, currentQuote, candidates, estimatedFeePerContract = 0.65 }: RollCandidateInput): RollCandidateView[] {
+export function rollPreferenceMisses(candidate: RollMarketCandidate, management: RollCandidateInput["management"]): string[] {
+  const rules = management.effectiveSettings?.rules ?? {};
+  const goal = management.effectiveSettings?.goal ?? null;
+  const misses: string[] = [];
+  const dte = finite(candidate.dte);
+  const minDte = finite(rules.minDte);
+  const maxDte = finite(rules.maxDte);
+  if (dte !== null && ((minDte !== null && dte < minDte) || (maxDte !== null && dte > maxDte))) misses.push("expiration window");
+
+  const strike = finite(candidate.strike);
+  const spot = finite(candidate.underlying_price);
+  const minMoneyness = finite(rules.minMoneyness);
+  const maxMoneyness = finite(rules.maxMoneyness);
+  if (strike !== null && spot !== null && spot > 0) {
+    const moneyness = strike / spot;
+    if ((minMoneyness !== null && moneyness < minMoneyness) || (maxMoneyness !== null && moneyness > maxMoneyness)) misses.push("strike range");
+    if (candidate.option_type === "put" && strike > spot) misses.push("money state");
+    if (candidate.option_type === "call" && strike < spot && goal !== "exit") misses.push("money state");
+  }
+
+  const delta = finite(candidate.delta);
+  const absoluteDelta = delta === null ? null : Math.abs(delta);
+  const deltaMin = finite(rules.targetDeltaMin);
+  const deltaMax = finite(rules.targetDeltaMax);
+  if ((deltaMin !== null || deltaMax !== null) && (absoluteDelta === null
+    || (deltaMin !== null && absoluteDelta < deltaMin)
+    || (deltaMax !== null && absoluteDelta > deltaMax))) misses.push("delta range");
+
+  const spread = finite(candidate.spread_percent);
+  const maxSpread = finite(rules.maxSpreadPercent);
+  if (maxSpread !== null && (spread === null || spread > maxSpread)) misses.push("bid-ask spread");
+  const openInterest = finite(candidate.open_interest);
+  const minOpenInterest = finite(rules.minOpenInterest);
+  if (minOpenInterest !== null && minOpenInterest > 0 && (openInterest === null || openInterest < minOpenInterest)) misses.push("open interest");
+  const volume = finite(candidate.volume);
+  const minVolume = finite(rules.minVolume);
+  if (minVolume !== null && minVolume > 0 && (volume === null || volume < minVolume)) misses.push("volume");
+  const periodReturn = finite(candidate.period_return);
+  const minPeriodReturn = finite(rules.minPeriodReturn);
+  if (minPeriodReturn !== null && (periodReturn === null || periodReturn < minPeriodReturn)) misses.push("term return");
+  return [...new Set(misses)];
+}
+
+export function calculateAndRankRollCandidates({ trade, management, currentQuote, candidates, estimatedFeePerContract = 0.65, preserveCandidateOrder = false, ruleStatus = "match" }: RollCandidateInput): RollCandidateView[] {
   const goal = management.effectiveSettings?.goal ?? null;
   const profile = buildRollSearchProfile(management.effectiveSettings);
   const quantity = Math.abs(Number(trade.contracts));
@@ -255,8 +302,10 @@ export function calculateAndRankRollCandidates({ trade, management, currentQuote
     const direction = candidate.strike > trade.strike ? "Up and out" : candidate.strike < trade.strike ? "Down and out" : "Straight out";
     const delta = finite(candidate.delta);
     const hasPriceGuard = profile.priceGuardMinor !== null;
-    const fitSummary = goal === "protect"
-      ? `${direction} raises the call-away price and ${delta === null ? "fits the saved contract range" : `moves delta to ${Math.abs(delta).toFixed(2)}`}.`
+    const fitSummary = ruleStatus === "alternative"
+      ? `${direction} has a usable quote. Review the saved-rule misses above before using it.`
+      : goal === "protect"
+        ? `${direction} raises the call-away price and ${delta === null ? "fits the saved contract range" : `moves delta to ${Math.abs(delta).toFixed(2)}`}.`
       : goal === "exit"
         ? hasPriceGuard ? `${direction} keeps the planned sale above the saved floor.` : `${direction} moves the call toward the intended stock sale.`
         : goal === "acquire"
@@ -268,12 +317,14 @@ export function calculateAndRankRollCandidates({ trade, management, currentQuote
       openInterest: finite(candidate.open_interest), volume: finite(candidate.volume), periodReturn: finite(candidate.period_return),
       closeDebit, newOpenCredit, naturalRollCash, midpointRollCash, cumulativeOptionCash, effectiveAssignmentPrice,
       addedDays: Math.max(1, Math.round(utcDay(candidate.expiration) - utcDay(trade.expiration))), direction, fitSummary,
+      ruleStatus, preferenceMisses: [],
     }];
   });
 
   const rules = management.effectiveSettings?.rules ?? {};
   const deltaMidpoint = profile.deltaMin === null || profile.deltaMax === null ? null : (profile.deltaMin + profile.deltaMax) / 2;
   const dteMidpoint = (profile.minDte + profile.maxDte) / 2;
+  if (preserveCandidateOrder) return views.slice(0, Math.min(3, finite(rules.limit) ?? 3));
   return views.sort((left, right) => {
     if (goal === "protect") {
       const strikeOrder = right.strike - left.strike;

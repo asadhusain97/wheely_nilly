@@ -123,7 +123,48 @@ def test_roll_scan_uses_one_snapshot_and_returns_only_later_matching_contracts()
     assert result["current_quote"]["ask"] == 4
     assert result["current_quote"]["available"] is True
     assert [candidate["contract_symbol"] for candidate in result["candidates"]] == [replacement_symbol]
+    assert result["alternatives"] == []
     assert result["quote_timestamp"] == now
+
+
+def test_roll_scan_keeps_usable_later_quotes_as_alternatives_when_rules_filter_every_match():
+    today = datetime.now(UTC).date()
+    current_expiration = today + timedelta(days=5)
+    replacement_expiration = today + timedelta(days=32)
+    current_symbol = f"XYZ{current_expiration:%y%m%d}C00100000"
+    replacement_symbol = f"XYZ{replacement_expiration:%y%m%d}C00110000"
+    now = datetime.now(UTC)
+
+    class StaticProvider:
+        async def fetch_chain(self, _symbol, _min_dte, _max_dte):
+            return ChainSnapshot(provider="fixture", underlying_price=100, underlying_quote_time=now,
+                                 fetched_at=now, quotes=[
+                OptionQuote(symbol=current_symbol, option_type="call", expiration=current_expiration,
+                            strike=100, bid=3.8, ask=4, volume=100, open_interest=500,
+                            implied_volatility=.3, quote_time=now),
+                OptionQuote(symbol=replacement_symbol, option_type="call", expiration=replacement_expiration,
+                            strike=110, bid=4.5, ask=4.7, volume=2, open_interest=4,
+                            implied_volatility=None, quote_time=now),
+            ])
+
+    result = asyncio.run(ScreenerService(StaticProvider()).roll(RollRequest(
+        current_contract=ExactContract(contract_symbol=current_symbol, symbol="XYZ", option_type="call",
+                                       expiration=current_expiration, strike=100),
+        min_dte=30, max_dte=60, min_moneyness=1.05, max_moneyness=1.25,
+        min_open_interest=100, min_volume=10, target_delta_min=.08, target_delta_max=.25,
+        min_period_return=.10,
+    )))
+
+    assert result["candidates"] == []
+    assert [candidate["contract_symbol"] for candidate in result["alternatives"]] == [replacement_symbol]
+    assert result["alternatives"][0]["bid"] == 4.5
+    assert result["exclusions"] == {
+        "open_interest": 1,
+        "volume": 1,
+        "delta_low": 1,
+        "delta_high": 1,
+        "period_return": 1,
+    }
 
 
 def test_roll_scan_refuses_stale_current_buyback_quote():

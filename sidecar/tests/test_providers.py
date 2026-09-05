@@ -159,6 +159,104 @@ def test_yfinance_chain_supports_contracts_expiring_today(monkeypatch):
     assert [quote.symbol for quote in result.quotes] == [contract_symbol]
 
 
+def test_yfinance_equity_quotes_fetch_all_prices_in_one_batch(monkeypatch):
+    quote_time = datetime.now(UTC).replace(microsecond=0)
+    columns = pd.MultiIndex.from_tuples([
+        ("AAPL", "Close"),
+        ("MSFT", "Close"),
+    ])
+    history = pd.DataFrame([[195.1, 405.3]], index=[pd.Timestamp(quote_time)], columns=columns)
+    download_calls = []
+
+    class FakeTicker:
+        fast_info = {}
+
+        def history(self, *_args, **_kwargs):
+            raise AssertionError("batch prices should not be fetched again per ticker")
+
+    def download(symbols, **kwargs):
+        download_calls.append((symbols, kwargs))
+        return history
+
+    monkeypatch.setitem(sys.modules, "yfinance", SimpleNamespace(
+        download=download,
+        Ticker=lambda _symbol: FakeTicker(),
+    ))
+
+    results = YFinanceProvider(timeout_seconds=7)._fetch_quotes(["AAPL", "MSFT"])
+
+    assert [result["price"] for result in results] == [195.1, 405.3]
+    assert all(result["quote_time"] == quote_time for result in results)
+    assert len(download_calls) == 1
+    assert download_calls[0][0] == ["AAPL", "MSFT"]
+    assert download_calls[0][1]["timeout"] == 7
+
+
+def test_yfinance_equity_quotes_retry_missing_batch_symbols_with_daily_prices(monkeypatch):
+    intraday_time = datetime.now(UTC).replace(microsecond=0)
+    daily_time = intraday_time - timedelta(days=1)
+    intraday = pd.DataFrame(
+        [[195.1, float("nan")]],
+        index=[pd.Timestamp(intraday_time)],
+        columns=pd.MultiIndex.from_tuples([("AAPL", "Close"), ("MSFT", "Close")]),
+    )
+    daily = pd.DataFrame(
+        [[405.3]],
+        index=[pd.Timestamp(daily_time)],
+        columns=pd.MultiIndex.from_tuples([("MSFT", "Close")]),
+    )
+    download_calls = []
+
+    class FakeTicker:
+        def history(self, *_args, **_kwargs):
+            raise AssertionError("the daily batch should fill the missing ticker")
+
+    def download(symbols, **kwargs):
+        download_calls.append((symbols, kwargs["interval"]))
+        return intraday if kwargs["interval"] == "1m" else daily
+
+    monkeypatch.setitem(sys.modules, "yfinance", SimpleNamespace(
+        download=download,
+        Ticker=lambda _symbol: FakeTicker(),
+    ))
+
+    results = YFinanceProvider()._fetch_quotes(["AAPL", "MSFT"])
+
+    assert [result["price"] for result in results] == [195.1, 405.3]
+    assert [result["quote_time"] for result in results] == [intraday_time, daily_time]
+    assert download_calls == [(["AAPL", "MSFT"], "1m"), (["MSFT"], "1d")]
+
+
+def test_yfinance_equity_quote_keeps_price_when_optional_bid_ask_fail(monkeypatch):
+    quote_time = datetime.now(UTC).replace(microsecond=0)
+    history = pd.DataFrame({"Close": [67.51]}, index=[pd.Timestamp(quote_time)])
+
+    class FakeTicker:
+        @property
+        def fast_info(self):
+            raise RuntimeError("optional quote summary unavailable")
+
+        def history(self, period, interval):
+            assert (period, interval) == ("5d", "1m")
+            return history
+
+    def failed_batch(*_args, **_kwargs):
+        raise RuntimeError("batch temporarily unavailable")
+
+    monkeypatch.setitem(sys.modules, "yfinance", SimpleNamespace(
+        download=failed_batch,
+        Ticker=lambda _symbol: FakeTicker(),
+    ))
+
+    result = YFinanceProvider()._fetch_quotes(["RKLB"])[0]
+
+    assert result["price"] == 67.51
+    assert result["quote_time"] == quote_time
+    assert result["bid"] is None
+    assert result["ask"] is None
+    assert result["error"] is None
+
+
 def test_market_data_provider_delegates_to_yahoo():
     expected = SimpleNamespace(provider="yfinance")
 

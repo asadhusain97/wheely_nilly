@@ -88,10 +88,11 @@ export interface MarketQuote {
   price: number | null;
   bid: number | null;
   ask: number | null;
-  quoteTime: string | null;
-  fetchedAt: string;
+  quote_time: string | null;
+  fetched_at: string;
   provider: "yfinance";
   unofficial: true;
+  error: { code: string; message: string } | null;
 }
 
 export interface ExactContractQuote {

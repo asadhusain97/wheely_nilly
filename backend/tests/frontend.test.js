@@ -275,6 +275,12 @@ describe('responsive dashboard shell', () => {
     assert.match(js, /state: 'unavailable', goal, searchProfile: null/);
     assert.match(rollsJs, /\/api\/v1\/position-management\/rolls/);
     assert.match(rollsJs, /At your broker, look for/);
+    assert.match(rollsJs, /Rule matches/);
+    assert.match(rollsJs, /Other quoted/);
+    assert.match(rollsJs, /Buy to close/);
+    assert.match(rollsJs, /Sell to open/);
+    assert.match(rollsJs, /current ask/);
+    assert.match(rollsJs, /replacement bid/);
     assert.match(rollsJs, /Copy roll plan/);
     assert.match(rollsJs, /does not place or prepare an order/);
     assert.match(rollsJs, /event\.key === 'Escape'/);
@@ -283,6 +289,7 @@ describe('responsive dashboard shell', () => {
     assert.match(rollAnalysisTs, /naturalRollCash = roundMoney\(newOpenCredit - closeDebit\)/);
     assert.match(rollAnalysisTs, /currentAsk \* multiplier \* quantity/);
     assert.match(rollAnalysisTs, /candidate\.expiration\) <= utcDay\(trade\.expiration\)/);
+    assert.match(localAnalysisTs, /market\.alternatives/);
     assert.match(localAnalysisTs, /fetcher\("\/api\/market\/rolls"/);
     assert.match(localFirstFetchTs, /url\.pathname === "\/api\/v1\/position-management\/rolls"/);
     assert.match(rollsCss, /\.roll-sheet \{/);

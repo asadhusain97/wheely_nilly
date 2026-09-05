@@ -100,9 +100,9 @@ function swapView(result, candidate) {
   const section = node('section', 'roll-selection');
   const rail = node('div', 'roll-swap-rail');
   rail.append(
-    contractBlock('Current', result.currentStrike, result.currentExpiration, null, result.strategy === 'cc' ? 'call' : 'put'),
+    contractBlock('Buy to close', result.currentStrike, result.currentExpiration, null, result.strategy === 'cc' ? 'call' : 'put'),
     node('span', 'roll-swap-arrow', '→'),
-    contractBlock('Replacement', candidate.strike, candidate.expiration, candidate.dte, candidate.optionType),
+    contractBlock('Sell to open', candidate.strike, candidate.expiration, candidate.dte, candidate.optionType),
   );
   const economics = node('dl', 'roll-economics');
   for (const [label, value, tone] of [
@@ -114,8 +114,44 @@ function swapView(result, candidate) {
     item.append(node('dt', '', label), node('dd', '', value));
     economics.append(item);
   }
-  section.append(rail, economics, node('p', 'roll-fit-summary', candidate.fitSummary));
+  section.append(
+    rail,
+    node('p', 'roll-price-assumption', `Assumes a ${price(result.currentQuote.ask)} buy at the current ask and a ${price(candidate.bid)} sale at the replacement bid.`),
+    economics,
+    node('p', 'roll-fit-summary', candidate.fitSummary),
+  );
   return section;
+}
+
+function choiceTabs(result, activeGroup, select) {
+  if (!(result.candidates?.length && result.alternatives?.length)) return null;
+  const tabs = node('div', 'roll-choice-tabs');
+  tabs.setAttribute('role', 'tablist');
+  tabs.setAttribute('aria-label', 'Roll choice type');
+  for (const [group, label, count] of [
+    ['matches', 'Rule matches', result.candidates.length],
+    ['alternatives', 'Other quoted', result.alternatives.length],
+  ]) {
+    const button = node('button', group === activeGroup ? 'is-active' : '', `${label} ${count}`);
+    button.type = 'button';
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', String(group === activeGroup));
+    button.addEventListener('click', () => select(group));
+    tabs.append(button);
+  }
+  return tabs;
+}
+
+function alternativeNote(candidate) {
+  const note = node('section', 'roll-alternative-note');
+  const misses = candidate.preferenceMisses ?? [];
+  note.append(
+    node('strong', '', 'Usable quote, outside saved rules'),
+    node('p', '', misses.length
+      ? `This contract misses your ${misses.slice(0, 3).join(', ')} settings.`
+      : 'This contract was outside the top rule matches.'),
+  );
+  return note;
 }
 
 function candidateButton(candidate, selected, select) {
@@ -177,6 +213,7 @@ export function createRollController({ request, notify }) {
   let sequence = 0;
   let current = null;
   let selectedIndex = 0;
+  let selectedGroup = 'matches';
 
   const setBackgroundInert = (inert) => {
     for (const item of document.querySelectorAll('.app-bar, main, .bottom-nav, #settings-editor-dialog, #monitor-add-dialog, #glossary-dialog')) item.inert = inert;
@@ -206,7 +243,9 @@ export function createRollController({ request, notify }) {
       body.append(unavailable);
       return;
     }
-    if (!current.candidates.length) {
+    const matches = current.candidates ?? [];
+    const alternatives = current.alternatives ?? [];
+    if (!matches.length && !alternatives.length) {
       const empty = node('section', 'roll-empty');
       empty.append(node('strong', '', `No verified roll fits ${current.goalLabel} right now.`));
       const filters = [...new Set(Object.entries(current.exclusions ?? {}).filter(([, count]) => count > 0).sort((a, b) => b[1] - a[1]).map(([key]) => EXCLUSIONS[key] ?? key.replaceAll('_', ' ')))].slice(0, 3);
@@ -214,21 +253,31 @@ export function createRollController({ request, notify }) {
       body.append(empty);
       return;
     }
-    const candidate = current.candidates[selectedIndex] ?? current.candidates[0];
+    if (selectedGroup === 'matches' && !matches.length) selectedGroup = 'alternatives';
+    if (selectedGroup === 'alternatives' && !alternatives.length) selectedGroup = 'matches';
+    const groupTabs = choiceTabs(current, selectedGroup, (group) => {
+      selectedGroup = group;
+      selectedIndex = 0;
+      renderResult();
+    });
+    if (groupTabs) body.append(groupTabs);
+    const choices = selectedGroup === 'matches' ? matches : alternatives;
+    const candidate = choices[selectedIndex] ?? choices[0];
+    if (selectedGroup === 'alternatives') body.append(alternativeNote(candidate));
     body.append(swapView(current, candidate));
-    if (current.candidates.length > 1) {
-      const alternatives = node('section', 'roll-alternatives');
-      alternatives.append(node('p', 'roll-section-eyebrow', 'Other matches'));
-      const choices = node('div', 'roll-candidate-list');
-      current.candidates.forEach((item, index) => {
+    if (choices.length > 1) {
+      const otherChoices = node('section', 'roll-alternatives');
+      otherChoices.append(node('p', 'roll-section-eyebrow', selectedGroup === 'matches' ? 'Other matches' : 'Other quoted choices'));
+      const list = node('div', 'roll-candidate-list');
+      choices.forEach((item, index) => {
         if (index === selectedIndex) return;
-        choices.append(candidateButton(item, false, () => {
+        list.append(candidateButton(item, false, () => {
           selectedIndex = index;
           renderResult();
         }));
       });
-      alternatives.append(choices);
-      body.append(alternatives);
+      otherChoices.append(list);
+      body.append(otherChoices);
     }
     body.append(auditView(current, candidate));
     const copy = node('button', 'roll-copy', 'Copy roll plan');
@@ -255,6 +304,7 @@ export function createRollController({ request, notify }) {
     opener.setAttribute('aria-expanded', 'true');
     current = null;
     selectedIndex = 0;
+    selectedGroup = 'matches';
     title.textContent = `Roll ${trade.symbol} ${trade.type === 'cc' ? 'call' : 'put'}`;
     description.textContent = goalGuidance(review.goal);
     status.textContent = 'Checking the current contract and later expirations.';
@@ -275,7 +325,14 @@ export function createRollController({ request, notify }) {
       });
       if (requestSequence !== sequence) return;
       current = result;
-      status.textContent = `${result.candidates.length} matching roll ${result.candidates.length === 1 ? 'choice' : 'choices'} found.`;
+      const matchCount = result.candidates?.length ?? 0;
+      const alternativeCount = result.alternatives?.length ?? 0;
+      selectedGroup = matchCount ? 'matches' : 'alternatives';
+      status.textContent = matchCount
+        ? `${matchCount} rule ${matchCount === 1 ? 'match' : 'matches'}${alternativeCount ? ` and ${alternativeCount} other quoted ${alternativeCount === 1 ? 'choice' : 'choices'}` : ''} found.`
+        : alternativeCount
+          ? `No exact rule matches. ${alternativeCount} other quoted ${alternativeCount === 1 ? 'choice is' : 'choices are'} available.`
+          : 'No usable later contracts found.';
       renderResult();
     } catch (error) {
       if (requestSequence !== sequence) return;

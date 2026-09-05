@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { mergeMarketCache } from "../src/data-refresh-ui";
-import type { ExactContractQuote } from "../src/types";
+import type { ExactContractQuote, MarketQuote } from "../src/types";
 
 const contract = (available: boolean, ask: number | null, fetchedAt: string): ExactContractQuote => ({
   contract: {
@@ -19,6 +19,18 @@ const contract = (available: boolean, ask: number | null, fetchedAt: string): Ex
   contract_quote_time: fetchedAt,
   fetched_at: fetchedAt,
   provider: "yfinance",
+});
+
+const stockQuote = (symbol: string, price: number | null, fetchedAt: string): MarketQuote => ({
+  symbol,
+  price,
+  bid: null,
+  ask: null,
+  quote_time: price === null ? null : fetchedAt,
+  fetched_at: fetchedAt,
+  provider: "yfinance",
+  unofficial: true,
+  error: price === null ? { code: "PROVIDER_UNAVAILABLE", message: "Quote unavailable" } : null,
 });
 
 describe("market quote cache", () => {
@@ -61,5 +73,28 @@ describe("market quote cache", () => {
 
     assert.deepEqual(result.contracts, []);
     assert.deepEqual(result.lastUsableContracts, []);
+  });
+
+  it("does not replace a usable stock price with a transient provider failure", () => {
+    const previous = stockQuote("RKLB", 67.51, "2026-08-31T14:00:00.000Z");
+    const failed = stockQuote("RKLB", null, "2026-08-31T14:02:00.000Z");
+    const result = mergeMarketCache(
+      { quotes: [previous], contracts: [], lastUsableContracts: [] },
+      [failed],
+      [],
+    );
+
+    assert.deepEqual(result.quotes, [previous]);
+  });
+
+  it("adds an unavailable stock quote when no usable price has been cached", () => {
+    const failed = stockQuote("NEW", null, "2026-08-31T14:02:00.000Z");
+    const result = mergeMarketCache(
+      { quotes: [], contracts: [], lastUsableContracts: [] },
+      [failed],
+      [],
+    );
+
+    assert.deepEqual(result.quotes, [failed]);
   });
 });

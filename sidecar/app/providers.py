@@ -128,16 +128,40 @@ class YFinanceProvider:
         return matches[:limit]
 
     @staticmethod
-    def _price_from_ticker(ticker) -> tuple[float, datetime]:
-        history = ticker.history(period="5d", interval="1m")
-        if history.empty:
-            raise ProviderUnavailable("yfinance", "no_underlying_quote")
-        closes = history["Close"].dropna()
-        price = _clean_float(closes.iloc[-1]) if not closes.empty else None
-        quote_time = _clean_datetime(closes.index[-1]) if not closes.empty else None
+    def _price_from_history(history, symbol: str | None = None) -> tuple[float, datetime] | None:
+        if history is None or history.empty:
+            return None
+        frame = history
+        columns = getattr(frame, "columns", None)
+        if getattr(columns, "nlevels", 1) > 1:
+            if symbol in columns.get_level_values(0):
+                frame = frame[symbol]
+            elif symbol in columns.get_level_values(1):
+                frame = frame.xs(symbol, axis=1, level=1)
+            else:
+                return None
+        if "Close" not in frame:
+            return None
+        closes = frame["Close"].dropna()
+        if closes.empty:
+            return None
+        price = _clean_float(closes.iloc[-1])
+        quote_time = _clean_datetime(closes.index[-1])
         if price is None or price <= 0 or quote_time is None:
-            raise ProviderUnavailable("yfinance", "no_underlying_quote")
+            return None
         return price, quote_time
+
+    @staticmethod
+    def _price_from_ticker(ticker) -> tuple[float, datetime]:
+        last_error = None
+        for period, interval in (("5d", "1m"), ("1mo", "1d")):
+            try:
+                price = YFinanceProvider._price_from_history(ticker.history(period=period, interval=interval))
+                if price is not None:
+                    return price
+            except Exception as error:
+                last_error = error
+        raise ProviderUnavailable("yfinance", "no_underlying_quote") from last_error
 
     @staticmethod
     def _fetch(symbol: str, min_dte: int, max_dte: int) -> ChainSnapshot:
@@ -184,22 +208,43 @@ class YFinanceProvider:
 
         return list(yf.Ticker(symbol).options)
 
-    @staticmethod
-    def _fetch_quotes(symbols: list[str]) -> list[dict]:
+    def _fetch_quotes(self, symbols: list[str]) -> list[dict]:
         import yfinance as yf
 
         results = []
         fetched_at = datetime.now(UTC)
+        batch_prices = {}
+        missing = list(symbols)
+        for period, interval in (("5d", "1m"), ("1mo", "1d")):
+            try:
+                history = yf.download(
+                    missing,
+                    period=period,
+                    interval=interval,
+                    group_by="ticker",
+                    auto_adjust=False,
+                    threads=True,
+                    progress=False,
+                    timeout=self.timeout,
+                    multi_level_index=True,
+                )
+                for symbol in missing:
+                    price = self._price_from_history(history, symbol)
+                    if price is not None:
+                        batch_prices[symbol] = price
+            except Exception:
+                pass
+            missing = [symbol for symbol in missing if symbol not in batch_prices]
+            if not missing:
+                break
         for symbol in symbols:
             try:
-                ticker = yf.Ticker(symbol)
-                price, quote_time = YFinanceProvider._price_from_ticker(ticker)
-                fast = ticker.fast_info
+                price, quote_time = batch_prices.get(symbol) or self._price_from_ticker(yf.Ticker(symbol))
                 results.append({
                     "symbol": symbol,
                     "price": price,
-                    "bid": _clean_float(fast.get("bid")),
-                    "ask": _clean_float(fast.get("ask")),
+                    "bid": None,
+                    "ask": None,
                     "quote_time": quote_time,
                     "fetched_at": fetched_at,
                     "provider": YFinanceProvider.name,

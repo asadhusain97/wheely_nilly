@@ -1,9 +1,10 @@
 import { buildDerivedModel } from "../../backend/src/services/wheel.js";
 import { localRepository } from "./storage";
-import type { BrokerageEvent, BrokerageSnapshot, MarketQuote, WheelyNillyPosition } from "./types";
+import type { BrokerageEvent, BrokerageSnapshot, MarketCache, MarketQuote, WheelyNillyPosition } from "./types";
 import { builtInSettingsDocument, normalizeSettingsDocument, SYSTEM_RULES } from "../assets/js/settings.js";
 import { calculateCloseResult } from "../../backend/src/services/position-management.js";
-import { buildRollSearchProfile, calculateAndRankRollCandidates, GOAL_LABELS } from "./roll-analysis";
+import { buildRollSearchProfile, calculateAndRankRollCandidates, GOAL_LABELS, rollPreferenceMisses } from "./roll-analysis";
+import { prepareRadarCandidates } from "../assets/js/radar-scoring.js";
 
 const minor = (value: number | null): number | null => value === null || !Number.isFinite(value) ? null : Math.round(value * 100);
 
@@ -78,7 +79,7 @@ export async function buildLocalModel() {
     .map(normalizedEvent)
     .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id));
   const accountId = snapshot?.accounts[0]?.id ?? "local";
-  const quotes = (marketRecord?.value.quotes ?? []).map((quote) => ({ accountId, symbol: quote.symbol, lastTradePriceMinor: minor(quote.price), bidPriceMinor: minor(quote.bid), askPriceMinor: minor(quote.ask), asOf: quote.quoteTime ?? quote.fetchedAt }));
+  const quotes = (marketRecord?.value.quotes ?? []).map((quote) => ({ accountId, symbol: quote.symbol, lastTradePriceMinor: minor(quote.price), bidPriceMinor: minor(quote.bid), askPriceMinor: minor(quote.ask), asOf: quote.quote_time ?? quote.fetched_at }));
   const normalized = scopeLocalAccount({
     schemaVersion: 1,
     calculationVersion: "wheel-v2",
@@ -127,16 +128,20 @@ const effectiveSettings = (settings: any, symbol: string, leg: "coveredCall" | "
 };
 
 export async function buildLocalTargets() {
-  const [model, settingsRecord] = await Promise.all([
+  const [model, settingsRecord, marketRecord] = await Promise.all([
     buildLocalModel(),
     localRepository.get<any>("tickerStrategies", "document").catch(() => null),
+    localRepository.get<MarketCache>("marketCache", "current").catch(() => null),
   ]);
   const settings = normalizeSettingsDocument(settingsRecord?.value ?? builtInSettingsDocument());
+  const stockPrices = new Map((marketRecord?.value.quotes ?? [])
+    .filter((quote) => quote.price !== null && Number.isFinite(quote.price) && quote.price > 0)
+    .map((quote) => [quote.symbol, quote.price]));
   const bySymbol = new Map<string, any>();
   for (const holding of model.dashboard.opportunities.coveredCalls ?? []) {
     bySymbol.set(holding.symbol, {
       symbol: holding.symbol,
-      stockPrice: holding.price ?? null,
+      stockPrice: stockPrices.get(holding.symbol) ?? holding.price ?? null,
       owned: true,
       manuallyTracked: false,
       uncoveredLots: Number(holding.availableLots),
@@ -145,7 +150,7 @@ export async function buildLocalTargets() {
     });
   }
   for (const [symbol, playbook] of Object.entries<any>(settings.tickerPlaybooks ?? {})) {
-    const target = bySymbol.get(symbol) ?? { symbol, stockPrice: null, owned: false, manuallyTracked: true, uncoveredLots: 0, legs: [] };
+    const target = bySymbol.get(symbol) ?? { symbol, stockPrice: stockPrices.get(symbol) ?? null, owned: false, manuallyTracked: true, uncoveredLots: 0, legs: [] };
     target.manuallyTracked = true;
     for (const leg of ["coveredCall", "cashSecuredPut"] as const) if (playbook[leg]?.enabled && !target.legs.includes(leg)) target.legs.push(leg);
     bySymbol.set(symbol, target);
@@ -308,6 +313,31 @@ export async function buildLocalRollResults(fetcher: typeof fetch, contractSymbo
   const candidates = market.current_quote?.available
     ? calculateAndRankRollCandidates({ trade, management, currentQuote: market.current_quote, candidates: market.candidates ?? [] })
     : [];
+  const alternativesBySymbol = new Map<string, any>((market.alternatives ?? []).map((candidate: any) => [candidate.contract_symbol, candidate]));
+  const rankedAlternativeCandidates = prepareRadarCandidates({
+    symbol: trade.symbol,
+    leg: trade.type === "cc" ? "covered_call" : "cash_secured_put",
+    underlying_price: market.underlying_price,
+    effectiveSettings: effective,
+    candidates: market.alternatives ?? [],
+  }).map((candidate: any) => candidate.rawMetrics);
+  const alternatives = market.current_quote?.available
+    ? calculateAndRankRollCandidates({
+      trade,
+      management,
+      currentQuote: market.current_quote,
+      candidates: rankedAlternativeCandidates,
+      preserveCandidateOrder: true,
+      ruleStatus: "alternative",
+    })
+      .map((candidate) => {
+        const marketCandidate = alternativesBySymbol.get(candidate.contractSymbol);
+        return {
+          ...candidate,
+          preferenceMisses: marketCandidate ? rollPreferenceMisses(marketCandidate, management) : [],
+        };
+      })
+    : [];
   return {
     contractSymbol: trade.contractSymbol,
     symbol: trade.symbol,
@@ -324,6 +354,7 @@ export async function buildLocalRollResults(fetcher: typeof fetch, contractSymbo
     underlyingPrice: market.underlying_price,
     currentQuote: market.current_quote,
     candidates,
+    alternatives,
     exclusions: market.exclusions ?? {},
   };
 }

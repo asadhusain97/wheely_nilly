@@ -737,6 +737,7 @@ export function createScreenerController({ request, notify, addTicker, removeTic
       }
     });
     document.addEventListener('strategy-settings-saved', () => loadTargets(true));
+    document.addEventListener('wheely-market-updated', () => loadTargets(true));
     document.addEventListener('wheely-radar-updated', (event) => {
       void applyScan(event.detail).catch(() => undefined);
     });

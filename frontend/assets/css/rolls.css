@@ -217,7 +217,8 @@
 .roll-selection,
 .roll-alternatives,
 .roll-audit,
-.roll-empty {
+.roll-empty,
+.roll-alternative-note {
   min-width: 0;
   border: 1px solid var(--line);
   border-radius: 17px;
@@ -268,6 +269,56 @@
   margin: 9px 1px 0;
   color: var(--body);
   font-size: 12px;
+  line-height: 1.4;
+}
+
+.roll-choice-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--mist, rgba(241, 241, 237, .62));
+}
+
+.roll-choice-tabs button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--mute);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.roll-choice-tabs button.is-active {
+  background: var(--canvas);
+  box-shadow: 0 1px 5px rgba(17, 17, 15, .08);
+  color: var(--ink);
+}
+
+.roll-choice-tabs button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.roll-alternative-note {
+  padding: 11px 12px;
+  border-color: #ecd7ae;
+  background: #fffaf1;
+}
+
+.roll-alternative-note strong,
+.roll-alternative-note p {
+  font-size: 12px;
+}
+
+.roll-alternative-note p {
+  margin: 4px 0 0;
+  color: var(--mute);
   line-height: 1.4;
 }
 
@@ -330,6 +381,15 @@
   margin: 0;
   border-top: 1px solid var(--soft-line);
   background: var(--soft-line);
+}
+
+.roll-price-assumption {
+  margin: 0;
+  padding: 9px 11px;
+  border-top: 1px solid var(--soft-line);
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .roll-economics > div {

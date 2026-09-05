@@ -103,6 +103,7 @@ describe('responsive dashboard shell', () => {
     assert.match(storageTs, /async clearAllData\(\)/);
     assert.match(html, /class="connection-card-actions"/);
     assert.match(html, /data-reconnect-alignment[^>]+hidden>Reconnect SnapTrade/);
+    assert.match(css, /\.connection-card \[hidden\]\{display:none\}/);
     assert.match(dataRefreshTs, /SnapTrade could not confirm access\. Your saved view is unchanged\. Try again once/);
     assert.match(dataRefreshTs, /retryAlignment\.hidden = false/);
     assert.match(dataRefreshTs, /reconnectAlignment\.hidden = !authorizationExpired/);

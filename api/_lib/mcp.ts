@@ -16,6 +16,12 @@ interface ToolResult {
   isError?: boolean;
 }
 
+interface ToolErrorDetails {
+  status?: number;
+  code?: string;
+  message: string;
+}
+
 export class McpHttpError extends Error {
   status: number;
 
@@ -23,6 +29,20 @@ export class McpHttpError extends Error {
     super(message);
     this.name = "McpHttpError";
     this.status = status;
+  }
+}
+
+export class McpToolError extends Error {
+  status?: number;
+  code?: string;
+  retryable: boolean;
+
+  constructor({ status, code, message }: ToolErrorDetails) {
+    super(message);
+    this.name = "McpToolError";
+    this.status = status;
+    this.code = code;
+    this.retryable = status === undefined || TRANSIENT_STATUSES.has(status);
   }
 }
 
@@ -54,12 +74,50 @@ const parseToolText = (text: string): unknown => {
   }
 };
 
+const toolErrorDetails = (tool: ToolResult): ToolErrorDetails => {
+  const contentText = tool.content?.find((item) => item.type === "text" && item.text)?.text;
+  const queue: unknown[] = [tool.structuredContent, ...(tool.content ?? []).map((item) => item.text)];
+  const records: Record<string, unknown>[] = [];
+  const visited = new Set<object>();
+  while (queue.length) {
+    const value = queue.shift();
+    if (typeof value === "string" && /^\s*[\[{]/.test(value)) {
+      try { queue.push(JSON.parse(value)); } catch { /* Keep the original text as the message. */ }
+      continue;
+    }
+    if (!value || typeof value !== "object" || visited.has(value)) continue;
+    visited.add(value);
+    if (Array.isArray(value)) {
+      queue.push(...value);
+      continue;
+    }
+    const record = value as Record<string, unknown>;
+    records.push(record);
+    queue.push(...Object.values(record));
+  }
+  const firstValue = (keys: string[]) => records
+    .flatMap((record) => keys.map((key) => record[key]))
+    .find((value) => value !== undefined && value !== null);
+  const rawStatus = Number(firstValue(["status", "statusCode", "status_code", "httpStatus", "http_status"]));
+  let status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : undefined;
+  const rawCode = firstValue(["code", "errorCode", "error_code"]);
+  const code = typeof rawCode === "string" || typeof rawCode === "number" ? String(rawCode) : undefined;
+  const nestedMessage = firstValue(["message", "detail", "error"]);
+  const message = contentText
+    ?? (typeof nestedMessage === "string" ? nestedMessage : null)
+    ?? "SnapTrade MCP tool failed";
+  const signature = `${code ?? ""} ${message}`.toLowerCase();
+  const authenticationFailure = /(?:auth(?:entication|orization)?[ _-]+required|authentication credentials.{0,30}(?:invalid|missing|not provided)|not authenticated|unauthorized|invalid[ _-]+grant|invalid[ _-]+token|access[ _-]+token.{0,30}(?:expired|invalid)|token.{0,30}expired)/.test(signature);
+  if (authenticationFailure && (status === undefined || status === 401 || status === 403)) status = 401;
+  else if (status === undefined && /rate.?limit|too many requests/.test(signature)) status = 429;
+  else if (status === undefined && /timed? out|timeout/.test(signature)) status = 504;
+  else if (status === undefined && /temporar(?:y|ily) unavailable|service unavailable|upstream unavailable/.test(signature)) status = 503;
+  return { status, code, message };
+};
+
 export const extractToolPayload = (result: unknown): unknown => {
   const tool = result && typeof result === "object" ? result as ToolResult : {};
-  if (tool.isError) {
-    const message = tool.content?.find((item) => item.type === "text" && item.text)?.text ?? "SnapTrade MCP tool failed";
-    throw new Error(message);
-  }
+  if (tool.isError) throw new McpToolError(toolErrorDetails(tool));
   if (tool.structuredContent !== undefined) {
     return typeof tool.structuredContent === "string"
       ? parseToolText(tool.structuredContent)
@@ -103,7 +161,16 @@ export class SnapTradeMcpClient {
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<unknown> {
     await this.open();
-    return extractToolPayload(await this.#request("tools/call", { name, arguments: args }, false, name !== "request_connection_link"));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return extractToolPayload(await this.#request("tools/call", { name, arguments: args }, false, name !== "request_connection_link"));
+      } catch (error) {
+        const retryableToolError = error instanceof McpToolError && error.retryable && name !== "request_connection_link";
+        if (attempt === 0 && retryableToolError && await this.#pauseBeforeRetry(1_000)) continue;
+        throw error;
+      }
+    }
+    throw new McpHttpError(504, "SnapTrade MCP request timed out");
   }
 
   async close(): Promise<void> {

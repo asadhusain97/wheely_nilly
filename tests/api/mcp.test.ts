@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
-import { extractToolPayload, McpHttpError, SnapTradeMcpClient } from "../../api/_lib/mcp";
+import { extractToolPayload, McpHttpError, McpToolError, SnapTradeMcpClient } from "../../api/_lib/mcp";
 import { normalizeAccount, normalizeEvent, normalizePosition, payloadItems, payloadPagination, payloadRecord } from "../../api/_lib/snaptrade";
 
 const originalFetch = globalThis.fetch;
@@ -34,6 +34,30 @@ describe("SnapTrade MCP client", () => {
 
     const client = new SnapTradeMcpClient("private-token");
     assert.deepEqual(await client.callTool("Connections_listBrokerageAuthorizations"), []);
+    assert.equal(calls, 4);
+  });
+
+  it("retries a transient error returned inside a successful MCP tool response", async () => {
+    let calls = 0;
+    globalThis.fetch = async (_input, init = {}) => {
+      calls += 1;
+      const body = typeof init.body === "string" ? JSON.parse(init.body) : null;
+      if (body?.method === "initialize") {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: { protocolVersion: "2025-11-25" } }, { headers: { "mcp-session-id": "session-1" } });
+      }
+      if (body?.method === "notifications/initialized") return new Response(null, { status: 202 });
+      if (calls === 3) {
+        return Response.json({ jsonrpc: "2.0", id: body.id, result: {
+          isError: true,
+          structuredContent: { error: { status_code: 503, code: "UPSTREAM_UNAVAILABLE" } },
+          content: [{ type: "text", text: "Service temporarily unavailable" }],
+        } });
+      }
+      return Response.json({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "[]" }] } });
+    };
+
+    const client = new SnapTradeMcpClient("private-token");
+    assert.deepEqual(await client.callTool("AccountInformation_getAllAccountPositions"), []);
     assert.equal(calls, 4);
   });
 
@@ -244,6 +268,34 @@ describe("SnapTrade MCP client", () => {
 
   it("parses JSON from text tool results", () => {
     assert.deepEqual(extractToolPayload({ content: [{ type: "text", text: "```json\n[{\"id\":\"account-1\"}]\n```" }] }), [{ id: "account-1" }]);
+  });
+
+  it("preserves authentication status returned inside an MCP tool error", () => {
+    assert.throws(
+      () => extractToolPayload({
+        isError: true,
+        structuredContent: { error: { status_code: 403, code: "INVALID_TOKEN" } },
+        content: [{ type: "text", text: "Access token is invalid" }],
+      }),
+      (error: unknown) => error instanceof McpToolError
+        && error.status === 401
+        && error.code === "INVALID_TOKEN"
+        && error.retryable === false,
+    );
+  });
+
+  it("recognizes an expired access token described only in MCP tool text", () => {
+    assert.throws(
+      () => extractToolPayload({ isError: true, content: [{ type: "text", text: "The access token has expired" }] }),
+      (error: unknown) => error instanceof McpToolError && error.status === 401,
+    );
+  });
+
+  it("recognizes a machine-readable authentication code without an HTTP status", () => {
+    assert.throws(
+      () => extractToolPayload({ isError: true, structuredContent: { error: { code: "AUTH_REQUIRED" } } }),
+      (error: unknown) => error instanceof McpToolError && error.status === 401,
+    );
   });
 
   it("initializes a session and reads an SSE tool response", async () => {

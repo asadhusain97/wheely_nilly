@@ -54,6 +54,7 @@ describe('responsive dashboard shell', () => {
     assert.match(css, /width:min\(100%,560px\)/);
     assert.match(css, /min-width:44px;min-height:44px/);
     assert.match(css, /backdrop-filter:blur\(var\(--glass-blur\)\) saturate\(var\(--glass-saturation\)\)/);
+    assert.match(css, /\.bottom-nav\{[^}]*background:linear-gradient\(180deg,rgba\(255,255,255,\.7\),rgba\(255,255,255,\.52\)\)/);
     assert.match(css, /\.toast\{right:auto;left:50%;width:min\(calc\(100% - 24px\),536px\);max-width:none;margin:0;transform:translateX\(-50%\)\}/);
   });
   it('prevents app text selection while preserving editable field behavior', () => {
@@ -561,6 +562,7 @@ describe('responsive dashboard shell', () => {
     for (const token of ['Escape', 'pointerdown', 'pointermove', 'pointerup', 'setBackgroundInert', 'lastFocused.focus', 'filterGlossary', 'entry.hidden', 'group.hidden', 'search.addEventListener', 'createGlossaryTerm', 'LONG_PRESS_DURATION_MS', 'data-glossary-term']) {
       assert.match(glossaryJs, new RegExp(token));
     }
+    assert.match(glossaryJs, /const LONG_PRESS_DURATION_MS = 300;/);
     assert.match(settingsJs, /createGlossaryTerm/);
     assert.match(settingsJs, /\{ glossaryTerms: true \}/);
     assert.match(settingsJs, /GLOSSARY_TERM_BY_RULE_KEY/);

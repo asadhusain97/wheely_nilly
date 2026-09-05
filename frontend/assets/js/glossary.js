@@ -1,4 +1,4 @@
-const LONG_PRESS_DURATION_MS = 550;
+const LONG_PRESS_DURATION_MS = 300;
 const LONG_PRESS_MOVE_TOLERANCE_PX = 10;
 
 export function createGlossaryTerm(label, term = label, className = '') {
